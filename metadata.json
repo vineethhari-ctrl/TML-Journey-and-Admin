@@ -1,0 +1,6 @@
+{
+  "name": "Tata Motors Service Transformation — VS2",
+  "description": "VS2 TML Vehicle Journey and Centralized Administration Control Center for Tata Motors Service Operations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
