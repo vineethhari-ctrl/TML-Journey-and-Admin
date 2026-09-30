@@ -5,6 +5,8 @@
  * with an enterprise API Versioning & Release Management system ensuring zero breaking changes for live dealer workflows.
  */
 
+import { parseDateTime } from '../utils/dateUtil';
+
 export type DealerTargetModule =
   | 'vehicle_journey'
   | 'job_card'
@@ -181,6 +183,8 @@ export interface VersionComparisonResult {
 }
 
 const STORAGE_KEY = 'tata_motors_rules_engine_definitions_v2';
+
+const isBlank = (v: any) => v === undefined || v === null || String(v).trim() === '';
 const ACTIVE_VERSION_KEY = 'tata_motors_rules_engine_active_version_v2';
 const VERSION_HISTORY_KEY = 'tata_motors_rules_engine_releases_v2';
 
@@ -1065,21 +1069,52 @@ class RulesEngineService {
     return this.getRulesForVersion(this.activeVersionStr, targetModule);
   }
 
-  public saveRule(rule: CustomFieldRuleDefinition): void {
+  /**
+   * Creates or updates a rule (matched by id). Keys must be unique across rules —
+   * saving a rule whose key belongs to a different rule is rejected rather than
+   * silently overwriting that other rule.
+   */
+  public saveRule(rule: CustomFieldRuleDefinition): { success: boolean; error?: string } {
     const active = this.getActiveApiVersion();
-    const existingIndex = active.rules.findIndex((r) => r.id === rule.id || r.key === rule.key);
+    const key = rule.key.trim();
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
+      return { success: false, error: `Field key "${rule.key}" must start with a letter/underscore and contain only letters, digits and underscores.` };
+    }
+    const keyOwner = active.rules.find((r) => r.key === key && r.id !== rule.id);
+    if (keyOwner) {
+      return { success: false, error: `Field key "${key}" is already used by rule "${keyOwner.label}".` };
+    }
+    if (rule.validation?.regex?.pattern) {
+      try {
+        new RegExp(rule.validation.regex.pattern, rule.validation.regex.flags || '');
+      } catch (err: any) {
+        return { success: false, error: `Invalid regex pattern: ${err?.message || rule.validation.regex.pattern}` };
+      }
+    }
+
+    const existingIndex = active.rules.findIndex((r) => r.id === rule.id);
     const updatedRule: CustomFieldRuleDefinition = {
       ...rule,
+      key,
       version: existingIndex >= 0 ? active.rules[existingIndex].version + 1 : 1,
       lastUpdated: new Date().toISOString().replace('T', ' ').substring(0, 19),
     };
 
-    if (existingIndex >= 0) {
-      active.rules[existingIndex] = updatedRule;
-    } else {
-      active.rules.push(updatedRule);
-    }
+    // Replace the array (never mutate in place) so subscribers holding the old array re-render
+    active.rules =
+      existingIndex >= 0
+        ? active.rules.map((r, i) => (i === existingIndex ? updatedRule : r))
+        : [...active.rules, updatedRule];
     this.saveState();
+    return { success: true };
+  }
+
+  /** Returns a key not yet used by any rule in the active release, e.g. custom_field_7. */
+  public suggestUniqueKey(base = 'custom_field'): string {
+    const used = new Set(this.getActiveApiVersion().rules.map((r) => r.key));
+    let n = used.size + 1;
+    while (used.has(`${base}_${n}`)) n++;
+    return `${base}_${n}`;
   }
 
   public deleteRule(id: string): boolean {
@@ -1152,17 +1187,18 @@ class RulesEngineService {
         }
         return true;
 
+      // Numeric comparisons never match an empty value (Number('') would be 0)
       case 'greaterThan':
-        return Number(val) > Number(cond.value);
+        return !isBlank(val) && Number(val) > Number(cond.value);
 
       case 'lessThan':
-        return Number(val) < Number(cond.value);
+        return !isBlank(val) && Number(val) < Number(cond.value);
 
       case 'greaterThanOrEqual':
-        return Number(val) >= Number(cond.value);
+        return !isBlank(val) && Number(val) >= Number(cond.value);
 
       case 'lessThanOrEqual':
-        return Number(val) <= Number(cond.value);
+        return !isBlank(val) && Number(val) <= Number(cond.value);
 
       case 'contains':
         return String(val ?? '').toLowerCase().includes(String(cond.value ?? '').toLowerCase());
@@ -1309,7 +1345,10 @@ class RulesEngineService {
 
     // Date range check
     if (rule.validation?.dateRange && rule.widgetType === 'date') {
-      const dateVal = new Date(String(value));
+      // Parse as a local calendar date: new Date('YYYY-MM-DD') is UTC midnight, which is
+      // 05:30 IST and would make "max: today" reject today's date.
+      const dateVal = parseDateTime(String(value));
+      dateVal.setHours(0, 0, 0, 0);
       if (isNaN(dateVal.getTime())) {
         errors.push(`Invalid date format for ${rule.dealerDisplayLabel || rule.label}`);
       } else {
@@ -1395,8 +1434,10 @@ class RulesEngineService {
       return res;
     }
 
-    const parsed = new Date(dateStr);
-    return isNaN(parsed.getTime()) ? now : parsed;
+    const parsed = parseDateTime(dateStr);
+    if (isNaN(parsed.getTime())) return now;
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
   }
 }
 

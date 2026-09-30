@@ -23,7 +23,7 @@ interface DeviceDetailModalProps {
 }
 
 export const DeviceDetailModal: React.FC<DeviceDetailModalProps> = ({ device, isOpen, onClose }) => {
-  const { blockDevice, unblockDevice, forceLogoutDevice, showToast } = useApp();
+  const { blockDevice, unblockDevice, forceLogoutDevice, navigate } = useApp();
 
   if (!device) return null;
 
@@ -176,7 +176,8 @@ export const DeviceDetailModal: React.FC<DeviceDetailModalProps> = ({ device, is
 
             <button
               onClick={() => {
-                showToast(`Displaying telemetry trace for ${device.deviceId}`, 'info');
+                onClose();
+                navigate(`/admin/audit?search=${encodeURIComponent(device.deviceId)}`);
               }}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-semibold transition-colors"
             >

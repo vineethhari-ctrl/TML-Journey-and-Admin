@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   MASTER_COLLECTIONS,
@@ -60,6 +60,7 @@ import {
   Table2,
 } from 'lucide-react';
 import { masterExportUtil } from '../utils/masterExportUtil';
+import { mergeImportedRecords } from '../utils/recordMerge';
 
 interface BayRecord {
   id: string;
@@ -141,7 +142,7 @@ export const MastersMaintenancePage: React.FC = () => {
   // BAY MANAGEMENT STATE (Dealer Network & Facilities)
   // ---------------------------------------------------------------------------
   const [filterRegion, setFilterRegion] = useState('South');
-  const [filterDealer, setFilterDealer] = useState('DLR1001 - Sample Motors Hyderabad');
+  const [filterDealer, setFilterDealer] = useState('All');
   const [filterBayType, setFilterBayType] = useState('All');
   const [filterBayStatus, setFilterBayStatus] = useState('All');
   const [filterBayName, setFilterBayName] = useState('');
@@ -149,7 +150,6 @@ export const MastersMaintenancePage: React.FC = () => {
 
   const [selectedBayIds, setSelectedBayIds] = useState<string[]>([]);
   const [activeSelectedBayId, setActiveSelectedBayId] = useState<string>('BAY-01');
-  const [isCreatingNewBay, setIsCreatingNewBay] = useState(false);
   const [isBayImportModalOpen, setIsBayImportModalOpen] = useState(false);
 
   const [bays, setBays] = useState<BayRecord[]>([
@@ -342,8 +342,8 @@ export const MastersMaintenancePage: React.FC = () => {
         { key: 'dealerName', label: 'Dealer Name', type: 'text', mandatory: true },
         { key: 'bayName', label: 'Bay Name', type: 'text', mandatory: true },
         { key: 'bayType', label: 'Bay Type', type: 'select', options: ['Mechanical', 'Electrical', 'EV', 'Fleet', 'Speedo', 'AC', 'BodyShop'], mandatory: true },
-        { key: 'floor', label: 'Floor', type: 'text', mandatory: true },
-        { key: 'liftAvailability', label: 'Lift Availability', type: 'select', options: ['Available', 'Not Available', '2 post lift', 'No Lift'], mandatory: true },
+        { key: 'floor', label: 'Floor', type: 'select', options: ['Ground', 'Floor 1', 'Floor 2', 'Basement'], mandatory: true },
+        { key: 'liftAvailability', label: 'Lift Availability', type: 'select', options: ['No Lift', '2 post lift', '4 post lift'], mandatory: true },
         { key: 'bayStatus', label: 'Bay Status', type: 'select', options: ['Active', 'Inactive'], mandatory: true },
         { key: 'techSupervisor', label: 'Tech Supervisor', type: 'text' },
         { key: 'tech1', label: 'Technician 1', type: 'text' },
@@ -354,10 +354,15 @@ export const MastersMaintenancePage: React.FC = () => {
     [bays]
   );
 
+  const nextBayNumber = () => bays.reduce((max, b) => Math.max(max, b.no), 0) + 1;
+
   const handleBayImportComplete = (importedRows: Array<Record<string, any>>) => {
+    const existingIds = new Set(bays.map((b) => b.id));
+    const startNo = nextBayNumber();
     const newBays: BayRecord[] = importedRows.map((r, idx) => ({
-      id: r.id || `BAY-${bays.length + idx + 10}`,
-      no: bays.length + idx + 1,
+      // Never reuse an id that already exists (duplicate ids break selection & approval)
+      id: r.id && !existingIds.has(r.id) ? r.id : `BAY-${String(startNo + idx).padStart(2, '0')}`,
+      no: startNo + idx,
       region: (r.region as any) || 'South',
       dealerCode: r.dealerCode || 'DLR1001',
       dealerName: r.dealerName || 'Sample Motors Hyderabad',
@@ -367,19 +372,20 @@ export const MastersMaintenancePage: React.FC = () => {
       inactiveFrom: '',
       inactiveTo: '',
       approvalStatus: 'Approved',
-      floor: r.floor || 'Ground Floor',
-      liftAvailability: (r.liftAvailability as any) || 'Available',
+      floor: r.floor || 'Ground',
+      liftAvailability: (r.liftAvailability as any) || 'No Lift',
       specialEquipments: [],
       techSupervisor: r.techSupervisor || 'Suresh Kumar',
       tech1: r.tech1 || 'M. Rajesh',
       tech2: r.tech2 || 'P. Vinay',
     }));
-    setBays([...newBays, ...bays]);
+    setBays((prev) => [...newBays, ...prev]);
     showToast(`Successfully imported ${newBays.length} bays into workshop layout`, 'success');
   };
 
   const filteredBays = bays.filter((b) => {
     if (filterRegion !== 'All' && b.region !== filterRegion) return false;
+    if (filterDealer !== 'All' && b.dealerCode !== filterDealer) return false;
     if (filterBayType !== 'All' && b.bayType !== filterBayType) return false;
     if (filterBayStatus !== 'All' && b.bayStatus !== filterBayStatus) return false;
     if (filterApprovalStatus !== 'All' && b.approvalStatus !== filterApprovalStatus) return false;
@@ -401,13 +407,70 @@ export const MastersMaintenancePage: React.FC = () => {
     }
   };
 
+  // Editable copy of the bay open in the inspector; saved explicitly via "Save Bay Setup"
+  const [bayDraft, setBayDraft] = useState<BayRecord | null>(null);
+  useEffect(() => {
+    setBayDraft(selectedBay ? { ...selectedBay } : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSelectedBayId, selectedBay?.id]);
+
+  const handleCreateBay = () => {
+    const no = nextBayNumber();
+    const dealer = dealersList.find((d) => d.code === filterDealer) || dealersList[0];
+    const newBay: BayRecord = {
+      id: `BAY-${String(no).padStart(2, '0')}`,
+      no,
+      region: (filterRegion !== 'All' ? filterRegion : dealer.zone) as BayRecord['region'],
+      dealerCode: dealer.code,
+      dealerName: dealer.name,
+      bayName: `New Bay ${no}`,
+      bayType: 'Mechanical',
+      bayStatus: 'Active',
+      inactiveFrom: '',
+      inactiveTo: '',
+      approvalStatus: 'Draft',
+      floor: 'Ground',
+      liftAvailability: 'No Lift',
+      specialEquipments: [],
+      techSupervisor: '',
+      tech1: '',
+      tech2: '',
+    };
+    setBays((prev) => [newBay, ...prev]);
+    setActiveSelectedBayId(newBay.id);
+    // Make sure the new draft isn't hidden by the current filters
+    setFilterBayType('All');
+    setFilterBayStatus('All');
+    setFilterApprovalStatus('All');
+    setFilterBayName('');
+    logAudit('Bay Created', 'Masters Maintenance', `${newBay.id} (${newBay.dealerCode})`, 'None', 'Draft bay created');
+    showToast(`Draft ${newBay.id} created — edit its details below and save`, 'info');
+  };
+
+  const handleSaveBay = () => {
+    if (!bayDraft) return;
+    if (!bayDraft.bayName.trim()) {
+      showToast('Bay name is required', 'error');
+      return;
+    }
+    const before = bays.find((b) => b.id === bayDraft.id);
+    setBays((prev) => prev.map((b) => (b.id === bayDraft.id ? { ...bayDraft, bayName: bayDraft.bayName.trim() } : b)));
+    logAudit(
+      'Bay Updated',
+      'Masters Maintenance',
+      `${bayDraft.id} (${bayDraft.dealerCode})`,
+      before ? `${before.bayName} / ${before.bayType} / ${before.floor} / ${before.liftAvailability}` : '—',
+      `${bayDraft.bayName} / ${bayDraft.bayType} / ${bayDraft.floor} / ${bayDraft.liftAvailability}`
+    );
+    showToast(`Saved changes for ${bayDraft.bayName}`, 'success');
+  };
+
   const handleSendForApproval = () => {
     if (selectedBayIds.length === 0) return;
-    setBays(
-      bays.map((b) =>
-        selectedBayIds.includes(b.id) ? { ...b, approvalStatus: 'Pending Approval' } : b
-      )
+    setBays((prev) =>
+      prev.map((b) => (selectedBayIds.includes(b.id) ? { ...b, approvalStatus: 'Pending Approval' } : b))
     );
+    logAudit('Bays Sent for Approval', 'Masters Maintenance', selectedBayIds.join(', '), 'Draft / Rejected', 'Pending Approval');
     showToast(`Sent ${selectedBayIds.length} bay(s) for TML Admin approval!`, 'success');
     setSelectedBayIds([]);
   };
@@ -425,7 +488,7 @@ export const MastersMaintenancePage: React.FC = () => {
     { day: 'Sunday', isWeekOff: true, open: '09:00', close: '13:00' },
   ]);
 
-  const [dateHolidays] = useState<HolidayOverride[]>([
+  const [dateHolidays, setDateHolidays] = useState<HolidayOverride[]>([
     {
       id: 'HOL-SEP-01',
       date: '2026-09-17',
@@ -443,6 +506,32 @@ export const MastersMaintenancePage: React.FC = () => {
       isClosed: true,
     },
   ]);
+
+  const [holidayDraft, setHolidayDraft] = useState<{ date: string; name: string; isClosed: boolean; hours: string } | null>(null);
+
+  const handleAddHoliday = () => {
+    if (!holidayDraft) return;
+    if (!holidayDraft.date || !holidayDraft.name.trim()) {
+      showToast('Date and occasion name are required', 'error');
+      return;
+    }
+    if (dateHolidays.some((h) => h.date === holidayDraft.date)) {
+      showToast(`An override already exists for ${holidayDraft.date}`, 'error');
+      return;
+    }
+    const entry: HolidayOverride = {
+      id: `HOL-${holidayDraft.date}`,
+      date: holidayDraft.date,
+      name: holidayDraft.name.trim(),
+      type: holidayDraft.isClosed ? 'Festival Closure' : 'Half Day Override',
+      hours: holidayDraft.isClosed ? 'Closed' : holidayDraft.hours || '09:00 - 13:00',
+      isClosed: holidayDraft.isClosed,
+    };
+    setDateHolidays((prev) => [...prev, entry].sort((a, b) => a.date.localeCompare(b.date)));
+    logAudit('Holiday Override Added', 'Masters Maintenance', `${entry.date} (${entry.name})`, 'None', entry.hours);
+    showToast(`Added ${entry.name} on ${entry.date}`, 'success');
+    setHolidayDraft(null);
+  };
 
   const handleToggleWeeklyOff = (dayName: string) => {
     setWeeklyPattern(
@@ -549,6 +638,24 @@ export const MastersMaintenancePage: React.FC = () => {
     });
     return counts;
   }, [masterConfigs]);
+
+  // Masters rendered by a dedicated console keep their rows in local state, so a
+  // generic upload into the catalogue copy would never show up on screen.
+  const CONSOLE_ONLY_MASTERS = ['holiday_calendar_master', 'time_slot_quotas_master', 'dealer_details_registry'];
+  const openBulkUpload = (m: MasterConfig) => {
+    // Same ownership rule the table editor applies to its own upload button
+    if (m.owner === 'TML_ADMIN' && adminRole !== 'TML Admin') {
+      showToast(`${m.name} is governed by TML Central — switch to TML Admin to upload`, 'error');
+      return;
+    }
+    if (m.id === 'bay_management_interactive') {
+      setIsBayImportModalOpen(true);
+    } else if (CONSOLE_ONLY_MASTERS.includes(m.id)) {
+      showToast(`Bulk upload is not available for ${m.name} — edit it directly in its console`, 'info');
+    } else {
+      setBulkUploadMaster(m);
+    }
+  };
 
   // Action: Launch a master from card into workspace
   const handleLaunchMaster = (masterId: string) => {
@@ -1270,7 +1377,7 @@ export const MastersMaintenancePage: React.FC = () => {
 
           {/* Module-Level Reporting Downloads & Bulk Upload */}
           <button
-            onClick={() => setBulkUploadMaster(currentMaster)}
+            onClick={() => openBulkUpload(currentMaster)}
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-xs font-bold border border-blue-400/40 cursor-pointer shadow-xs transition-all"
             title={`Bulk upload parameter records into ${currentMaster.name} (JSON or Excel)`}
           >
@@ -1487,7 +1594,7 @@ export const MastersMaintenancePage: React.FC = () => {
                     </button>
 
                     <button
-                      onClick={() => setBulkUploadMaster(m)}
+                      onClick={() => openBulkUpload(m)}
                       className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-900 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer border border-blue-200"
                       title="Bulk upload parameter records (JSON / Excel)"
                     >
@@ -1531,7 +1638,8 @@ export const MastersMaintenancePage: React.FC = () => {
               {masterConfigs
                 .filter((m) => m.logicalGroup === activeLogicalGroup)
                 .map((m) => {
-                  const isSelected = selectedMasterId === m.id;
+                  // currentMaster falls back to the group's first master, so highlight what's actually shown
+                  const isSelected = currentMaster.id === m.id;
                   return (
                     <button
                       key={m.id}
@@ -1624,9 +1732,12 @@ export const MastersMaintenancePage: React.FC = () => {
                           onChange={(e) => setFilterDealer(e.target.value)}
                           className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-slate-800 focus:outline-hidden"
                         >
-                          <option value="DLR1001 - Sample Motors Hyderabad">DLR1001 - Sample Motors Hyderabad</option>
-                          <option value="DLR1002 - Rudra Motors South">DLR1002 - Rudra Motors South</option>
-                          <option value="DLR1003 - Concorde Motors Mumbai">DLR1003 - Concorde Motors Mumbai</option>
+                          <option value="All">All</option>
+                          {dealersList.map((d) => (
+                            <option key={d.code} value={d.code}>
+                              {d.code} - {d.name}
+                            </option>
+                          ))}
                         </select>
                       </div>
 
@@ -1692,6 +1803,7 @@ export const MastersMaintenancePage: React.FC = () => {
                       <button
                         onClick={() => {
                           setFilterRegion('All');
+                          setFilterDealer('All');
                           setFilterBayType('All');
                           setFilterBayStatus('All');
                           setFilterBayName('');
@@ -1719,10 +1831,7 @@ export const MastersMaintenancePage: React.FC = () => {
 
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => {
-                            setIsCreatingNewBay(true);
-                            showToast('Ready to configure new bay below', 'info');
-                          }}
+                          onClick={handleCreateBay}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-2xs cursor-pointer"
                         >
                           <Plus className="h-3.5 w-3.5 text-blue-600" />
@@ -1877,14 +1986,15 @@ export const MastersMaintenancePage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Selected Bay Inspection Form */}
+                  {/* Selected Bay Inspection Form (editable draft, saved explicitly) */}
+                  {bayDraft && (
                   <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                       <div>
                         <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
                           <span>Bay Inspection &amp; Hardware: {selectedBay.bayName}</span>
                           <span className="text-[11px] px-2 py-0.2 rounded bg-blue-100 text-blue-900 font-mono font-bold">
-                            {selectedBay.dealerCode}
+                            {bayDraft.dealerCode}
                           </span>
                         </h3>
                         <p className="text-xs text-slate-500">
@@ -1892,8 +2002,9 @@ export const MastersMaintenancePage: React.FC = () => {
                         </p>
                       </div>
                       <button
-                        onClick={() => showToast(`Saved changes for ${selectedBay.bayName}`, 'success')}
-                        className="px-4 py-1.5 bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer"
+                        onClick={handleSaveBay}
+                        disabled={JSON.stringify(bayDraft) === JSON.stringify(selectedBay)}
+                        className="px-4 py-1.5 bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Save Bay Setup
                       </button>
@@ -1901,43 +2012,93 @@ export const MastersMaintenancePage: React.FC = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
                       <div>
-                        <label className="text-slate-500 font-semibold block mb-1">Bay Classification</label>
+                        <label className="text-slate-500 font-semibold block mb-1">Bay Name</label>
                         <input
                           type="text"
-                          value={selectedBay.bayType}
-                          disabled
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 font-bold"
+                          value={bayDraft.bayName}
+                          onChange={(e) => setBayDraft({ ...bayDraft, bayName: e.target.value })}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
                         />
+                      </div>
+                      <div>
+                        <label className="text-slate-500 font-semibold block mb-1">Bay Classification</label>
+                        <select
+                          value={bayDraft.bayType}
+                          onChange={(e) => setBayDraft({ ...bayDraft, bayType: e.target.value as BayRecord['bayType'] })}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
+                        >
+                          {['Mechanical', 'Electrical', 'EV', 'Fleet', 'Speedo', 'AC', 'BodyShop'].map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="text-slate-500 font-semibold block mb-1">Floor Level</label>
-                        <input
-                          type="text"
-                          value={selectedBay.floor}
-                          disabled
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 font-bold"
-                        />
+                        <select
+                          value={bayDraft.floor}
+                          onChange={(e) => setBayDraft({ ...bayDraft, floor: e.target.value as BayRecord['floor'] })}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
+                        >
+                          {['Ground', 'Floor 1', 'Floor 2', 'Basement'].map((f) => (
+                            <option key={f} value={f}>{f}</option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="text-slate-500 font-semibold block mb-1">Lift Availability</label>
-                        <input
-                          type="text"
-                          value={selectedBay.liftAvailability}
-                          disabled
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 font-bold"
-                        />
+                        <select
+                          value={bayDraft.liftAvailability}
+                          onChange={(e) =>
+                            setBayDraft({ ...bayDraft, liftAvailability: e.target.value as BayRecord['liftAvailability'] })
+                          }
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
+                        >
+                          {['No Lift', '2 post lift', '4 post lift'].map((l) => (
+                            <option key={l} value={l}>{l}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-slate-500 font-semibold block mb-1">Bay Status</label>
+                        <select
+                          value={bayDraft.bayStatus}
+                          onChange={(e) => setBayDraft({ ...bayDraft, bayStatus: e.target.value as BayRecord['bayStatus'] })}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
+                        >
+                          <option value="Active">Active</option>
+                          <option value="Inactive">Inactive</option>
+                        </select>
                       </div>
                       <div>
                         <label className="text-slate-500 font-semibold block mb-1">Technical Supervisor</label>
                         <input
                           type="text"
-                          value={selectedBay.techSupervisor}
-                          disabled
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 font-bold"
+                          value={bayDraft.techSupervisor}
+                          onChange={(e) => setBayDraft({ ...bayDraft, techSupervisor: e.target.value })}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-500 font-semibold block mb-1">Technician 1</label>
+                        <input
+                          type="text"
+                          value={bayDraft.tech1}
+                          onChange={(e) => setBayDraft({ ...bayDraft, tech1: e.target.value })}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-500 font-semibold block mb-1">Technician 2</label>
+                        <input
+                          type="text"
+                          value={bayDraft.tech2}
+                          onChange={(e) => setBayDraft({ ...bayDraft, tech2: e.target.value })}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
                         />
                       </div>
                     </div>
                   </div>
+                  )}
                 </div>
               );
             }
@@ -2030,13 +2191,68 @@ export const MastersMaintenancePage: React.FC = () => {
                         </p>
                       </div>
                       <button
-                        onClick={() => showToast('Opening Add Holiday Date Override modal...', 'info')}
+                        onClick={() => setHolidayDraft({ date: '', name: '', isClosed: true, hours: '09:00 - 13:00' })}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs shadow-xs cursor-pointer"
                       >
                         <Plus className="h-3.5 w-3.5" />
                         <span>Add Date Override</span>
                       </button>
                     </div>
+
+                    {holidayDraft && (
+                      <div className="flex flex-wrap items-end gap-3 p-3 rounded-xl border border-blue-200 bg-blue-50/50 text-xs">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">Date</label>
+                          <input
+                            type="date"
+                            value={holidayDraft.date}
+                            onChange={(e) => setHolidayDraft({ ...holidayDraft, date: e.target.value })}
+                            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-[180px]">
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">Occasion / Holiday Name</label>
+                          <input
+                            type="text"
+                            value={holidayDraft.name}
+                            placeholder="e.g. Diwali"
+                            onChange={(e) => setHolidayDraft({ ...holidayDraft, name: e.target.value })}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white"
+                          />
+                        </div>
+                        <label className="flex items-center gap-1.5 font-semibold text-slate-700 pb-1.5">
+                          <input
+                            type="checkbox"
+                            checked={holidayDraft.isClosed}
+                            onChange={(e) => setHolidayDraft({ ...holidayDraft, isClosed: e.target.checked })}
+                          />
+                          Full day closed
+                        </label>
+                        {!holidayDraft.isClosed && (
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 mb-1">Operating Hours</label>
+                            <input
+                              type="text"
+                              value={holidayDraft.hours}
+                              onChange={(e) => setHolidayDraft({ ...holidayDraft, hours: e.target.value })}
+                              className="w-32 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-mono"
+                            />
+                          </div>
+                        )}
+                        <button
+                          onClick={handleAddHoliday}
+                          className="px-3 py-1.5 rounded-lg bg-blue-900 text-white font-bold hover:bg-blue-800 cursor-pointer"
+                        >
+                          Add
+                        </button>
+                        <button
+                          onClick={() => setHolidayDraft(null)}
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
 
                     <div className="rounded-xl border border-slate-200 overflow-hidden">
                       <table className="w-full text-left text-xs">
@@ -2252,24 +2468,11 @@ export const MastersMaintenancePage: React.FC = () => {
           onClose={() => setBulkUploadMaster(null)}
           master={bulkUploadMaster}
           onImportComplete={(imported, mode) => {
-            let updatedRecords: Array<Record<string, any>>;
-            if (mode === 'replace') {
-              updatedRecords = imported;
-            } else if (mode === 'upsert') {
-              const importedMap = new Map(imported.map((r) => [r.id, r]));
-              const existingUpdated = bulkUploadMaster.records.map((r) =>
-                importedMap.has(r.id) ? { ...r, ...importedMap.get(r.id) } : r
-              );
-              const existingIds = new Set(bulkUploadMaster.records.map((r) => r.id));
-              const brandNew = imported.filter((r) => !existingIds.has(r.id));
-              updatedRecords = [...brandNew, ...existingUpdated];
-            } else {
-              updatedRecords = [...imported, ...bulkUploadMaster.records];
-            }
-
+            // Merge into the latest saved version, not the snapshot taken when the modal opened
+            const latest = masterConfigs.find((m) => m.id === bulkUploadMaster.id) || bulkUploadMaster;
             const updated = {
-              ...bulkUploadMaster,
-              records: updatedRecords,
+              ...latest,
+              records: mergeImportedRecords(latest.records, imported, mode),
             };
             updateMasterConfig(updated);
             showToast(

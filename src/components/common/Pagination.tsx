@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PaginationProps {
@@ -17,6 +17,12 @@ export const Pagination: React.FC<PaginationProps> = ({
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const endItem = Math.min(currentPage * pageSize, totalItems);
+
+  // If the list shrinks (new filter, deletions) keep the page in range instead of showing an empty page
+  useEffect(() => {
+    if (currentPage > totalPages) onPageChange(totalPages);
+    else if (currentPage < 1) onPageChange(1);
+  }, [currentPage, totalPages, onPageChange]);
 
   if (totalItems <= pageSize && currentPage === 1) {
     return (

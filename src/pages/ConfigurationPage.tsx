@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { SystemConfiguration } from '../types';
+import { validateConfiguration } from '../utils/configUtil';
 import {
   Sliders,
   Clock,
@@ -14,7 +15,7 @@ import {
 } from 'lucide-react';
 
 export const ConfigurationPage: React.FC = () => {
-  const { configuration, updateConfiguration } = useApp();
+  const { configuration, updateConfiguration, showToast } = useApp();
 
   const [formData, setFormData] = useState<SystemConfiguration>({ ...configuration });
   const [isDirty, setIsDirty] = useState(false);
@@ -29,6 +30,11 @@ export const ConfigurationPage: React.FC = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    const errors = validateConfiguration(formData);
+    if (errors.length > 0) {
+      showToast(errors.join(' '), 'error');
+      return;
+    }
     updateConfiguration(formData);
     setIsDirty(false);
   };

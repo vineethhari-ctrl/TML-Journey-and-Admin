@@ -572,7 +572,7 @@ export function generateInitialData() {
       deviceType: `${dev.deviceType} (${dev.operatingSystem.split(' ')[0]})`,
       ipAddress: dev.ipAddress,
       location: dev.location,
-      loginTime: `Today, 0${(i % 5) + 7}:${10 + (i % 45)} AM`,
+      loginTime: `Today, ${pad2((i % 5) + 7)}:${10 + (i % 45)} AM`,
       lastActivity: sessStat === 'TERMINATED' ? 'Terminated at 10:45 AM' : sessStat === 'IDLE' ? '32 mins ago' : `${(i % 15) + 1} mins ago`,
       status: sessStat,
     });
@@ -662,7 +662,7 @@ export function generateInitialData() {
       workshopName: `${loc.city} Workshop Terminal ${(i % 3) + 1}`,
       zone: loc.zone,
       region: loc.region,
-      createdAt: `2026-09-30 0${(i % 4) + 8}:${10 + (i % 40)}:00`,
+      createdAt: `2026-09-30 ${pad2((i % 4) + 8)}:${pad2(10 + (i % 40))}:00`,
       currentStage: currentStg,
       overallStatus: overall,
       serviceType: i % 4 === 0 ? 'Running Repair' : i % 5 === 0 ? 'Accident / BodyShop' : i % 3 === 0 ? 'Warranty Claim' : 'Periodic Maintenance',

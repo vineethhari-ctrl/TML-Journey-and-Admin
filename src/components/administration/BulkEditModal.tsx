@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { MasterConfig, MasterFieldDef } from '../../data/masterCatalogue';
+import { masterValidationSchema } from '../../utils/masterValidationSchema';
 import {
   CheckSquare,
   X,
@@ -49,6 +50,7 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
   // Track enabled modifications per field
   const [fieldChanges, setFieldChanges] = useState<Record<string, { enabled: boolean; value: any }>>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Initialize fieldChanges when modal opens
   React.useEffect(() => {
@@ -64,6 +66,7 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
       });
       setFieldChanges(initial);
       setShowDeleteConfirm(false);
+      setSubmitError(null);
     }
   }, [isOpen, editableFields]);
 
@@ -133,12 +136,29 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
     const updates: Record<string, any> = {};
     const summaryParts: string[] = [];
 
+    const errors: string[] = [];
+
     activeFieldsToUpdate.forEach(([key, state]) => {
-      updates[key] = state.value;
       const fieldDef = master.fields.find((f) => f.key === key);
       const label = fieldDef?.label || key;
-      summaryParts.push(`${label} ➔ "${String(state.value)}"`);
+      // Same schema rules as single-row edits, so bulk edits can't store invalid values
+      if (fieldDef) {
+        const res = masterValidationSchema.validateField(fieldDef, state.value);
+        if (!res.isValid) {
+          errors.push(res.error || `${label} is invalid.`);
+          return;
+        }
+        updates[key] = res.sanitizedValue;
+      } else {
+        updates[key] = state.value;
+      }
+      summaryParts.push(`${label} ➔ "${String(updates[key])}"`);
     });
+
+    if (errors.length > 0) {
+      setSubmitError(errors.join(' '));
+      return;
+    }
 
     const summary = `Bulk updated ${selectedCount} record(s): ${summaryParts.join(', ')}`;
     onApplyBulkEdit(updates, selectedRowIds, summary);
@@ -400,6 +420,11 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
+              {submitError && (
+                <span className="text-rose-700 font-semibold max-w-xs text-[11px]" role="alert">
+                  {submitError}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={onClose}

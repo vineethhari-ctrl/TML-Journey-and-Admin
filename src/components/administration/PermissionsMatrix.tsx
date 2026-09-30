@@ -363,7 +363,7 @@ interface PermissionsMatrixProps {
 }
 
 export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({ onSaved }) => {
-  const { showToast } = useApp();
+  const { showToast, logAudit } = useApp();
 
   const [roleMatrix, setRoleMatrix] = useState<RoleMatrixRecord[]>(INITIAL_ROLE_DATA);
   const [selectedRoleId, setSelectedRoleId] = useState<string>('serviceAdvisor');
@@ -493,6 +493,13 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({ onSaved })
   // Save changes
   const handleSaveMatrix = () => {
     setHasUnsavedChanges(false);
+    logAudit(
+      'Permissions Matrix Saved',
+      'Administration',
+      `Role Permission Matrix (${currentRoleRecord.roleName})`,
+      'Previous Matrix',
+      `${stats.viewCount} view / ${stats.createCount} create / ${stats.editCount} edit / ${stats.deleteCount} delete grants`
+    );
     showToast(`Permissions Matrix ratified for ${currentRoleRecord.roleName}!`, 'success');
     if (onSaved) onSaved();
   };

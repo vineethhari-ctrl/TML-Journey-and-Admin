@@ -19,6 +19,7 @@ import {
 } from '../types';
 import { generateInitialData, buildJourneyForCase } from '../data/mockDataGenerator';
 import { auditService } from '../services/auditService';
+import { diffConfiguration } from '../utils/configUtil';
 import { userService } from '../services/userService';
 import {
   MASTER_COLLECTIONS,
@@ -516,6 +517,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const suspendUser = useCallback((userId: string) => {
     const u = users.find((x) => x.userId === userId);
     if (!u) return;
+    if (userId === currentUser.userId) {
+      showToast('You cannot suspend your own account', 'error');
+      return;
+    }
     setUsers((prev) => prev.map((x) => (x.userId === userId ? { ...x, status: 'SUSPENDED' as UserStatus } : x)));
     logAudit('User Suspended', 'Administration', `${u.userId} (${u.name})`, u.status, 'SUSPENDED');
     // Also terminate their sessions
@@ -523,7 +528,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((s) => (s.userId === userId ? { ...s, status: 'TERMINATED' as SessionStatus } : s))
     );
     showToast(`User ${userId} has been suspended & sessions terminated`, 'info');
-  }, [users, logAudit, showToast]);
+  }, [users, currentUser.userId, logAudit, showToast]);
 
   const activateUser = useCallback((userId: string) => {
     const u = users.find((x) => x.userId === userId);
@@ -603,10 +608,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Config Actions
   const updateConfiguration = useCallback((newConfig: SystemConfiguration) => {
+    const changes = diffConfiguration(configuration, newConfig);
+    if (changes.length === 0) {
+      showToast('No configuration changes to save', 'info');
+      return;
+    }
     setConfiguration(newConfig);
-    logAudit('Configuration Changed', 'Administration', 'System Parameters', 'Previous Settings', 'Updated Thresholds & Policies');
-    showToast(`System configurations saved successfully`, 'success');
-  }, [logAudit, showToast]);
+    logAudit(
+      'Configuration Changed',
+      'Administration',
+      'System Parameters',
+      changes.map((c) => c.split(' → ')[0]).join('; '),
+      changes.join('; ')
+    );
+    showToast(`Saved ${changes.length} configuration change(s)`, 'success');
+  }, [configuration, logAudit, showToast]);
 
   // Exceptions Actions
   const updateExceptionStatus = useCallback((exceptionId: string, status: ExceptionStatus) => {
