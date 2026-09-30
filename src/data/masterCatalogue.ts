@@ -1,55 +1,355 @@
+export type DealerTargetModule =
+  | 'vehicle_journey'
+  | 'job_card'
+  | 'reception'
+  | 'workshop_floor'
+  | 'general';
+
+export interface MasterFieldValidation {
+  min?: number;
+  max?: number;
+  minDate?: string;
+  maxDate?: string;
+  pattern?: string;
+  customErrorMessage?: string;
+}
+
 export interface MasterFieldDef {
   key: string;
   label: string;
   type: 'text' | 'number' | 'select' | 'boolean' | 'date';
   options?: string[];
   mandatory?: boolean;
+  isCustom?: boolean;
+  isSystem?: boolean;
+  displayInDealerApp?: boolean;
+  dealerTargetModule?: DealerTargetModule;
+  dealerDisplayLabel?: string;
+  valueMapping?: Record<string, string>; // Maps raw internal code to customer/dealer display label
+  description?: string;
+  validation?: MasterFieldValidation;
+}
+
+export type ModuleCode =
+  | 'appointment'
+  | 'reception'
+  | 'security'
+  | 'jc_creation'
+  | 'jc_tracking'
+  | 'spd'
+  | 'thd'
+  | 'eqc'
+  | 'claim'
+  | 'bodyshop'
+  | 'ira'
+  | 'dealer_network';
+
+export type LogicalModuleGroup =
+  | 'Vehicle Data'
+  | 'Dealer Network'
+  | 'Service Operations'
+  | 'Parts, Claims & Support';
+
+export interface LogicalModuleDef {
+  id: LogicalModuleGroup;
+  title: string;
+  shortDesc: string;
+  iconName: string;
+  colorTheme: string;
+  badge: string;
+}
+
+export interface MasterModuleMeta {
+  code: ModuleCode;
+  title: string;
+  subtitle: string;
+  badge: string;
+  iconName: string;
+  accentColor: string;
+  categoryTag: string;
 }
 
 export interface MasterConfig {
   id: string;
   name: string;
   owner: 'TML_ADMIN' | 'DEALER_ADMIN';
-  category: 'JC Tracking' | 'Complaints & Labor' | 'Vehicle Hierarchy' | 'Commercial & AMC' | 'Dealership Operations';
+  category: string;
+  logicalGroup: LogicalModuleGroup;
+  moduleCode: ModuleCode;
+  moduleName: string;
   description: string;
   fields: MasterFieldDef[];
   records: Array<Record<string, any>>;
+  isInteractiveSpecial?: boolean;
+  interactiveTabTarget?: 'bays' | 'calendar' | 'dealers' | 'timeslots';
 }
 
-export const MASTER_COLLECTIONS: MasterConfig[] = [
-  // 1. Pause Reason Master (From Image 7) - TML Admin
+export const LOGICAL_MODULES: LogicalModuleDef[] = [
   {
-    id: 'pause_reasons',
-    name: 'Pause Reason Master',
+    id: 'Vehicle Data',
+    title: 'Vehicle & Product Data',
+    shortDesc: 'PPL & PL vehicle variants, model checklists, diagnostic codes, EV high-voltage safety & labor FRTs',
+    iconName: 'Car',
+    colorTheme: 'blue',
+    badge: 'VEHICLE',
+  },
+  {
+    id: 'Dealer Network',
+    title: 'Dealer Network & Facilities',
+    shortDesc: 'Authorized 3S/2S dealership network, physical bay configurations, holiday calendars & intake quotas',
+    iconName: 'Building2',
+    colorTheme: 'emerald',
+    badge: 'NETWORK',
+  },
+  {
+    id: 'Service Operations',
+    title: 'Service Operations & Floor',
+    shortDesc: 'Bay technician rosters, clocking pause reasons, repeat complaints, quality checks & bodyshop stages',
+    iconName: 'Wrench',
+    colorTheme: 'amber',
+    badge: 'OPS',
+  },
+  {
+    id: 'Parts, Claims & Support',
+    title: 'Parts, Claims & Support',
+    shortDesc: 'Spare parts dispatch (SPD), plant helpdesk (THD), AMC value care pricing, warranty defects & gate security',
+    iconName: 'Package',
+    colorTheme: 'purple',
+    badge: 'SUPPORT',
+  },
+];
+
+export const WORKSHOP_MODULES: MasterModuleMeta[] = [
+  {
+    code: 'appointment',
+    title: 'Appointment Scheduling',
+    subtitle: 'Service appointment bookings, slot intake allocation, emergency buffer caps',
+    badge: 'appointment',
+    iconName: 'Calendar',
+    accentColor: 'blue',
+    categoryTag: 'Customer Inflow & Intake',
+  },
+  {
+    code: 'reception',
+    title: 'P&D and Reception',
+    subtitle: 'Pick & Drop transit queues, driver allocation, lounge customer greeting checklists',
+    badge: 'reception',
+    iconName: 'Car',
+    accentColor: 'indigo',
+    categoryTag: 'Customer Experience & Transit',
+  },
+  {
+    code: 'security',
+    title: 'Security & Gate Operations',
+    subtitle: 'Physical inward/outward vehicle check-in, barrier automation, visitor & pass logs',
+    badge: 'security',
+    iconName: 'ShieldCheck',
+    accentColor: 'emerald',
+    categoryTag: 'Perimeter & Asset Security',
+  },
+  {
+    code: 'jc_creation',
+    title: 'JC Creation',
+    subtitle: 'Open repair orders, customer complaint capture, demanded work line codes, manual estimation',
+    badge: 'jc_creation',
+    iconName: 'FileText',
+    accentColor: 'violet',
+    categoryTag: 'Service Order & Scope',
+  },
+  {
+    code: 'jc_tracking',
+    title: 'JC Tracking & Bay Dispatch',
+    subtitle: 'Real-time bay occupancy, technician skill dispatch, stage transitions, bay transit',
+    badge: 'jc_tracking',
+    iconName: 'Wrench',
+    accentColor: 'sky',
+    categoryTag: 'Shop Floor & Execution',
+  },
+  {
+    code: 'spd',
+    title: 'SPD (Spare Parts Dispatch)',
+    subtitle: 'Spare parts requisition, stock bin checks, picking slip generation, counter issue',
+    badge: 'spd',
+    iconName: 'Package',
+    accentColor: 'amber',
+    categoryTag: 'Supply Chain & Inventory',
+  },
+  {
+    code: 'thd',
+    title: 'THD (Technical Help Desk)',
+    subtitle: 'Field technical issue tickets to Tata Motors plant, TIB bulletin advisories, diagnostics',
+    badge: 'thd',
+    iconName: 'HelpCircle',
+    accentColor: 'orange',
+    categoryTag: 'Plant Engineering & Diagnostics',
+  },
+  {
+    code: 'eqc',
+    title: 'EQC (Electronic Quality Check)',
+    subtitle: 'Quality inspection checklists, road test records, torque verifications, rework routing',
+    badge: 'eqc',
+    iconName: 'CheckSquare',
+    accentColor: 'teal',
+    categoryTag: 'Quality Assurance & Sign-off',
+  },
+  {
+    code: 'claim',
+    title: 'Claim & Warranty',
+    subtitle: 'Warranty defect submissions, causal part tagging, insurance surveyor claims, AMC schemes',
+    badge: 'claim',
+    iconName: 'Award',
+    accentColor: 'rose',
+    categoryTag: 'Warranty & Commercial Contracts',
+  },
+  {
+    code: 'bodyshop',
+    title: 'BodyShop & Paint Operations',
+    subtitle: 'Accident estimates, panel denting, heated spray booth schedules, paint formulation',
+    badge: 'bodyshop',
+    iconName: 'Paintbrush',
+    accentColor: 'fuchsia',
+    categoryTag: 'Body Repairs & Refinishing',
+  },
+  {
+    code: 'ira',
+    title: 'IRA Connected Vehicle & EV',
+    subtitle: 'Telematics alerts, high-voltage battery state-of-health, DTC fault codes, FOTA firmware',
+    badge: 'ira',
+    iconName: 'Zap',
+    accentColor: 'cyan',
+    categoryTag: 'EV & Connected Telematics',
+  },
+  {
+    code: 'dealer_network',
+    title: 'Dealership Network & Facility',
+    subtitle: 'Authorized dealer 3S/2S facility network, zone allocations, workshop capacity profiles',
+    badge: 'masters',
+    iconName: 'Building2',
+    accentColor: 'slate',
+    categoryTag: 'Infrastructure & Governance',
+  },
+];
+
+export const MASTER_COLLECTIONS: MasterConfig[] = [
+  // =========================================================================
+  // LOGICAL GROUP 1: VEHICLE & PRODUCT DATA
+  // =========================================================================
+  {
+    id: 'ppl_master',
+    name: 'PPL & PL (Product Line) Master',
     owner: 'TML_ADMIN',
-    category: 'JC Tracking',
-    description: 'Governs bay clocking pauses. Configures mandatory dependent fields (SAP Part No, THD No, Ticket ID).',
+    category: 'Vehicle Hierarchy',
+    logicalGroup: 'Vehicle Data',
+    moduleCode: 'jc_creation',
+    moduleName: 'JC Creation',
+    description: 'Parent Product Line (PPL) and Product Line (PL) variants defining OEM parts and service eligibility.',
     fields: [
-      { key: 'bu', label: 'BU', type: 'select', options: ['PV + EV', 'PV', 'EV', 'CV'], mandatory: true },
-      { key: 'pauseReason', label: 'Pause Reason', type: 'text', mandatory: true },
-      { key: 'dependantField1', label: 'Dependant Field 1 (Mandatory)', type: 'text', mandatory: true },
-      { key: 'dependantField2', label: 'Dependant Field 2 (Mandatory)', type: 'text' },
-      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
-      { key: 'displayOrder', label: 'Display Order', type: 'number' },
+      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], mandatory: true, isSystem: true },
+      { key: 'pplCode', label: 'PPL Code', type: 'text', mandatory: true, isSystem: true },
+      { key: 'pplName', label: 'PPL (Parent Line)', type: 'text', mandatory: true, isSystem: true },
+      { key: 'plName', label: 'PL (Variant / Sub-Line)', type: 'text', mandatory: true, isSystem: true },
+      { key: 'fuelType', label: 'Powertrain', type: 'select', options: ['EV', 'Petrol', 'Diesel', 'CNG'], isSystem: true },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'], isSystem: true },
+      {
+        key: 'extended_warranty_tier',
+        label: 'Extended Warranty Tier',
+        type: 'select',
+        options: ['PLATINUM', 'GOLD', 'SILVER', 'STANDARD'],
+        isCustom: true,
+        displayInDealerApp: true,
+        dealerTargetModule: 'vehicle_journey',
+        dealerDisplayLabel: 'Warranty & AMC Protection Tier',
+        valueMapping: {
+          PLATINUM: '🛡️ Platinum 5-Yr Comprehensive Cover',
+          GOLD: '⭐ Gold Shield 3-Yr Comprehensive',
+          SILVER: '🔹 Silver Drivetrain Only',
+          STANDARD: 'Standard 2-Yr Factory Warranty',
+        },
+        description: 'Auto-mapped protection tier displayed on Dealer Job Card & Vehicle Journey screens.',
+      },
+      {
+        key: 'telematics_ota_status',
+        label: 'Telematics Diagnostic Tier',
+        type: 'select',
+        options: ['OTA_ACTIVE', 'ECU_FLASH_REQ', 'NON_CONNECTED'],
+        isCustom: true,
+        displayInDealerApp: true,
+        dealerTargetModule: 'vehicle_journey',
+        dealerDisplayLabel: 'iRA Connected Telematics Status',
+        valueMapping: {
+          OTA_ACTIVE: '🟢 Connected Fleet OTA Active (v4.2)',
+          ECU_FLASH_REQ: '⚠️ Manual Bay Flash Required',
+          NON_CONNECTED: '⚪ Legacy Non-Telematics ECU',
+        },
+        description: 'Telematics connectivity status for dealer technician inspection guidance.',
+      },
     ],
     records: [
-      { id: 'PR-01', bu: 'PV + EV', pauseReason: 'Parts Not Available', dependantField1: 'Part Description (DPM Unissued)', dependantField2: 'Order Number (SAP Order No)', active: 'Y', displayOrder: 1 },
-      { id: 'PR-02', bu: 'PV + EV', pauseReason: 'THD Resolution Pending', dependantField1: 'THD Number (Open/Closed)', dependantField2: 'NA', active: 'Y', displayOrder: 2 },
-      { id: 'PR-03', bu: 'PV + EV', pauseReason: 'Waiting for customer approval', dependantField1: 'Customer Approval Doc / OTP', dependantField2: 'NA', active: 'Y', displayOrder: 3 },
-      { id: 'PR-04', bu: 'PV + EV', pauseReason: 'Manpower absenteeism', dependantField1: 'Supervisor Override Code', dependantField2: 'NA', active: 'Y', displayOrder: 4 },
-      { id: 'PR-05', bu: 'EV', pauseReason: 'HV Battery Support Awaited', dependantField1: 'Ticket No (Ticket Description)', dependantField2: 'Safety Officer Clearance', active: 'Y', displayOrder: 5 },
-      { id: 'PR-06', bu: 'PV + EV', pauseReason: 'Vendor Support Awaited', dependantField1: 'Vendor Name (BOSCH / Delphi)', dependantField2: 'Vendor Visit Date', active: 'Y', displayOrder: 6 },
-      { id: 'PR-07', bu: 'PV + EV', pauseReason: 'Goodwill Approval Awaited', dependantField1: 'Goodwill Request ID (CRM)', dependantField2: 'DGM Endorsement ID', active: 'Y', displayOrder: 7 },
-      { id: 'PR-08', bu: 'PV + EV', pauseReason: 'Extended Warranty Approval Awaited', dependantField1: 'Request ID (Raised to TML)', dependantField2: 'Insurance Surveyor Ref', active: 'Y', displayOrder: 8 },
+      {
+        id: 'PPL-01',
+        bu: 'EV',
+        pplCode: 'PPL-NEXON-EV',
+        pplName: 'Nexon',
+        plName: 'Nexon EV Long Range (45 kWh)',
+        fuelType: 'EV',
+        active: 'Y',
+        extended_warranty_tier: 'PLATINUM',
+        telematics_ota_status: 'OTA_ACTIVE',
+      },
+      {
+        id: 'PPL-02',
+        bu: 'PV',
+        pplCode: 'PPL-NEXON-ICE',
+        pplName: 'Nexon',
+        plName: 'Nexon Fearless+ DCA Petrol',
+        fuelType: 'Petrol',
+        active: 'Y',
+        extended_warranty_tier: 'GOLD',
+        telematics_ota_status: 'OTA_ACTIVE',
+      },
+      {
+        id: 'PPL-03',
+        bu: 'PV',
+        pplCode: 'PPL-ALTROZ',
+        pplName: 'Altroz',
+        plName: 'Altroz XZ i-CNG Twin Cylinder',
+        fuelType: 'CNG',
+        active: 'Y',
+        extended_warranty_tier: 'GOLD',
+        telematics_ota_status: 'NON_CONNECTED',
+      },
+      {
+        id: 'PPL-04',
+        bu: 'PV',
+        pplCode: 'PPL-HARRIER',
+        pplName: 'Harrier',
+        plName: 'Harrier Fearless Dark 2.0L Diesel AT',
+        fuelType: 'Diesel',
+        active: 'Y',
+        extended_warranty_tier: 'PLATINUM',
+        telematics_ota_status: 'ECU_FLASH_REQ',
+      },
+      {
+        id: 'PPL-05',
+        bu: 'EV',
+        pplCode: 'PPL-CURVV-EV',
+        pplName: 'Curvv',
+        plName: 'Curvv EV 55 kWh Hyperion',
+        fuelType: 'EV',
+        active: 'Y',
+        extended_warranty_tier: 'PLATINUM',
+        telematics_ota_status: 'OTA_ACTIVE',
+      },
     ],
   },
-
-  // 2. Tech Model Specific Checklist (From Image 6) - TML Admin
   {
     id: 'model_checklists',
     name: 'Tech Model Specific Checklist',
     owner: 'TML_ADMIN',
-    category: 'JC Tracking',
+    category: 'Vehicle Inspection',
+    logicalGroup: 'Vehicle Data',
+    moduleCode: 'jc_tracking',
+    moduleName: 'JC Tracking & Bay Dispatch',
     description: 'Mandatory technical quality inspection checklist items per vehicle Parent Product Line and Product Line.',
     fields: [
       { key: 'section', label: 'Section', type: 'text', mandatory: true },
@@ -74,13 +374,14 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
       { id: 'MC-07', section: 'Technician Model Checklist', pplName: 'Nexon', pl: 'Nexon EV Empowered', checkDescription: 'HV Traction Cable Insulation & Connector Seals', actionBtn1: 'Good', actionBtn2: 'Inspect', actionBtn3: 'Replace', actionBtn4: 'Torque', actionBtn5: 'No Action', active: 'Y', displayOrder: 7 },
     ],
   },
-
-  // 3. Complaint Code Category Master - TML Admin
   {
     id: 'complaint_codes',
     name: 'Complaint Code Category Master',
     owner: 'TML_ADMIN',
-    category: 'Complaints & Labor',
+    category: 'Complaints & Diagnostics',
+    logicalGroup: 'Vehicle Data',
+    moduleCode: 'jc_creation',
+    moduleName: 'JC Creation',
     description: 'Hierarchical customer voice codes (Symptom, System, Sub-System) for standardization.',
     fields: [
       { key: 'categoryCode', label: 'Category Code', type: 'text', mandatory: true },
@@ -98,13 +399,14 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
       { id: 'CC-05', categoryCode: 'INFO-SCR-05', systemName: 'Infotainment & Connected', complaintDesc: 'Harman touchscreen blanking / Apple CarPlay disconnects', bu: 'PV + EV', severity: 'Low', active: 'Y' },
     ],
   },
-
-  // 4. Job Code Master & Standard FRT - TML Admin
   {
     id: 'job_codes',
     name: 'Job Code & FRT Master',
     owner: 'TML_ADMIN',
-    category: 'Complaints & Labor',
+    category: 'Labor & Billed Hours',
+    logicalGroup: 'Vehicle Data',
+    moduleCode: 'jc_creation',
+    moduleName: 'JC Creation',
     description: 'Tata Motors Flat Rate Time (FRT) standard labor operations and standard billed hours.',
     fields: [
       { key: 'jobCode', label: 'Labor Job Code', type: 'text', mandatory: true },
@@ -121,13 +423,14 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
       { id: 'JC-04', jobCode: 'TML-LAB-4100', operationName: 'Four-Wheel 3D Laser Alignment & Camber Calibration', skillLevel: 'L1 (Certified)', frtHours: 0.9, category: 'Running Repair', active: 'Y' },
     ],
   },
-
-  // 5. Complaint - Job Code - PPL Linkage - TML Admin
   {
     id: 'complaint_job_linkage',
     name: 'Complaint Job Code PPL Linkage',
     owner: 'TML_ADMIN',
-    category: 'Complaints & Labor',
+    category: 'Labor Mapping',
+    logicalGroup: 'Vehicle Data',
+    moduleCode: 'jc_creation',
+    moduleName: 'JC Creation',
     description: 'AI-assisted routing mapping customer symptoms to standard labor job codes filtered by vehicle model.',
     fields: [
       { key: 'pplName', label: 'PPL Name', type: 'select', options: ['Nexon', 'Altroz', 'Harrier', 'Safari', 'Punch', 'Curvv', 'Tiago'], mandatory: true },
@@ -143,82 +446,117 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
       { id: 'CJ-03', pplName: 'Altroz', complaintCode: 'ENG-NOIS-01', recommendedJobCode: 'TML-LAB-1001 (Oil & Tensioner Check)', matchConfidence: 'High (90%)', autoAssignBay: 'Mechanical', active: 'Y' },
     ],
   },
-
-  // 6. PPL Master & PL Master - TML Admin
   {
-    id: 'ppl_master',
-    name: 'PPL & PL (Product Line) Master',
+    id: 'ev_safety_protocols',
+    name: 'EV High-Voltage Safety & Protocols',
     owner: 'TML_ADMIN',
-    category: 'Vehicle Hierarchy',
-    description: 'Parent Product Line (PPL) and Product Line (PL) variants defining OEM parts and service eligibility.',
+    category: 'EV Protocols',
+    logicalGroup: 'Vehicle Data',
+    moduleCode: 'ira',
+    moduleName: 'IRA Connected Vehicle & EV',
+    description: 'Mandatory OEM safety gates before touching high-voltage (350V - 400V DC) EV components.',
     fields: [
-      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], mandatory: true },
-      { key: 'pplCode', label: 'PPL Code', type: 'text', mandatory: true },
-      { key: 'pplName', label: 'PPL (Parent Line)', type: 'text', mandatory: true },
-      { key: 'plName', label: 'PL (Variant / Sub-Line)', type: 'text', mandatory: true },
-      { key: 'fuelType', label: 'Powertrain', type: 'select', options: ['EV', 'Petrol', 'Diesel', 'CNG'] },
+      { key: 'protocolCode', label: 'Protocol ID', type: 'text', mandatory: true },
+      { key: 'safetyGate', label: 'Mandatory Isolation Protocol', type: 'text', mandatory: true },
+      { key: 'requiredPpe', label: 'Mandatory PPE Grade', type: 'select', options: ['Class 0 1000V Insulated Gloves + Face Shield', 'Arc Flash Suit Level 2', 'Rubber Insulated Floor Matting 17kV'] },
+      { key: 'digitalMultimeterCheck', label: 'Bus Voltage Below 5V Verification', type: 'select', options: ['Y', 'N'] },
       { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
     ],
     records: [
-      { id: 'PPL-01', bu: 'EV', pplCode: 'PPL-NEXON-EV', pplName: 'Nexon', plName: 'Nexon EV Long Range (45 kWh)', fuelType: 'EV', active: 'Y' },
-      { id: 'PPL-02', bu: 'PV', pplCode: 'PPL-NEXON-ICE', pplName: 'Nexon', plName: 'Nexon Fearless+ DCA Petrol', fuelType: 'Petrol', active: 'Y' },
-      { id: 'PPL-03', bu: 'PV', pplCode: 'PPL-ALTROZ', pplName: 'Altroz', plName: 'Altroz XZ i-CNG Twin Cylinder', fuelType: 'CNG', active: 'Y' },
-      { id: 'PPL-04', bu: 'PV', pplCode: 'PPL-HARRIER', pplName: 'Harrier', plName: 'Harrier Fearless Dark 2.0L Diesel AT', fuelType: 'Diesel', active: 'Y' },
-      { id: 'PPL-05', bu: 'EV', pplCode: 'PPL-CURVV-EV', pplName: 'Curvv', plName: 'Curvv EV 55 kWh Hyperion', fuelType: 'EV', active: 'Y' },
+      { id: 'EV-01', protocolCode: 'EV-ISO-01', safetyGate: 'Manual Service Disconnect (MSD) orange plug removal & lock-out tag-out (LOTO)', requiredPpe: 'Class 0 1000V Insulated Gloves + Face Shield', digitalMultimeterCheck: 'Y', active: 'Y' },
+      { id: 'EV-02', protocolCode: 'EV-ISO-02', safetyGate: '12V Auxiliary battery terminal disconnection to disable HV contactor control', requiredPpe: 'Class 0 1000V Insulated Gloves + Face Shield', digitalMultimeterCheck: 'Y', active: 'Y' },
+      { id: 'EV-03', protocolCode: 'EV-ISO-03', safetyGate: 'Capacitor discharge wait cycle (10 mins) and inverter busbar residual test', requiredPpe: 'Rubber Insulated Floor Matting 17kV', digitalMultimeterCheck: 'Y', active: 'Y' },
     ],
   },
-
-  // 7. Repeat Complaint / Revisit Reason LOV Master - TML Admin
   {
-    id: 'revisit_reasons',
-    name: 'Repeat Complaint & Revisit LOV Master',
+    id: 'dtc_telematics_alerts',
+    name: 'DTC Fault Code Alert & Telematics',
     owner: 'TML_ADMIN',
-    category: 'Complaints & Labor',
-    description: 'Standardized root cause classifications for customer workshop revisits within 30 days.',
+    category: 'Telematics Codes',
+    logicalGroup: 'Vehicle Data',
+    moduleCode: 'ira',
+    moduleName: 'IRA Connected Vehicle & EV',
+    description: 'Connected vehicle telemetry triggers from iRA modem triggering preemptive telecaller CRM outreach.',
     fields: [
-      { key: 'reasonCode', label: 'Reason Code', type: 'text', mandatory: true },
-      { key: 'reasonName', label: 'Revisit Classification', type: 'text', mandatory: true },
-      { key: 'department', label: 'Accountable Department', type: 'select', options: ['Workmanship / Technician', 'Parts Quality / Defective Spare', 'Diagnosis Error', 'Customer Education'] },
-      { key: 'escalateToDGM', label: 'Auto Escalate to DGM', type: 'select', options: ['Y', 'N'] },
+      { key: 'dtcCode', label: 'OBD-II / CAN DTC Code', type: 'text', mandatory: true },
+      { key: 'description', label: 'Telematics Fault Description', type: 'text', mandatory: true },
+      { key: 'alertSeverity', label: 'Telemetry Alert Level', type: 'select', options: ['Critical Emergency (Red Lamp)', 'Warning Advisory (Amber Lamp)', 'Informational Routine (Blue)'] },
+      { key: 'autoBookAppointment', label: 'Auto Trigger CRM Outbound Call', type: 'select', options: ['Y', 'N'] },
       { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
     ],
     records: [
-      { id: 'RR-01', reasonCode: 'REV-TECH-01', reasonName: 'Incomplete torque or loose fastener during initial repair', department: 'Workmanship / Technician', escalateToDGM: 'Y', active: 'Y' },
-      { id: 'RR-02', reasonCode: 'REV-PART-02', reasonName: 'New spare part premature failure within warranty', department: 'Parts Quality / Defective Spare', escalateToDGM: 'N', active: 'Y' },
-      { id: 'RR-03', reasonCode: 'REV-DIAG-03', reasonName: 'Incorrect fault diagnosis (Replaced wrong component)', department: 'Diagnosis Error', escalateToDGM: 'Y', active: 'Y' },
-      { id: 'RR-04', reasonCode: 'REV-CUST-04', reasonName: 'Operating nuance / normal NVH characteristic explained', department: 'Customer Education', escalateToDGM: 'N', active: 'Y' },
+      { id: 'DTC-01', dtcCode: 'P0A80-00', description: 'HV Battery Pack Cell Imbalance > 150mV across modules', alertSeverity: 'Critical Emergency (Red Lamp)', autoBookAppointment: 'Y', active: 'Y' },
+      { id: 'DTC-02', dtcCode: 'P1A02-14', description: 'Electric Motor Inverter Coolant Flow Below Threshold', alertSeverity: 'Warning Advisory (Amber Lamp)', autoBookAppointment: 'Y', active: 'Y' },
+      { id: 'DTC-03', dtcCode: 'B1245-01', description: 'Smart Key Fob Battery Low (30-day forecast)', alertSeverity: 'Informational Routine (Blue)', autoBookAppointment: 'N', active: 'Y' },
     ],
   },
 
-  // 8. AMC Products & Pricing Master - TML Admin
+  // =========================================================================
+  // LOGICAL GROUP 2: DEALER NETWORK & FACILITIES
+  // =========================================================================
   {
-    id: 'amc_pricing',
-    name: 'AMC Products & Pricing Master',
+    id: 'dealer_details_registry',
+    name: 'Authorized Dealer Network & Facility Registry',
     owner: 'TML_ADMIN',
-    category: 'Commercial & AMC',
-    description: 'Tata Motors Value Care AMC packages, tenure, coverage limits, and national price schedules.',
+    category: 'Facility Registry',
+    logicalGroup: 'Dealer Network',
+    moduleCode: 'dealer_network',
+    moduleName: 'Dealership Network & Facility',
+    isInteractiveSpecial: true,
+    interactiveTabTarget: 'dealers',
+    description: 'PAN-India authorized dealer facility registry, 3S/2S workshop status, zone affiliations, and active bay counts.',
     fields: [
-      { key: 'amcCode', label: 'AMC Plan Code', type: 'text', mandatory: true },
-      { key: 'planName', label: 'AMC Plan Name', type: 'text', mandatory: true },
-      { key: 'pplName', label: 'Applicable PPL', type: 'select', options: ['All Models', 'Nexon', 'Altroz', 'Harrier / Safari', 'EV Fleet'] },
-      { key: 'tenureYears', label: 'Tenure (Yrs)', type: 'number', mandatory: true },
-      { key: 'maxKms', label: 'Max Coverage (KMs)', type: 'number', mandatory: true },
-      { key: 'priceInr', label: 'Base OEM MRP (₹)', type: 'number', mandatory: true },
-      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+      { key: 'dealerCode', label: 'Dealer Code', type: 'text', mandatory: true },
+      { key: 'dealerName', label: 'Dealership Facility Name', type: 'text', mandatory: true },
+      { key: 'city', label: 'City', type: 'text', mandatory: true },
+      { key: 'zone', label: 'Zone', type: 'select', options: ['South', 'North', 'West', 'East'] },
+      { key: 'facilityType', label: 'Facility Type', type: 'select', options: ['3S (Sales, Service, Spares)', '2S (Service & Spares)', '1S (Express Workshop)'] },
+      { key: 'totalBays', label: 'Total Physical Bays', type: 'number', mandatory: true },
+      { key: 'status', label: 'Operating Status', type: 'select', options: ['ACTIVE', 'SUSPENDED', 'UNDER_AUDIT'] },
     ],
     records: [
-      { id: 'AMC-01', amcCode: 'TML-VC-SILVER-02', planName: 'Value Care Silver (Scheduled Lube & Filters)', pplName: 'Nexon', tenureYears: 2, maxKms: 30000, priceInr: 12500, active: 'Y' },
-      { id: 'AMC-02', amcCode: 'TML-VC-GOLD-03', planName: 'Value Care Gold (Wear & Tear + Scheduled)', pplName: 'Harrier / Safari', tenureYears: 3, maxKms: 45000, priceInr: 34000, active: 'Y' },
-      { id: 'AMC-03', amcCode: 'TML-EV-PROMISE-05', planName: 'EV Battery & Motor Health Guard AMC', pplName: 'EV Fleet', tenureYears: 5, maxKms: 100000, priceInr: 28500, active: 'Y' },
+      { id: 'DLR-01', dealerCode: 'DLR1001', dealerName: 'Sample Motors Hyderabad', city: 'Hyderabad', zone: 'South', facilityType: '3S (Sales, Service, Spares)', totalBays: 12, status: 'ACTIVE' },
+      { id: 'DLR-02', dealerCode: 'DLR1002', dealerName: 'Rudra Motors South', city: 'Bangalore', zone: 'South', facilityType: '3S (Sales, Service, Spares)', totalBays: 18, status: 'ACTIVE' },
+      { id: 'DLR-03', dealerCode: 'DLR1003', dealerName: 'Concorde Motors Mumbai', city: 'Mumbai', zone: 'West', facilityType: '3S (Sales, Service, Spares)', totalBays: 24, status: 'ACTIVE' },
+      { id: 'DLR-04', dealerCode: 'DLR1004', dealerName: 'Lexicon Motors Delhi', city: 'New Delhi', zone: 'North', facilityType: '3S (Sales, Service, Spares)', totalBays: 20, status: 'ACTIVE' },
+      { id: 'DLR-05', dealerCode: 'DLR1005', dealerName: 'Austin Motors Kolkata', city: 'Kolkata', zone: 'East', facilityType: '2S (Service & Spares)', totalBays: 14, status: 'ACTIVE' },
     ],
   },
-
-  // 9. Bay Master with Division Capacity (From Image 4) - Dealer Admin
+  {
+    id: 'bay_management_interactive',
+    name: 'Bay Management Master & Lift Matrix',
+    owner: 'DEALER_ADMIN',
+    category: 'Bay Setup',
+    logicalGroup: 'Dealer Network',
+    moduleCode: 'jc_tracking',
+    moduleName: 'JC Tracking & Bay Dispatch',
+    isInteractiveSpecial: true,
+    interactiveTabTarget: 'bays',
+    description: 'Comprehensive physical bay infrastructure, floor levels, 2-post/4-post lift availability, special tooling, and approval states.',
+    fields: [
+      { key: 'bayName', label: 'Bay Name', type: 'text', mandatory: true },
+      { key: 'bayType', label: 'Bay Classification', type: 'select', options: ['Mechanical', 'Electrical', 'EV', 'Fleet', 'Speedo', 'AC', 'BodyShop'] },
+      { key: 'floor', label: 'Floor Level', type: 'select', options: ['Ground', 'Floor 1', 'Floor 2', 'Basement'] },
+      { key: 'liftAvailability', label: 'Lift Setup', type: 'select', options: ['No Lift', '2 post lift', '4 post lift'] },
+      { key: 'techSupervisor', label: 'Assigned Supervisor', type: 'text', mandatory: true },
+      { key: 'approvalStatus', label: 'Approval Status', type: 'select', options: ['Approved', 'Pending Approval', 'Draft', 'Rejected'] },
+    ],
+    records: [
+      { id: 'BAY-01', bayName: 'Mechanical Bay 01', bayType: 'Mechanical', floor: 'Floor 1', liftAvailability: '2 post lift', techSupervisor: 'Ram', approvalStatus: 'Approved' },
+      { id: 'BAY-02', bayName: 'Mechanical Bay 02', bayType: 'Mechanical', floor: 'Floor 1', liftAvailability: '2 post lift', techSupervisor: 'Ram', approvalStatus: 'Approved' },
+      { id: 'BAY-03', bayName: 'Electrical Bay 01', bayType: 'Electrical', floor: 'Floor 1', liftAvailability: 'No Lift', techSupervisor: 'Madhu', approvalStatus: 'Pending Approval' },
+      { id: 'BAY-04', bayName: 'EV High-Voltage Bay 01', bayType: 'EV', floor: 'Floor 1', liftAvailability: '2 post lift', techSupervisor: 'Madhu', approvalStatus: 'Approved' },
+      { id: 'BAY-05', bayName: 'Fleet Service Bay 01', bayType: 'Fleet', floor: 'Floor 1', liftAvailability: '4 post lift', techSupervisor: 'Ram', approvalStatus: 'Draft' },
+    ],
+  },
   {
     id: 'bay_division_summary',
     name: 'Dealership Division Bay Allocation',
     owner: 'DEALER_ADMIN',
-    category: 'Dealership Operations',
+    category: 'Capacity Allocations',
+    logicalGroup: 'Dealer Network',
+    moduleCode: 'jc_tracking',
+    moduleName: 'JC Tracking & Bay Dispatch',
     description: 'Dealership division bay capacities across Mechanical, Bodyshop, Wheel Alignment, Electrical, AC, Speedo, Fleet.',
     fields: [
       { key: 'divisionName', label: 'Division Name', type: 'text', mandatory: true },
@@ -238,13 +576,72 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
       { id: 'BD-02', divisionName: 'D2 - Express Hub', dealerName: 'Sample Motors Hyderabad', bu: 'PV + EV', bayCount: 15, mechanical: 3, bodyshop: 3, wheelAlignment: 2, electrical: 2, ac: 2, speedo: 1, fleet: 2 },
     ],
   },
+  {
+    id: 'holiday_calendar_master',
+    name: 'Non-Operational Hours & Holiday Calendar',
+    owner: 'DEALER_ADMIN',
+    category: 'Operating Calendar',
+    logicalGroup: 'Dealer Network',
+    moduleCode: 'appointment',
+    moduleName: 'Appointment Scheduling',
+    isInteractiveSpecial: true,
+    interactiveTabTarget: 'calendar',
+    description: 'Weekly day-off operating patterns and date-specific festival / plant maintenance overrides.',
+    fields: [
+      { key: 'date', label: 'Holiday Date', type: 'date', mandatory: true },
+      { key: 'name', label: 'Occasion / Name', type: 'text', mandatory: true },
+      { key: 'type', label: 'Classification', type: 'select', options: ['National Holiday', 'Festival Closure', 'State Holiday', 'Quarterly Maintenance'] },
+      { key: 'hours', label: 'Operating Window', type: 'text', mandatory: true },
+      { key: 'isClosed', label: 'Full Day Closed', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'HOL-01', date: '2026-10-02', name: 'Mahatma Gandhi Jayanti', type: 'National Holiday', hours: 'Closed', isClosed: 'Y' },
+      { id: 'HOL-02', date: '2026-10-20', name: 'Dussehra / Vijayadashami', type: 'Festival Closure', hours: 'Closed', isClosed: 'Y' },
+      { id: 'HOL-03', date: '2026-11-09', name: 'Diwali (Deepavali)', type: 'Festival Closure', hours: 'Closed', isClosed: 'Y' },
+      { id: 'HOL-04', date: '2026-11-10', name: 'Govardhan Puja & Audit Maintenance', type: 'Quarterly Maintenance', hours: '09:00 AM - 01:00 PM', isClosed: 'N' },
+    ],
+  },
+  {
+    id: 'time_slot_quotas_master',
+    name: 'Time Slot Quotas & Hourly Capacity',
+    owner: 'DEALER_ADMIN',
+    category: 'Intake Density',
+    logicalGroup: 'Dealer Network',
+    moduleCode: 'appointment',
+    moduleName: 'Appointment Scheduling',
+    isInteractiveSpecial: true,
+    interactiveTabTarget: 'timeslots',
+    description: 'Regulates hourly intake densities, dedicated lift allocations, and walk-in buffer reserves per workshop division.',
+    fields: [
+      { key: 'slot', label: 'Time Window', type: 'text', mandatory: true },
+      { key: 'cap', label: 'Max Vehicle Capacity', type: 'number', mandatory: true },
+      { key: 'buffer', label: 'Walk-in Reserve Buffer', type: 'number', mandatory: true },
+      { key: 'dedicatedBays', label: 'Dedicated Bays Allocated', type: 'number', mandatory: true },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'TS-01', slot: '09:00 AM - 10:00 AM', cap: 12, buffer: 3, dedicatedBays: 8, active: 'Y' },
+      { id: 'TS-02', slot: '10:00 AM - 11:00 AM', cap: 14, buffer: 4, dedicatedBays: 9, active: 'Y' },
+      { id: 'TS-03', slot: '11:00 AM - 12:00 PM', cap: 12, buffer: 3, dedicatedBays: 8, active: 'Y' },
+      { id: 'TS-04', slot: '12:00 PM - 01:00 PM', cap: 10, buffer: 2, dedicatedBays: 7, active: 'Y' },
+      { id: 'TS-05', slot: '02:00 PM - 03:00 PM', cap: 10, buffer: 2, dedicatedBays: 7, active: 'Y' },
+      { id: 'TS-06', slot: '03:00 PM - 04:00 PM', cap: 8, buffer: 2, dedicatedBays: 6, active: 'Y' },
+      { id: 'TS-07', slot: '04:00 PM - 05:00 PM', cap: 8, buffer: 2, dedicatedBays: 6, active: 'Y' },
+      { id: 'TS-08', slot: '05:00 PM - 06:30 PM', cap: 6, buffer: 2, dedicatedBays: 5, active: 'Y' },
+    ],
+  },
 
-  // 10. Bay - Technician Mapping (From Image 5) - Dealer Admin
+  // =========================================================================
+  // LOGICAL GROUP 3: SERVICE OPERATIONS & FLOOR
+  // =========================================================================
   {
     id: 'bay_technician',
     name: 'Bay - Technician & Supervisor Roster',
     owner: 'DEALER_ADMIN',
-    category: 'Dealership Operations',
+    category: 'Manpower Allocation',
+    logicalGroup: 'Service Operations',
+    moduleCode: 'jc_tracking',
+    moduleName: 'JC Tracking & Bay Dispatch',
     description: 'Assigns certified technicians and technical supervisors to designated workshop bays.',
     fields: [
       { key: 'dealer', label: 'Dealer', type: 'text', mandatory: true },
@@ -261,6 +658,422 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
       { id: 'BT-01', dealer: 'DLR1001', division: 'D1 - South Main', bayName: 'Elect Bay 01', technicianType: 'Electrical', technicianName: 'Rohit Yadav', experienceYears: 3, skill: 'L2', certification: 'TML Level 2 Auto-Electrical', active: 'Y' },
       { id: 'BT-02', dealer: 'DLR1001', division: 'D1 - South Main', bayName: 'Mech Bay 01', technicianType: 'Mechanical', technicianName: 'Shyam Sundar', experienceYears: 5, skill: 'L2', certification: 'DCA Gearbox Specialist', active: 'Y' },
       { id: 'BT-03', dealer: 'DLR1001', division: 'D2 - Express Hub', bayName: 'EV Bay 01', technicianType: 'EV Certified', technicianName: 'Arjun Das', experienceYears: 4, skill: 'Diagnostic Master', certification: 'Tata EV 1000V High Voltage Certified', active: 'Y' },
+    ],
+  },
+  {
+    id: 'pause_reasons',
+    name: 'Clocking Pause Reason Master',
+    owner: 'TML_ADMIN',
+    category: 'Bay Clocking Rules',
+    logicalGroup: 'Service Operations',
+    moduleCode: 'jc_tracking',
+    moduleName: 'JC Tracking & Bay Dispatch',
+    description: 'Governs bay clocking pauses. Configures mandatory dependent fields (SAP Part No, THD No, Ticket ID).',
+    fields: [
+      { key: 'bu', label: 'BU', type: 'select', options: ['PV + EV', 'PV', 'EV', 'CV'], mandatory: true },
+      { key: 'pauseReason', label: 'Pause Reason', type: 'text', mandatory: true },
+      { key: 'dependantField1', label: 'Dependant Field 1 (Mandatory)', type: 'text', mandatory: true },
+      { key: 'dependantField2', label: 'Dependant Field 2 (Mandatory)', type: 'text' },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+      { key: 'displayOrder', label: 'Display Order', type: 'number' },
+    ],
+    records: [
+      { id: 'PR-01', bu: 'PV + EV', pauseReason: 'Parts Not Available', dependantField1: 'Part Description (DPM Unissued)', dependantField2: 'Order Number (SAP Order No)', active: 'Y', displayOrder: 1 },
+      { id: 'PR-02', bu: 'PV + EV', pauseReason: 'THD Resolution Pending', dependantField1: 'THD Number (Open/Closed)', dependantField2: 'NA', active: 'Y', displayOrder: 2 },
+      { id: 'PR-03', bu: 'PV + EV', pauseReason: 'Waiting for customer approval', dependantField1: 'Customer Approval Doc / OTP', dependantField2: 'NA', active: 'Y', displayOrder: 3 },
+      { id: 'PR-04', bu: 'PV + EV', pauseReason: 'Manpower absenteeism', dependantField1: 'Supervisor Override Code', dependantField2: 'NA', active: 'Y', displayOrder: 4 },
+      { id: 'PR-05', bu: 'EV', pauseReason: 'HV Battery Support Awaited', dependantField1: 'Ticket No (Ticket Description)', dependantField2: 'Safety Officer Clearance', active: 'Y', displayOrder: 5 },
+      { id: 'PR-06', bu: 'PV + EV', pauseReason: 'Vendor Support Awaited', dependantField1: 'Vendor Name (BOSCH / Delphi)', dependantField2: 'Vendor Visit Date', active: 'Y', displayOrder: 6 },
+      { id: 'PR-07', bu: 'PV + EV', pauseReason: 'Goodwill Approval Awaited', dependantField1: 'Goodwill Request ID (CRM)', dependantField2: 'DGM Endorsement ID', active: 'Y', displayOrder: 7 },
+      { id: 'PR-08', bu: 'PV + EV', pauseReason: 'Extended Warranty Approval Awaited', dependantField1: 'Request ID (Raised to TML)', dependantField2: 'Insurance Surveyor Ref', active: 'Y', displayOrder: 8 },
+    ],
+  },
+  {
+    id: 'revisit_reasons',
+    name: 'Repeat Complaint & Revisit LOV Master',
+    owner: 'TML_ADMIN',
+    category: 'Quality Root Causes',
+    logicalGroup: 'Service Operations',
+    moduleCode: 'jc_creation',
+    moduleName: 'JC Creation',
+    description: 'Standardized root cause classifications for customer workshop revisits within 30 days.',
+    fields: [
+      { key: 'reasonCode', label: 'Reason Code', type: 'text', mandatory: true },
+      { key: 'reasonName', label: 'Revisit Classification', type: 'text', mandatory: true },
+      { key: 'department', label: 'Accountable Department', type: 'select', options: ['Workmanship / Technician', 'Parts Quality / Defective Spare', 'Diagnosis Error', 'Customer Education'] },
+      { key: 'escalateToDGM', label: 'Auto Escalate to DGM', type: 'select', options: ['Y', 'N'] },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'RR-01', reasonCode: 'REV-TECH-01', reasonName: 'Incomplete torque or loose fastener during initial repair', department: 'Workmanship / Technician', escalateToDGM: 'Y', active: 'Y' },
+      { id: 'RR-02', reasonCode: 'REV-PART-02', reasonName: 'New spare part premature failure within warranty', department: 'Parts Quality / Defective Spare', escalateToDGM: 'N', active: 'Y' },
+      { id: 'RR-03', reasonCode: 'REV-DIAG-03', reasonName: 'Incorrect fault diagnosis (Replaced wrong component)', department: 'Diagnosis Error', escalateToDGM: 'Y', active: 'Y' },
+      { id: 'RR-04', reasonCode: 'REV-CUST-04', reasonName: 'Operating nuance / normal NVH characteristic explained', department: 'Customer Education', escalateToDGM: 'N', active: 'Y' },
+    ],
+  },
+  {
+    id: 'appointment_cancellation_lov',
+    name: 'Appointment Cancellation & Reschedule LOV',
+    owner: 'TML_ADMIN',
+    category: 'Appointment Flow',
+    logicalGroup: 'Service Operations',
+    moduleCode: 'appointment',
+    moduleName: 'Appointment Scheduling',
+    description: 'Standardized classifications for telecaller CRM reschedule and cancellation tracking.',
+    fields: [
+      { key: 'reasonCode', label: 'Reason Code', type: 'text', mandatory: true },
+      { key: 'reasonName', label: 'Cancellation / Reschedule Reason', type: 'text', mandatory: true },
+      { key: 'category', label: 'Initiated By', type: 'select', options: ['Customer Request', 'Dealership Capacity Constrained', 'Parts Shortage', 'Weather / Transit'] },
+      { key: 'allowAutoReschedule', label: 'Allow Auto Reschedule in CRM', type: 'select', options: ['Y', 'N'] },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'AC-01', reasonCode: 'CANC-CUST-OUT', reasonName: 'Customer out of town / traveling', category: 'Customer Request', allowAutoReschedule: 'Y', active: 'Y' },
+      { id: 'AC-02', reasonCode: 'CANC-PRICE-HIGH', reasonName: 'Service estimate higher than expected (Cost objection)', category: 'Customer Request', allowAutoReschedule: 'N', active: 'Y' },
+      { id: 'AC-03', reasonCode: 'CANC-BAY-CAP', reasonName: 'Specialized EV / Alignment bay overbooked', category: 'Dealership Capacity Constrained', allowAutoReschedule: 'Y', active: 'Y' },
+      { id: 'AC-04', reasonCode: 'CANC-PART-BO', reasonName: 'Critical spare part on transit backorder', category: 'Parts Shortage', allowAutoReschedule: 'Y', active: 'Y' },
+    ],
+  },
+  {
+    id: 'eqc_inspection_checklist',
+    name: 'Final Quality Inspection & Road Test Checklist',
+    owner: 'TML_ADMIN',
+    category: 'Quality Sign-off',
+    logicalGroup: 'Service Operations',
+    moduleCode: 'eqc',
+    moduleName: 'EQC (Electronic Quality Check)',
+    description: 'Pre-delivery quality assurance checklists, OBD-II DTC error sweeps, and road test verifications.',
+    fields: [
+      { key: 'checkCode', label: 'QC Code', type: 'text', mandatory: true },
+      { key: 'stageName', label: 'Inspection Stage', type: 'select', options: ['Underbody & Suspension', 'Underhood Fluids & Torques', 'Diagnostic Scan & OBD-II', 'Road Test Evaluation', 'Washing & Interior Cleanliness'] },
+      { key: 'description', label: 'Standard Inspection Item', type: 'text', mandatory: true },
+      { key: 'mandatoryPass', label: 'Zero-Defect Gate Requirement', type: 'select', options: ['Y', 'N'] },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'EQC-01', checkCode: 'EQC-OBD-01', stageName: 'Diagnostic Scan & OBD-II', description: 'Complete ECU fault code clear verification (Zero active DTCs)', mandatoryPass: 'Y', active: 'Y' },
+      { id: 'EQC-02', checkCode: 'EQC-TORQ-02', stageName: 'Underbody & Suspension', description: 'Four-wheel lug nuts torque verification with calibrated digital wrench', mandatoryPass: 'Y', active: 'Y' },
+      { id: 'EQC-03', checkCode: 'EQC-ROAD-03', stageName: 'Road Test Evaluation', description: '5 km dynamic road test: straight line tracking and ABS bite test', mandatoryPass: 'Y', active: 'Y' },
+      { id: 'EQC-04', checkCode: 'EQC-WASH-04', stageName: 'Washing & Interior Cleanliness', description: 'Zero water seepage, spotless dashboard, paper floor mats installed', mandatoryPass: 'N', active: 'Y' },
+    ],
+  },
+  {
+    id: 'torque_verification_standards',
+    name: 'Critical Fastener Torque Verification Master',
+    owner: 'TML_ADMIN',
+    category: 'Torque Engineering',
+    logicalGroup: 'Service Operations',
+    moduleCode: 'eqc',
+    moduleName: 'EQC (Electronic Quality Check)',
+    description: 'Factory-specified torque values (Nm) for wheel hubs, calipers, subframes, and steering links.',
+    fields: [
+      { key: 'fastenerCode', label: 'Fastener Part Code', type: 'text', mandatory: true },
+      { key: 'assemblyName', label: 'Assembly Location', type: 'text', mandatory: true },
+      { key: 'nominalTorque', label: 'Nominal Torque (Nm)', type: 'number', mandatory: true },
+      { key: 'tolerance', label: 'Tolerance (± Nm)', type: 'number', mandatory: true },
+      { key: 'toolRequired', label: 'Digital Torque Wrench Tool ID', type: 'text', mandatory: true },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'TRQ-01', fastenerCode: 'FAST-WHL-120', assemblyName: 'Wheel Lug Nuts (All 4 wheels)', nominalTorque: 120, tolerance: 5, toolRequired: 'TW-DIGI-200', active: 'Y' },
+      { id: 'TRQ-02', fastenerCode: 'FAST-CALIP-85', assemblyName: 'Front Brake Caliper Guide Pins', nominalTorque: 85, tolerance: 3, toolRequired: 'TW-DIGI-100', active: 'Y' },
+      { id: 'TRQ-03', fastenerCode: 'FAST-SUBFRM-140', assemblyName: 'Front Subframe to Monocoque Mounts', nominalTorque: 140, tolerance: 8, toolRequired: 'TW-DIGI-250', active: 'Y' },
+    ],
+  },
+  {
+    id: 'bodyshop_process_stages',
+    name: 'BodyShop Denting & Paint Stage Master',
+    owner: 'TML_ADMIN',
+    category: 'BodyShop Workflow',
+    logicalGroup: 'Service Operations',
+    moduleCode: 'bodyshop',
+    moduleName: 'BodyShop & Paint Operations',
+    description: 'Sequenced bodyshop workflow stages from accident survey to bake oven finish.',
+    fields: [
+      { key: 'stageCode', label: 'Stage Code', type: 'text', mandatory: true },
+      { key: 'stageName', label: 'Process Stage', type: 'text', mandatory: true },
+      { key: 'standardDurationHrs', label: 'Standard FRT (Hrs)', type: 'number', mandatory: true },
+      { key: 'requiresSurveyorApproval', label: 'Surveyor Sign-off Gate', type: 'select', options: ['Y', 'N'] },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'BSP-01', stageCode: 'BS-SURV-01', stageName: 'Insurance Surveyor Joint Inspection & Supplementary Estimate', standardDurationHrs: 24, requiresSurveyorApproval: 'Y', active: 'Y' },
+      { id: 'BSP-02', stageCode: 'BS-DENT-02', stageName: 'Panel Beating & Hydraulic Chassis Pulling Jig Alignment', standardDurationHrs: 8, requiresSurveyorApproval: 'N', active: 'Y' },
+      { id: 'BSP-03', stageCode: 'BS-PRIM-03', stageName: 'Body Filler Application & Anti-Corrosion Epoxy Primer', standardDurationHrs: 4, requiresSurveyorApproval: 'N', active: 'Y' },
+      { id: 'BSP-04', stageCode: 'BS-OVEN-04', stageName: 'Heated Paint Booth Spray & 60°C Bake Cycle', standardDurationHrs: 3, requiresSurveyorApproval: 'N', active: 'Y' },
+    ],
+  },
+  {
+    id: 'paint_booth_schedule',
+    name: 'Heated Spray Booth & Oven Slot Master',
+    owner: 'DEALER_ADMIN',
+    category: 'Paint Facilities',
+    logicalGroup: 'Service Operations',
+    moduleCode: 'bodyshop',
+    moduleName: 'BodyShop & Paint Operations',
+    description: 'Spray booth slotting, color batching, and energy consumption metrics.',
+    fields: [
+      { key: 'boothName', label: 'Spray Booth Identification', type: 'text', mandatory: true },
+      { key: 'paintType', label: 'Paint Technology', type: 'select', options: ['Waterborne Eco-Basecoat', 'Solvent-borne Clearcoat', 'Matte Finish Specialty'] },
+      { key: 'maxBakeTemp', label: 'Baking Temperature (°C)', type: 'number', mandatory: true },
+      { key: 'dailyCapacityPanels', label: 'Daily Panel Capacity', type: 'number', mandatory: true },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'PB-01', boothName: 'Booth 1 - Blowtherm Downdraft', paintType: 'Waterborne Eco-Basecoat', maxBakeTemp: 65, dailyCapacityPanels: 14, active: 'Y' },
+      { id: 'PB-02', boothName: 'Booth 2 - Nova Verta High Temp', paintType: 'Solvent-borne Clearcoat', maxBakeTemp: 70, dailyCapacityPanels: 16, active: 'Y' },
+    ],
+  },
+
+  // =========================================================================
+  // LOGICAL GROUP 4: PARTS, CLAIMS & SUPPORT
+  // =========================================================================
+  {
+    id: 'amc_pricing',
+    name: 'AMC Products & Pricing Master',
+    owner: 'TML_ADMIN',
+    category: 'Commercial Contracts',
+    logicalGroup: 'Parts, Claims & Support',
+    moduleCode: 'claim',
+    moduleName: 'Claim & Warranty',
+    description: 'Tata Motors Value Care AMC packages, tenure, coverage limits, and national price schedules.',
+    fields: [
+      { key: 'amcCode', label: 'AMC Plan Code', type: 'text', mandatory: true },
+      { key: 'planName', label: 'AMC Plan Name', type: 'text', mandatory: true },
+      { key: 'pplName', label: 'Applicable PPL', type: 'select', options: ['All Models', 'Nexon', 'Altroz', 'Harrier / Safari', 'EV Fleet'] },
+      { key: 'tenureYears', label: 'Tenure (Yrs)', type: 'number', mandatory: true },
+      { key: 'maxKms', label: 'Max Coverage (KMs)', type: 'number', mandatory: true },
+      { key: 'priceInr', label: 'Base OEM MRP (₹)', type: 'number', mandatory: true },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'AMC-01', amcCode: 'TML-VC-SILVER-02', planName: 'Value Care Silver (Scheduled Lube & Filters)', pplName: 'Nexon', tenureYears: 2, maxKms: 30000, priceInr: 12500, active: 'Y' },
+      { id: 'AMC-02', amcCode: 'TML-VC-GOLD-03', planName: 'Value Care Gold (Wear & Tear + Scheduled)', pplName: 'Harrier / Safari', tenureYears: 3, maxKms: 45000, priceInr: 34000, active: 'Y' },
+      { id: 'AMC-03', amcCode: 'TML-EV-PROMISE-05', planName: 'EV Battery & Motor Health Guard AMC', pplName: 'EV Fleet', tenureYears: 5, maxKms: 100000, priceInr: 28500, active: 'Y' },
+    ],
+  },
+  {
+    id: 'warranty_defect_codes',
+    name: 'Warranty Defect & Causal Part Tagging Master',
+    owner: 'TML_ADMIN',
+    category: 'Warranty Tagging',
+    logicalGroup: 'Parts, Claims & Support',
+    moduleCode: 'claim',
+    moduleName: 'Claim & Warranty',
+    description: 'Defect classifications for processing OEM claims to Tata Motors and vendor chargebacks.',
+    fields: [
+      { key: 'defectCode', label: 'Defect Code', type: 'text', mandatory: true },
+      { key: 'defectCategory', label: 'Defect Group', type: 'select', options: ['Manufacturing Quality', 'Material Defect', 'Vendor Assembly Flaw', 'Software / Firmware Logic', 'Corrosion / Paint Flaw'] },
+      { key: 'partCoverage', label: 'Warranty Scheme', type: 'select', options: ['Standard 3Yr / 100K Km', 'Extended Warranty (EW)', 'EV HV Battery 8Yr / 160K Km'] },
+      { key: 'requiresSampleReturn', label: 'Return Physical Sample to Plant', type: 'select', options: ['Y', 'N'] },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'WDC-01', defectCode: 'DEF-MFG-OILSEAL', defectCategory: 'Manufacturing Quality', partCoverage: 'Standard 3Yr / 100K Km', requiresSampleReturn: 'Y', active: 'Y' },
+      { id: 'WDC-02', defectCode: 'DEF-VEND-SUSPBUSH', defectCategory: 'Vendor Assembly Flaw', partCoverage: 'Standard 3Yr / 100K Km', requiresSampleReturn: 'Y', active: 'Y' },
+      { id: 'WDC-03', defectCode: 'DEF-EV-CELLIMB', defectCategory: 'Material Defect', partCoverage: 'EV HV Battery 8Yr / 160K Km', requiresSampleReturn: 'Y', active: 'Y' },
+    ],
+  },
+  {
+    id: 'goodwill_approval_limits',
+    name: 'Goodwill & Special Concession Matrix',
+    owner: 'TML_ADMIN',
+    category: 'Approval Authorities',
+    logicalGroup: 'Parts, Claims & Support',
+    moduleCode: 'claim',
+    moduleName: 'Claim & Warranty',
+    description: 'Financial approval thresholds for out-of-warranty customer goodwill concessions.',
+    fields: [
+      { key: 'authorityTier', label: 'Approving Authority', type: 'select', options: ['Works Manager (WM)', 'Area Service Manager (ASM - TML)', 'Regional Customer Care Head (RCCH)', 'DGM Service Central'] },
+      { key: 'maxLaborConcession', label: 'Max Labor Discount (%)', type: 'number', mandatory: true },
+      { key: 'maxPartsConcession', label: 'Max Parts Discount (%)', type: 'number', mandatory: true },
+      { key: 'maxAmountInr', label: 'Max Claim Value (₹)', type: 'number', mandatory: true },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'GW-01', authorityTier: 'Works Manager (WM)', maxLaborConcession: 25, maxPartsConcession: 10, maxAmountInr: 5000, active: 'Y' },
+      { id: 'GW-02', authorityTier: 'Area Service Manager (ASM - TML)', maxLaborConcession: 50, maxPartsConcession: 35, maxAmountInr: 25000, active: 'Y' },
+      { id: 'GW-03', authorityTier: 'Regional Customer Care Head (RCCH)', maxLaborConcession: 75, maxPartsConcession: 60, maxAmountInr: 75000, active: 'Y' },
+      { id: 'GW-04', authorityTier: 'DGM Service Central', maxLaborConcession: 100, maxPartsConcession: 100, maxAmountInr: 300000, active: 'Y' },
+    ],
+  },
+  {
+    id: 'spd_issuance_priority',
+    name: 'Spare Parts Requisition & Issuance Priority',
+    owner: 'TML_ADMIN',
+    category: 'Inventory Picking',
+    logicalGroup: 'Parts, Claims & Support',
+    moduleCode: 'spd',
+    moduleName: 'SPD (Spare Parts Dispatch)',
+    description: 'Prioritizes store counter picking slips by vehicle state: VOR (Vehicle Off Road), Warranty, Running Repair.',
+    fields: [
+      { key: 'priorityCode', label: 'Priority Code', type: 'text', mandatory: true },
+      { key: 'priorityLevel', label: 'Priority Tag', type: 'select', options: ['Emergency VOR', 'Running Repair Express', 'Scheduled Periodic Maintenance', 'Recall Campaign'] },
+      { key: 'slaMins', label: 'Picking SLA (Minutes)', type: 'number', mandatory: true },
+      { key: 'requireOtp', label: 'Mechanic Fingerprint / OTP Verification', type: 'select', options: ['Y', 'N'] },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'SPD-01', priorityCode: 'PRIO-VOR-01', priorityLevel: 'Emergency VOR', slaMins: 15, requireOtp: 'Y', active: 'Y' },
+      { id: 'SPD-02', priorityCode: 'PRIO-RUN-02', priorityLevel: 'Running Repair Express', slaMins: 30, requireOtp: 'N', active: 'Y' },
+      { id: 'SPD-03', priorityCode: 'PRIO-SCH-03', priorityLevel: 'Scheduled Periodic Maintenance', slaMins: 45, requireOtp: 'N', active: 'Y' },
+      { id: 'SPD-04', priorityCode: 'PRIO-REC-04', priorityLevel: 'Recall Campaign', slaMins: 20, requireOtp: 'Y', active: 'Y' },
+    ],
+  },
+  {
+    id: 'parts_delay_reasons',
+    name: 'Spare Parts Stockout & Backorder LOV',
+    owner: 'DEALER_ADMIN',
+    category: 'Stockout Categories',
+    logicalGroup: 'Parts, Claims & Support',
+    moduleCode: 'spd',
+    moduleName: 'SPD (Spare Parts Dispatch)',
+    description: 'Stockroom delay categorization for auto-generating SAP parts backorders and customer notifications.',
+    fields: [
+      { key: 'delayCode', label: 'Delay Code', type: 'text', mandatory: true },
+      { key: 'reasonName', label: 'Non-Availability Root Cause', type: 'text', mandatory: true },
+      { key: 'autoOrderSap', label: 'Auto Trigger SAP Emergency Order', type: 'select', options: ['Y', 'N'] },
+      { key: 'smsCustomer', label: 'Trigger Customer ETA SMS', type: 'select', options: ['Y', 'N'] },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'PDR-01', delayCode: 'BO-PLANT-TRANSIT', reasonName: 'Depot stock depleted - Plant in-transit shipment', autoOrderSap: 'Y', smsCustomer: 'Y', active: 'Y' },
+      { id: 'PDR-02', delayCode: 'BO-BIN-MISMATCH', reasonName: 'Physical bin inventory variance (Inventory Audit flag)', autoOrderSap: 'N', smsCustomer: 'N', active: 'Y' },
+      { id: 'PDR-03', delayCode: 'BO-SUPPLIER-SHORT', reasonName: 'Tier-1 vendor supply constraint (Critical semiconductor/ECU)', autoOrderSap: 'Y', smsCustomer: 'Y', active: 'Y' },
+    ],
+  },
+  {
+    id: 'thd_escalation_categories',
+    name: 'THD Technical Escalation Category & Severity',
+    owner: 'TML_ADMIN',
+    category: 'Engineering Escalations',
+    logicalGroup: 'Parts, Claims & Support',
+    moduleCode: 'thd',
+    moduleName: 'THD (Technical Help Desk)',
+    description: 'Field technical issue tickets to Tata Motors plant engineering, crash diagnostics, and high-voltage defects.',
+    fields: [
+      { key: 'categoryCode', label: 'Escalation Category', type: 'text', mandatory: true },
+      { key: 'systemDomain', label: 'Engineering System', type: 'select', options: ['EV High Voltage Traction', 'DCA Dual Clutch Transmission', 'ADAS & Radar Calibration', 'Braking & ESP Hydraulics', 'CAN Bus Network Communication'] },
+      { key: 'severityTier', label: 'Plant Response SLA', type: 'select', options: ['Tier 1 Critical (< 4 Hours)', 'Tier 2 High (< 12 Hours)', 'Tier 3 Standard (< 24 Hours)'] },
+      { key: 'requiresPlantVisit', label: 'Plant Field Engineer Dispatch', type: 'select', options: ['Y', 'N'] },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'THD-01', categoryCode: 'THD-EV-BAT-ISO', systemDomain: 'EV High Voltage Traction', severityTier: 'Tier 1 Critical (< 4 Hours)', requiresPlantVisit: 'Y', active: 'Y' },
+      { id: 'THD-02', categoryCode: 'THD-DCA-JERK', systemDomain: 'DCA Dual Clutch Transmission', severityTier: 'Tier 2 High (< 12 Hours)', requiresPlantVisit: 'N', active: 'Y' },
+      { id: 'THD-03', categoryCode: 'THD-ADAS-MISALIGN', systemDomain: 'ADAS & Radar Calibration', severityTier: 'Tier 2 High (< 12 Hours)', requiresPlantVisit: 'N', active: 'Y' },
+      { id: 'THD-04', categoryCode: 'THD-CAN-ERR', systemDomain: 'CAN Bus Network Communication', severityTier: 'Tier 3 Standard (< 24 Hours)', requiresPlantVisit: 'N', active: 'Y' },
+    ],
+  },
+  {
+    id: 'tib_bulletin_codes',
+    name: 'Technical Information Bulletin (TIB) Advisory Codes',
+    owner: 'TML_ADMIN',
+    category: 'Plant Bulletins',
+    logicalGroup: 'Parts, Claims & Support',
+    moduleCode: 'thd',
+    moduleName: 'THD (Technical Help Desk)',
+    description: 'Tata Motors factory service technical bulletins, software flash versions, and campaign advisories.',
+    fields: [
+      { key: 'tibNumber', label: 'TIB Bulletin Reference', type: 'text', mandatory: true },
+      { key: 'title', label: 'Subject / Advisory Scope', type: 'text', mandatory: true },
+      { key: 'affectedPpl', label: 'Applicable Vehicle PPL', type: 'select', options: ['Nexon EV', 'Nexon ICE', 'Harrier / Safari', 'Curvv EV', 'Altroz'] },
+      { key: 'reworkType', label: 'Rework Classification', type: 'select', options: ['ECU Firmware Update', 'Harness Rerouting', 'Hardware Bush Replacement', 'Torque Audit'] },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'TIB-01', tibNumber: 'TIB-2026-PV-089', title: 'BMS High-Voltage Contactor Firmware v4.8 Update', affectedPpl: 'Nexon EV', reworkType: 'ECU Firmware Update', active: 'Y' },
+      { id: 'TIB-02', tibNumber: 'TIB-2026-PV-112', title: 'Rear Suspension Spring Seat Damping Pad Retrofit', affectedPpl: 'Harrier / Safari', reworkType: 'Hardware Bush Replacement', active: 'Y' },
+      { id: 'TIB-03', tibNumber: 'TIB-2026-PV-134', title: 'Steering Column Earth Strap Resistance Check', affectedPpl: 'Altroz', reworkType: 'Torque Audit', active: 'Y' },
+    ],
+  },
+  {
+    id: 'driver_transit_roster',
+    name: 'Chauffeur & Pick-and-Drop Transit Roster',
+    owner: 'DEALER_ADMIN',
+    category: 'Transit Chauffeurs',
+    logicalGroup: 'Parts, Claims & Support',
+    moduleCode: 'reception',
+    moduleName: 'P&D and Reception',
+    description: 'Driver certifications, assigned zone geofences, and vehicle transit speed monitoring.',
+    fields: [
+      { key: 'driverCode', label: 'Driver Code', type: 'text', mandatory: true },
+      { key: 'driverName', label: 'Driver Full Name', type: 'text', mandatory: true },
+      { key: 'assignedZone', label: 'Assigned Territory Zone', type: 'select', options: ['Zone A - Hitec City', 'Zone B - Secunderabad', 'Zone C - Gachibowli', 'Zone D - Banjara Hills'] },
+      { key: 'licenseNumber', label: 'Commercial DL Number', type: 'text', mandatory: true },
+      { key: 'evCertified', label: 'EV Transit Certified', type: 'select', options: ['Y', 'N'] },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'DRV-01', driverCode: 'DRV-HYD-101', driverName: 'Nageshwar Rao', assignedZone: 'Zone A - Hitec City', licenseNumber: 'TS09-2019-0023412', evCertified: 'Y', active: 'Y' },
+      { id: 'DRV-02', driverCode: 'DRV-HYD-102', driverName: 'Mohd Feroz Khan', assignedZone: 'Zone B - Secunderabad', licenseNumber: 'TS10-2018-0056123', evCertified: 'N', active: 'Y' },
+      { id: 'DRV-03', driverCode: 'DRV-HYD-103', driverName: 'Pradeep Patil', assignedZone: 'Zone C - Gachibowli', licenseNumber: 'TS09-2021-0089145', evCertified: 'Y', active: 'Y' },
+    ],
+  },
+  {
+    id: 'lounge_reception_checklist',
+    name: 'Customer Reception & Greeting Checklist',
+    owner: 'TML_ADMIN',
+    category: 'Customer Welcome',
+    logicalGroup: 'Parts, Claims & Support',
+    moduleCode: 'reception',
+    moduleName: 'P&D and Reception',
+    description: 'Standard OEM lounge customer greeting and advisor electronic tablet handover checklist.',
+    fields: [
+      { key: 'checkpointCode', label: 'Checkpoint Code', type: 'text', mandatory: true },
+      { key: 'checkpointDesc', label: 'Reception Standard Requirement', type: 'text', mandatory: true },
+      { key: 'channel', label: 'Intake Channel', type: 'select', options: ['Walk-in', 'Pre-Booked Appointment', 'Express Valet', 'Breakdown Flatbed'] },
+      { key: 'mandatoryProof', label: 'Mandatory Photo / Signature', type: 'select', options: ['Y', 'N'] },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'REC-01', checkpointCode: 'REC-VAL-01', checkpointDesc: 'Digital vehicle outer walk-around photo capture (4 angles)', channel: 'Pre-Booked Appointment', mandatoryProof: 'Y', active: 'Y' },
+      { id: 'REC-02', checkpointCode: 'REC-VAL-02', checkpointDesc: 'Fuel / EV SOC level verification & digital customer signature', channel: 'Pre-Booked Appointment', mandatoryProof: 'Y', active: 'Y' },
+      { id: 'REC-03', checkpointCode: 'REC-VAL-03', checkpointDesc: 'Customer personal valuables custody declaration slip', channel: 'Walk-in', mandatoryProof: 'Y', active: 'Y' },
+    ],
+  },
+  {
+    id: 'gate_security_checklist',
+    name: 'Vehicle Gate Inward / Outward Barrier Checklist',
+    owner: 'TML_ADMIN',
+    category: 'Perimeter Security',
+    logicalGroup: 'Parts, Claims & Support',
+    moduleCode: 'security',
+    moduleName: 'Security & Gate Operations',
+    description: 'Mandatory perimeter verification rules for automatic ANPR barrier opening and vehicle passes.',
+    fields: [
+      { key: 'ruleId', label: 'Gate Rule Code', type: 'text', mandatory: true },
+      { key: 'direction', label: 'Movement Direction', type: 'select', options: ['Inward (Check-in)', 'Outward (Check-out)', 'Internal Bay Transit'] },
+      { key: 'verificationItem', label: 'Verification Protocol', type: 'text', mandatory: true },
+      { key: 'anprSync', label: 'ANPR Camera Auto-Verify', type: 'select', options: ['Y', 'N'] },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'SEC-01', ruleId: 'GATE-IN-01', direction: 'Inward (Check-in)', verificationItem: 'ANPR plate scan match against appointment roster or generate walk-in pass', anprSync: 'Y', active: 'Y' },
+      { id: 'SEC-02', ruleId: 'GATE-IN-02', direction: 'Inward (Check-in)', verificationItem: 'Physical chassis plate stamp confirmation against CRM VIN', anprSync: 'N', active: 'Y' },
+      { id: 'SEC-03', ruleId: 'GATE-OUT-01', direction: 'Outward (Check-out)', verificationItem: 'Cashier zero-balance clearance seal & gate pass OTP verification', anprSync: 'Y', active: 'Y' },
+      { id: 'SEC-04', ruleId: 'GATE-OUT-02', direction: 'Outward (Check-out)', verificationItem: 'Old / replaced warranty parts box inventory verification (if customer request)', anprSync: 'N', active: 'Y' },
+    ],
+  },
+  {
+    id: 'gate_denial_reasons',
+    name: 'Gate Entry Denial & Security Hold LOV',
+    owner: 'DEALER_ADMIN',
+    category: 'Perimeter Security',
+    logicalGroup: 'Parts, Claims & Support',
+    moduleCode: 'security',
+    moduleName: 'Security & Gate Operations',
+    description: 'Security gate vehicle hold classifications and escalation protocol for police or insurance hold.',
+    fields: [
+      { key: 'denialCode', label: 'Denial Code', type: 'text', mandatory: true },
+      { key: 'reason', label: 'Security Denial / Hold Reason', type: 'text', mandatory: true },
+      { key: 'escalateTo', label: 'Immediate Notification Target', type: 'select', options: ['Works Manager', 'Security Officer In-Charge', 'Service Head', 'Customer Relation Manager'] },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
+    ],
+    records: [
+      { id: 'GD-01', denialCode: 'HOLD-CHASSIS-MISMATCH', reason: 'Physical VIN stamp does not match registration papers', escalateTo: 'Works Manager', active: 'Y' },
+      { id: 'GD-02', denialCode: 'HOLD-GATEPASS-PENDING', reason: 'Unsettled invoice amount or missing cashier gate pass release', escalateTo: 'Service Head', active: 'Y' },
+      { id: 'GD-03', denialCode: 'HOLD-POLICE-STOLEN', reason: 'Chassis flagged in police stolen vehicle database alert', escalateTo: 'Security Officer In-Charge', active: 'Y' },
     ],
   },
 ];

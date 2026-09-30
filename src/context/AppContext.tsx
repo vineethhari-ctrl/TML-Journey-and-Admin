@@ -20,6 +20,11 @@ import {
 import { generateInitialData } from '../data/mockDataGenerator';
 import { auditService } from '../services/auditService';
 import { userService } from '../services/userService';
+import {
+  MASTER_COLLECTIONS,
+  MasterConfig,
+  MasterFieldDef,
+} from '../data/masterCatalogue';
 
 export type PlatformRoleId =
   | 'superAdmin'
@@ -73,6 +78,13 @@ interface AppContextType {
   auditLogs: AuditLogEntry[];
   notifications: AppNotification[];
   unreadNotificationCount: number;
+
+  // Master Data & Dynamic Field Customization
+  masterConfigs: MasterConfig[];
+  updateMasterConfig: (updated: MasterConfig) => void;
+  addCustomMasterField: (masterId: string, fieldDef: MasterFieldDef, defaultValue?: any) => void;
+  updateMasterFieldMapping: (masterId: string, fieldKey: string, updates: Partial<MasterFieldDef>) => void;
+  resetMasterConfigs: () => void;
 
   // Toast
   toast: ToastInfo | null;
@@ -136,6 +148,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(initial.auditLogs);
   const [notifications, setNotifications] = useState<AppNotification[]>(initial.notifications);
   const [toast, setToast] = useState<ToastInfo | null>(null);
+
+  // Master Data & Custom Field Schema Configuration (persisted across sessions)
+  const [masterConfigs, setMasterConfigs] = useState<MasterConfig[]>(() => {
+    try {
+      const saved = localStorage.getItem('tml_master_configs_v2');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {
+      // fallback to built-in catalogue
+    }
+    return MASTER_COLLECTIONS;
+  });
 
   // Active Role State for Dynamic RBAC simulation
   const [activeRoleId, setActiveRoleId] = useState<PlatformRoleId>('superAdmin');
@@ -629,6 +654,85 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [vehicles, serviceCases, users, devices, sessions]
   );
 
+  const updateMasterConfig = useCallback((updated: MasterConfig) => {
+    setMasterConfigs((prev) => {
+      const next = prev.map((m) => (m.id === updated.id ? updated : m));
+      try {
+        localStorage.setItem('tml_master_configs_v2', JSON.stringify(next));
+      } catch {
+        // storage quota fallback
+      }
+      return next;
+    });
+  }, []);
+
+  const addCustomMasterField = useCallback((masterId: string, fieldDef: MasterFieldDef, defaultValue?: any) => {
+    setMasterConfigs((prev) => {
+      const next = prev.map((m) => {
+        if (m.id !== masterId) return m;
+
+        // Check if field exists
+        if (m.fields.some((f) => f.key === fieldDef.key)) return m;
+
+        const effectiveDefault =
+          defaultValue !== undefined
+            ? defaultValue
+            : fieldDef.type === 'select' && fieldDef.options && fieldDef.options.length > 0
+            ? fieldDef.options[0]
+            : fieldDef.type === 'number'
+            ? 0
+            : fieldDef.type === 'boolean'
+            ? false
+            : '—';
+
+        const updatedRecords = m.records.map((r) => ({
+          ...r,
+          [fieldDef.key]: r[fieldDef.key] !== undefined ? r[fieldDef.key] : effectiveDefault,
+        }));
+
+        return {
+          ...m,
+          fields: [...m.fields, { ...fieldDef, isCustom: true }],
+          records: updatedRecords,
+        };
+      });
+
+      try {
+        localStorage.setItem('tml_master_configs_v2', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const updateMasterFieldMapping = useCallback(
+    (masterId: string, fieldKey: string, updates: Partial<MasterFieldDef>) => {
+      setMasterConfigs((prev) => {
+        const next = prev.map((m) => {
+          if (m.id !== masterId) return m;
+          const updatedFields = m.fields.map((f) => {
+            if (f.key !== fieldKey) return f;
+            return { ...f, ...updates };
+          });
+          return { ...m, fields: updatedFields };
+        });
+
+        try {
+          localStorage.setItem('tml_master_configs_v2', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    },
+    []
+  );
+
+  const resetMasterConfigs = useCallback(() => {
+    setMasterConfigs(MASTER_COLLECTIONS);
+    try {
+      localStorage.removeItem('tml_master_configs_v2');
+    } catch {}
+    showToast('Reset all master schemas and value mappings to factory default', 'info');
+  }, [showToast]);
+
   return (
     <AppContext.Provider
       value={{
@@ -639,6 +743,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         hasPermission,
         canAccessRoute,
         currentUser,
+        masterConfigs,
+        updateMasterConfig,
+        addCustomMasterField,
+        updateMasterFieldMapping,
+        resetMasterConfigs,
         users,
         devices,
         sessions,

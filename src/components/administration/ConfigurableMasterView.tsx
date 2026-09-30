@@ -4,6 +4,7 @@ import {
   MasterConfig,
   MasterFieldDef,
 } from '../../data/masterCatalogue';
+import { masterValidationSchema } from '../../utils/masterValidationSchema';
 import {
   Plus,
   Search,
@@ -21,6 +22,7 @@ import {
   X,
   Sparkles,
   Layers,
+  AlertCircle,
 } from 'lucide-react';
 
 interface ConfigurableMasterViewProps {
@@ -45,12 +47,13 @@ export const ConfigurableMasterView: React.FC<ConfigurableMasterViewProps> = ({
   // New Parameter state
   const [newFieldLabel, setNewFieldLabel] = useState('');
   const [newFieldKey, setNewFieldKey] = useState('');
-  const [newFieldType, setNewFieldType] = useState<'text' | 'number' | 'select' | 'boolean'>('text');
+  const [newFieldType, setNewFieldType] = useState<'text' | 'number' | 'select' | 'boolean' | 'date'>('text');
   const [newFieldOptions, setNewFieldOptions] = useState('');
   const [newFieldMandatory, setNewFieldMandatory] = useState(false);
 
   // Record Form state
   const [recordFormData, setRecordFormData] = useState<Record<string, any>>({});
+  const [recordFormErrors, setRecordFormErrors] = useState<Record<string, string>>({});
 
   const isEditableByCurrentRole = master.owner === 'TML_ADMIN' ? isAdminTml : true;
 
@@ -80,11 +83,24 @@ export const ConfigurableMasterView: React.FC<ConfigurableMasterViewProps> = ({
       return;
     }
 
+    const defValidation = masterValidationSchema.validateCustomFieldDefinition({
+      label: newFieldLabel.trim(),
+      key,
+      type: newFieldType,
+      optionsString: newFieldOptions,
+    });
+
+    if (!defValidation.isValid && defValidation.error) {
+      showToast(defValidation.error, 'error');
+      return;
+    }
+
     const fieldDef: MasterFieldDef = {
       key,
       label: newFieldLabel.trim(),
       type: newFieldType,
       mandatory: newFieldMandatory,
+      isCustom: true,
       options:
         newFieldType === 'select'
           ? newFieldOptions.split(',').map((s) => s.trim()).filter(Boolean)
@@ -96,7 +112,16 @@ export const ConfigurableMasterView: React.FC<ConfigurableMasterViewProps> = ({
       fields: [...master.fields, fieldDef],
       records: master.records.map((r) => ({
         ...r,
-        [key]: newFieldType === 'select' && fieldDef.options ? fieldDef.options[0] : '—',
+        [key]:
+          newFieldType === 'select' && fieldDef.options
+            ? fieldDef.options[0]
+            : newFieldType === 'number'
+            ? 0
+            : newFieldType === 'date'
+            ? new Date().toISOString().split('T')[0]
+            : newFieldType === 'boolean'
+            ? false
+            : '—',
       })),
     };
 
@@ -106,16 +131,26 @@ export const ConfigurableMasterView: React.FC<ConfigurableMasterViewProps> = ({
     setNewFieldKey('');
     setNewFieldOptions('');
     setNewFieldMandatory(false);
-    showToast(`Added custom parameter "${fieldDef.label}" to schema!`, 'success');
+    showToast(`Added custom parameter "${fieldDef.label}" with ${fieldDef.type} validation!`, 'success');
   };
 
   // Open add record modal
   const handleOpenAddRecord = () => {
     const initData: Record<string, any> = { id: `REC-${Date.now().toString().slice(-4)}` };
     master.fields.forEach((f) => {
-      initData[f.key] = f.type === 'select' && f.options ? f.options[0] : f.type === 'number' ? 0 : '';
+      initData[f.key] =
+        f.type === 'select' && f.options
+          ? f.options[0]
+          : f.type === 'number'
+          ? 0
+          : f.type === 'date'
+          ? new Date().toISOString().split('T')[0]
+          : f.type === 'boolean'
+          ? false
+          : '';
     });
     setRecordFormData(initData);
+    setRecordFormErrors({});
     setEditingRecordId(null);
     setIsAddRecordModalOpen(true);
   };
@@ -123,23 +158,33 @@ export const ConfigurableMasterView: React.FC<ConfigurableMasterViewProps> = ({
   // Open edit record modal
   const handleOpenEditRecord = (record: Record<string, any>) => {
     setRecordFormData({ ...record });
+    setRecordFormErrors({});
     setEditingRecordId(record.id);
     setIsAddRecordModalOpen(true);
   };
 
-  // Save record
+  // Save record with validation
   const handleSaveRecord = (e: React.FormEvent) => {
     e.preventDefault();
+
+    const validationResult = masterValidationSchema.validateRecord(master.fields, recordFormData);
+    if (!validationResult.isValid) {
+      setRecordFormErrors(validationResult.errors);
+      showToast('Validation failed: Please correct invalid field values.', 'error');
+      return;
+    }
+
+    const sanitizedData = validationResult.sanitizedRecord;
     let updatedRecords: Array<Record<string, any>>;
 
     if (editingRecordId) {
       updatedRecords = master.records.map((r) =>
-        r.id === editingRecordId ? { ...recordFormData } : r
+        r.id === editingRecordId ? { ...sanitizedData } : r
       );
-      showToast('Record updated successfully', 'success');
+      showToast('Record validated & updated successfully', 'success');
     } else {
-      updatedRecords = [...master.records, { ...recordFormData }];
-      showToast('New record created in master catalogue', 'success');
+      updatedRecords = [...master.records, { ...sanitizedData }];
+      showToast('New record validated & created in master catalogue', 'success');
     }
 
     onUpdateMaster({ ...master, records: updatedRecords });
@@ -450,42 +495,122 @@ export const ConfigurableMasterView: React.FC<ConfigurableMasterViewProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSaveRecord} className="p-5 space-y-3 overflow-y-auto flex-1">
-              {master.fields.map((f) => (
-                <div key={f.key}>
-                  <label className="font-bold text-slate-700 block mb-1">
-                    {f.label} {f.mandatory && <span className="text-rose-500">*</span>}
-                  </label>
-                  {f.type === 'select' && f.options ? (
-                    <select
-                      value={recordFormData[f.key] || f.options[0]}
-                      onChange={(e) =>
-                        setRecordFormData({ ...recordFormData, [f.key]: e.target.value })
-                      }
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden"
-                    >
-                      {f.options.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type={f.type === 'number' ? 'number' : 'text'}
-                      required={f.mandatory}
-                      value={recordFormData[f.key] !== undefined ? recordFormData[f.key] : ''}
-                      onChange={(e) =>
-                        setRecordFormData({
-                          ...recordFormData,
-                          [f.key]: f.type === 'number' ? Number(e.target.value) : e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-hidden"
-                    />
-                  )}
+            {/* Validation Errors Summary Banner */}
+            {Object.keys(recordFormErrors).length > 0 && (
+              <div className="mx-5 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-xs text-rose-800 shrink-0">
+                <AlertCircle className="h-4 w-4 text-rose-600 mt-0.5 shrink-0" />
+                <div>
+                  <div className="font-bold">
+                    Validation required: {Object.keys(recordFormErrors).length} error{Object.keys(recordFormErrors).length > 1 ? 's' : ''} found
+                  </div>
+                  <div className="text-[11px] text-rose-700">
+                    Ensure Date (YYYY-MM-DD), Number, and Dropdown values comply with the schema.
+                  </div>
                 </div>
-              ))}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveRecord} className="p-5 space-y-3 overflow-y-auto flex-1">
+              {master.fields.map((f) => {
+                const hasError = Boolean(recordFormErrors[f.key]);
+                return (
+                  <div key={f.key} className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center justify-between text-xs">
+                      <span>
+                        {f.label} {f.mandatory && <span className="text-rose-500">*</span>}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400 font-normal">
+                        [{f.type}]
+                      </span>
+                    </label>
+
+                    {f.type === 'select' && f.options ? (
+                      <select
+                        value={recordFormData[f.key] !== undefined ? recordFormData[f.key] : f.options[0]}
+                        onChange={(e) =>
+                          setRecordFormData({ ...recordFormData, [f.key]: e.target.value })
+                        }
+                        className={`w-full px-3 py-1.5 border rounded-lg text-xs font-semibold focus:outline-hidden bg-white transition-colors cursor-pointer ${
+                          hasError
+                            ? 'border-rose-400 bg-rose-50/40 text-rose-900 focus:border-rose-500'
+                            : 'border-slate-200 focus:border-blue-400'
+                        }`}
+                      >
+                        {!f.mandatory && <option value="">-- Select {f.label} --</option>}
+                        {f.options.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    ) : f.type === 'number' ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={recordFormData[f.key] !== undefined ? recordFormData[f.key] : ''}
+                        onChange={(e) =>
+                          setRecordFormData({
+                            ...recordFormData,
+                            [f.key]: e.target.value,
+                          })
+                        }
+                        className={`w-full px-3 py-1.5 border rounded-lg text-xs focus:outline-hidden font-mono transition-colors ${
+                          hasError
+                            ? 'border-rose-400 bg-rose-50/40 text-rose-900 focus:border-rose-500'
+                            : 'border-slate-200 focus:border-blue-400'
+                        }`}
+                        placeholder={`Enter numeric ${f.label}`}
+                      />
+                    ) : f.type === 'date' ? (
+                      <input
+                        type="date"
+                        value={recordFormData[f.key] || ''}
+                        onChange={(e) =>
+                          setRecordFormData({ ...recordFormData, [f.key]: e.target.value })
+                        }
+                        className={`w-full px-3 py-1.5 border rounded-lg text-xs focus:outline-hidden font-mono transition-colors ${
+                          hasError
+                            ? 'border-rose-400 bg-rose-50/40 text-rose-900 focus:border-rose-500'
+                            : 'border-slate-200 focus:border-blue-400'
+                        }`}
+                      />
+                    ) : f.type === 'boolean' ? (
+                      <label className="flex items-center gap-2 cursor-pointer pt-1">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(recordFormData[f.key])}
+                          onChange={(e) =>
+                            setRecordFormData({ ...recordFormData, [f.key]: e.target.checked })
+                          }
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-slate-600 font-semibold">Enabled / Active</span>
+                      </label>
+                    ) : (
+                      <input
+                        type="text"
+                        value={recordFormData[f.key] !== undefined ? recordFormData[f.key] : ''}
+                        onChange={(e) =>
+                          setRecordFormData({ ...recordFormData, [f.key]: e.target.value })
+                        }
+                        className={`w-full px-3 py-1.5 border rounded-lg text-xs focus:outline-hidden transition-colors ${
+                          hasError
+                            ? 'border-rose-400 bg-rose-50/40 text-rose-900 focus:border-rose-500'
+                            : 'border-slate-200 focus:border-blue-400'
+                        }`}
+                        placeholder={`Enter ${f.label}`}
+                      />
+                    )}
+
+                    {hasError && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-rose-600 font-medium pt-0.5">
+                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                        <span>{recordFormErrors[f.key]}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
 
               <div className="pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0">
                 <button

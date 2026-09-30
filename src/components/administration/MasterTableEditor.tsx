@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { MasterConfig, MasterFieldDef } from '../../data/masterCatalogue';
 import {
@@ -35,9 +35,17 @@ import {
   SlidersHorizontal,
   Undo2,
   Redo2,
+  Settings,
+  Sparkles,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Smartphone,
 } from 'lucide-react';
 import { AuditTrailMiddleware } from '../../middleware/auditTrailMiddleware';
 import { masterExportUtil } from '../../utils/masterExportUtil';
+import { masterValidationSchema } from '../../utils/masterValidationSchema';
 import { MasterDataImportModal } from './MasterDataImportModal';
 import { BatchUndoModal, MasterChangeSnapshot } from './BatchUndoModal';
 import { BulkEditModal } from './BulkEditModal';
@@ -47,6 +55,8 @@ interface MasterTableEditorProps {
   onUpdateMaster: (updated: MasterConfig) => void;
   isAdminTml: boolean;
   readOnly?: boolean;
+  onOpenChangeLog?: () => void;
+  onOpenDealerPreview?: () => void;
 }
 
 export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
@@ -54,6 +64,8 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
   onUpdateMaster,
   isAdminTml,
   readOnly = false,
+  onOpenChangeLog,
+  onOpenDealerPreview,
 }) => {
   const { showToast, currentUser, logAudit, auditLogs } = useApp();
 
@@ -178,12 +190,91 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
   const [newFieldOptions, setNewFieldOptions] = useState('');
   const [newFieldMandatory, setNewFieldMandatory] = useState(false);
   const [newFieldDefaultVal, setNewFieldDefaultVal] = useState('');
+  const [newFieldMinNum, setNewFieldMinNum] = useState<string>('');
+  const [newFieldMaxNum, setNewFieldMaxNum] = useState<string>('');
+  const [newFieldMinDate, setNewFieldMinDate] = useState<string>('');
+  const [newFieldMaxDate, setNewFieldMaxDate] = useState<string>('');
+  const [newFieldDisplayInDealerApp, setNewFieldDisplayInDealerApp] = useState(true);
+  const [newFieldDealerTargetModule, setNewFieldDealerTargetModule] = useState<'vehicle_journey' | 'job_card' | 'reception' | 'workshop_floor' | 'general'>('vehicle_journey');
+  const [newFieldDealerDisplayLabel, setNewFieldDealerDisplayLabel] = useState('');
+  const [newFieldValueMappings, setNewFieldValueMappings] = useState<Array<{ raw: string; mapped: string }>>([
+    { raw: '', mapped: '' },
+  ]);
+
+  // Edit Existing Field Definition & Mapping Modal state
+  const [editingFieldConfig, setEditingFieldConfig] = useState<MasterFieldDef | null>(null);
+  const [editFieldDisplayInDealerApp, setEditFieldDisplayInDealerApp] = useState(false);
+  const [editFieldDealerTargetModule, setEditFieldDealerTargetModule] = useState<'vehicle_journey' | 'job_card' | 'reception' | 'workshop_floor' | 'general'>('vehicle_journey');
+  const [editFieldDealerDisplayLabel, setEditFieldDealerDisplayLabel] = useState('');
+  const [editFieldValueMappings, setEditFieldValueMappings] = useState<Array<{ raw: string; mapped: string }>>([]);
+
+  // Global ESC key listener to close any open modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isAddFieldModalOpen) setIsAddFieldModalOpen(false);
+        if (editingFieldConfig) setEditingFieldConfig(null);
+        if (isRecordModalOpen) setIsRecordModalOpen(false);
+        if (deletingRecord) setDeletingRecord(null);
+        if (isAuditTrailModalOpen) setIsAuditTrailModalOpen(false);
+        if (isImportModalOpen) setIsImportModalOpen(false);
+        if (isBatchUndoModalOpen) setIsBatchUndoModalOpen(false);
+        if (isBulkEditModalOpen) setIsBulkEditModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    isAddFieldModalOpen,
+    editingFieldConfig,
+    isRecordModalOpen,
+    deletingRecord,
+    isAuditTrailModalOpen,
+    isImportModalOpen,
+    isBatchUndoModalOpen,
+    isBulkEditModalOpen,
+  ]);
 
   // Form generator state
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
+  // Real-time Field change handler with live validation
+  const handleFormFieldChange = (fieldKey: string, value: any) => {
+    const updatedForm = { ...formData, [fieldKey]: value };
+    setFormData(updatedForm);
+
+    const targetField = master.fields.find((f) => f.key === fieldKey);
+    if (targetField) {
+      const fieldRes = masterValidationSchema.validateField(targetField, value);
+      setFormErrors((prev) => {
+        const next = { ...prev };
+        if (!fieldRes.isValid && fieldRes.error) {
+          next[fieldKey] = fieldRes.error;
+        } else {
+          delete next[fieldKey];
+        }
+        return next;
+      });
+    }
+  };
+
+  // Real-time Field blur handler
+  const handleFormFieldBlur = (field: MasterFieldDef) => {
+    const fieldRes = masterValidationSchema.validateField(field, formData[field.key]);
+    setFormErrors((prev) => {
+      const next = { ...prev };
+      if (!fieldRes.isValid && fieldRes.error) {
+        next[field.key] = fieldRes.error;
+      } else {
+        delete next[field.key];
+      }
+      return next;
+    });
+  };
+
   const canEdit = !readOnly && (master.owner === 'TML_ADMIN' ? isAdminTml : true);
+  const canCustomizeSchema = !readOnly; // Administrators can customize schema parameters & value mappings across masters
 
   // Enhanced Filtered & Sorted records
   const filteredRecords = useMemo(() => {
@@ -496,28 +587,23 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
   // Save Record (Add / Edit) with Schema Validation & Audit Logging
   const handleSaveRecord = (e: React.FormEvent) => {
     e.preventDefault();
-    const errors: Record<string, string> = {};
 
-    master.fields.forEach((f) => {
-      if (f.mandatory) {
-        const val = formData[f.key];
-        if (val === undefined || val === null || String(val).trim() === '') {
-          errors[f.key] = `${f.label} is required.`;
-        }
-      }
-    });
+    // Rigorous Schema Validation across all fields (Date, Number, Dropdown, Boolean, Text)
+    const validationResult = masterValidationSchema.validateRecord(master.fields, formData);
 
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      showToast('Please fix the validation errors in the form.', 'error');
+    if (!validationResult.isValid) {
+      setFormErrors(validationResult.errors);
+      showToast('Validation failed: Please correct the invalid field values highlighted below.', 'error');
       return;
     }
+
+    const sanitizedData = validationResult.sanitizedRecord;
 
     let updatedRecords: Array<Record<string, any>>;
     if (editingRecordId) {
       const oldRecord = master.records.find((r) => r.id === editingRecordId) || {};
       updatedRecords = master.records.map((r) =>
-        r.id === editingRecordId ? { ...formData } : r
+        r.id === editingRecordId ? { ...sanitizedData } : r
       );
       const newMaster = { ...master, records: updatedRecords };
 
@@ -534,20 +620,20 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
         masterName: master.name,
         masterId: master.id,
         oldRecord,
-        newRecord: formData,
+        newRecord: sanitizedData,
         user: { userId: currentUser.userId, userName: currentUser.name },
         logAudit,
       });
 
       onUpdateMaster(newMaster);
-      showToast(`Record ${editingRecordId} updated successfully.`, 'success');
+      showToast(`Record ${editingRecordId} validated & updated successfully.`, 'success');
     } else {
-      updatedRecords = [formData, ...master.records];
+      updatedRecords = [sanitizedData, ...master.records];
       const newMaster = { ...master, records: updatedRecords };
 
       recordSnapshot(
         'CREATE_RECORD',
-        `Added record ${formData.id || 'New Record'}`,
+        `Added record ${sanitizedData.id || 'New Record'}`,
         1,
         newMaster,
         `Inserted new row into ${master.name}`
@@ -557,13 +643,13 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
       AuditTrailMiddleware.logCreateRow({
         masterName: master.name,
         masterId: master.id,
-        record: formData,
+        record: sanitizedData,
         user: { userId: currentUser.userId, userName: currentUser.name },
         logAudit,
       });
 
       onUpdateMaster(newMaster);
-      showToast(`New record added to ${master.name}.`, 'success');
+      showToast(`New record validated & added to ${master.name}.`, 'success');
     }
 
     setIsRecordModalOpen(false);
@@ -583,26 +669,73 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
       return;
     }
 
+    // Validate the custom field definition (e.g. at least 2 dropdown options, min <= max for numbers)
+    const defValidation = masterValidationSchema.validateCustomFieldDefinition({
+      label: newFieldLabel.trim(),
+      key,
+      type: newFieldType,
+      optionsString: newFieldOptions,
+      defaultValue: newFieldDefaultVal.trim() || undefined,
+      min: newFieldMinNum !== '' ? Number(newFieldMinNum) : undefined,
+      max: newFieldMaxNum !== '' ? Number(newFieldMaxNum) : undefined,
+    });
+
+    if (!defValidation.isValid && defValidation.error) {
+      showToast(defValidation.error, 'error');
+      return;
+    }
+
+    const mappingObj: Record<string, string> = {};
+    newFieldValueMappings.forEach((m) => {
+      if (m.raw.trim() && m.mapped.trim()) {
+        mappingObj[m.raw.trim()] = m.mapped.trim();
+      }
+    });
+
+    const parsedOptions =
+      newFieldType === 'select'
+        ? newFieldOptions.split(',').map((s) => s.trim()).filter(Boolean)
+        : undefined;
+
+    const validationRules: any = {};
+    if (newFieldType === 'number') {
+      if (newFieldMinNum !== '') validationRules.min = Number(newFieldMinNum);
+      if (newFieldMaxNum !== '') validationRules.max = Number(newFieldMaxNum);
+    } else if (newFieldType === 'date') {
+      if (newFieldMinDate !== '') validationRules.minDate = newFieldMinDate;
+      if (newFieldMaxDate !== '') validationRules.maxDate = newFieldMaxDate;
+    }
+
     const newField: MasterFieldDef = {
       key,
       label: newFieldLabel.trim(),
       type: newFieldType,
       mandatory: newFieldMandatory,
-      options:
-        newFieldType === 'select'
-          ? newFieldOptions.split(',').map((s) => s.trim()).filter(Boolean)
-          : undefined,
+      isCustom: true,
+      displayInDealerApp: newFieldDisplayInDealerApp,
+      dealerTargetModule: newFieldDealerTargetModule,
+      dealerDisplayLabel: newFieldDealerDisplayLabel.trim() || newFieldLabel.trim(),
+      valueMapping: Object.keys(mappingObj).length > 0 ? mappingObj : undefined,
+      options: parsedOptions,
+      validation: Object.keys(validationRules).length > 0 ? validationRules : undefined,
     };
 
-    const defaultValue =
-      newFieldDefaultVal.trim() ||
-      (newFieldType === 'select' && newField.options && newField.options.length > 0
-        ? newField.options[0]
-        : newFieldType === 'number'
-        ? 0
-        : newFieldType === 'boolean'
-        ? false
-        : '—');
+    let defaultValue: any = newFieldDefaultVal.trim();
+    if (!defaultValue) {
+      if (newFieldType === 'select' && parsedOptions && parsedOptions.length > 0) {
+        defaultValue = parsedOptions[0];
+      } else if (newFieldType === 'number') {
+        defaultValue = validationRules.min !== undefined && validationRules.min > 0 ? validationRules.min : 0;
+      } else if (newFieldType === 'date') {
+        defaultValue = new Date().toISOString().split('T')[0];
+      } else if (newFieldType === 'boolean') {
+        defaultValue = false;
+      } else {
+        defaultValue = '—';
+      }
+    } else if (newFieldType === 'number') {
+      defaultValue = Number(defaultValue);
+    }
 
     const updatedRecords = master.records.map((r) => ({
       ...r,
@@ -627,7 +760,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
 
     recordSnapshot(
       'SCHEMA_EXTEND',
-      `Added parameter "${newField.label}" (${newField.type})`,
+      `Added parameter "${newField.label}" (${newField.type})${newField.displayInDealerApp ? ' [Dealer Mapped]' : ''}`,
       updatedRecords.length,
       newMaster,
       `Schema extended with field: ${newField.key}`
@@ -641,17 +774,96 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     setNewFieldOptions('');
     setNewFieldMandatory(false);
     setNewFieldDefaultVal('');
-    showToast(`Schema updated! Added custom parameter "${newField.label}".`, 'success');
+    setNewFieldMinNum('');
+    setNewFieldMaxNum('');
+    setNewFieldMinDate('');
+    setNewFieldMaxDate('');
+    setNewFieldDisplayInDealerApp(true);
+    setNewFieldDealerDisplayLabel('');
+    setNewFieldValueMappings([{ raw: '', mapped: '' }]);
+    showToast(
+      `Schema updated! Added custom parameter "${newField.label}" with strictly enforced ${newField.type} validation.`,
+      'success'
+    );
+  };
+
+  // Open Field Configuration & Dealer Value Mapping Modal
+  const handleOpenConfigureField = (field: MasterFieldDef) => {
+    setEditingFieldConfig(field);
+    setEditFieldDisplayInDealerApp(field.displayInDealerApp ?? false);
+    setEditFieldDealerTargetModule(field.dealerTargetModule || 'vehicle_journey');
+    setEditFieldDealerDisplayLabel(field.dealerDisplayLabel || field.label);
+
+    const mappings: Array<{ raw: string; mapped: string }> = [];
+    if (field.valueMapping && Object.keys(field.valueMapping).length > 0) {
+      Object.entries(field.valueMapping).forEach(([raw, mapped]) => {
+        mappings.push({ raw, mapped });
+      });
+    } else if (field.options && field.options.length > 0) {
+      field.options.forEach((opt) => {
+        mappings.push({ raw: opt, mapped: opt });
+      });
+    } else {
+      mappings.push({ raw: '', mapped: '' });
+    }
+    setEditFieldValueMappings(mappings);
+  };
+
+  // Save Field Configuration & Value Mapping
+  const handleSaveFieldConfiguration = () => {
+    if (!editingFieldConfig) return;
+
+    const mappingObj: Record<string, string> = {};
+    editFieldValueMappings.forEach((m) => {
+      if (m.raw.trim() && m.mapped.trim()) {
+        mappingObj[m.raw.trim()] = m.mapped.trim();
+      }
+    });
+
+    const updatedFields = master.fields.map((f) => {
+      if (f.key !== editingFieldConfig.key) return f;
+      return {
+        ...f,
+        displayInDealerApp: editFieldDisplayInDealerApp,
+        dealerTargetModule: editFieldDealerTargetModule,
+        dealerDisplayLabel: editFieldDealerDisplayLabel.trim() || f.label,
+        valueMapping: Object.keys(mappingObj).length > 0 ? mappingObj : undefined,
+      };
+    });
+
+    const newMaster = {
+      ...master,
+      fields: updatedFields,
+    };
+
+    onUpdateMaster(newMaster);
+
+    logAudit(
+      'Field Mapping Configured',
+      'Masters Maintenance',
+      `${master.name} > ${editingFieldConfig.label}`,
+      'Updated Value Mapping',
+      `Exposed to Dealer App: ${editFieldDisplayInDealerApp ? 'YES' : 'NO'}, Target: ${editFieldDealerTargetModule}, Mapped values: ${Object.keys(mappingObj).length}`,
+      'SUCCESS'
+    );
+
+    showToast(
+      `Saved field configuration & dealer value mapping for "${editingFieldConfig.label}"`,
+      'success'
+    );
+    setEditingFieldConfig(null);
   };
 
   // Handle bulk import completion from MasterDataImportModal
   const handleImportComplete = (
     importedRows: Array<Record<string, any>>,
-    mode: 'append' | 'upsert'
+    mode: 'append' | 'upsert' | 'replace'
   ) => {
     let updatedRecords: Array<Record<string, any>>;
 
-    if (mode === 'upsert') {
+    if (mode === 'replace') {
+      updatedRecords = importedRows;
+    } else if (mode === 'upsert') {
       const importedMap = new Map(importedRows.map((r) => [r.id, r]));
       const existingUpdated = master.records.map((r) =>
         importedMap.has(r.id) ? { ...r, ...importedMap.get(r.id) } : r
@@ -910,22 +1122,37 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
             {canEdit && (
               <button
                 onClick={() => setIsImportModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
-                title="Bulk upload master data from Excel or CSV with schema field mapping"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50/70 hover:bg-blue-100/80 text-blue-900 text-xs font-bold cursor-pointer shadow-2xs transition-all"
+                title="Bulk upload parameter records from JSON or Excel files with validation summary report"
               >
-                <Upload className="h-3.5 w-3.5 text-blue-600" />
-                <span>⬆ Import Data</span>
+                <Upload className="h-3.5 w-3.5 text-blue-700" />
+                <span>⬆ Bulk Upload</span>
+                <span className="text-[10px] bg-blue-200/80 text-blue-900 px-1 py-0.2 rounded font-mono font-bold">
+                  JSON / Excel
+                </span>
               </button>
             )}
 
-            {canEdit && (
+            {canCustomizeSchema && (
               <button
                 onClick={() => setIsAddFieldModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold shadow-xs cursor-pointer transition-all border border-purple-600"
                 title="Add a custom parameter to this entity schema without code changes"
               >
-                <Sliders className="h-3.5 w-3.5 text-blue-600" />
-                <span>+ Add Field / Parameter</span>
+                <Sliders className="h-3.5 w-3.5 text-purple-200" />
+                <span>+ Add Custom Parameter</span>
+              </button>
+            )}
+
+            {onOpenDealerPreview && (
+              <button
+                type="button"
+                onClick={onOpenDealerPreview}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 text-xs font-bold shadow-2xs cursor-pointer transition-all"
+                title="Preview configured dynamic fields & validation rules in the live Dealer App Simulator before publishing"
+              >
+                <Smartphone className="h-3.5 w-3.5 text-emerald-700" />
+                <span>📱 Dealer Preview</span>
               </button>
             )}
 
@@ -1398,24 +1625,56 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                   return (
                     <th
                       key={f.key}
-                      onClick={() => handleSortToggle(f.key)}
-                      className="py-3 px-3.5 cursor-pointer hover:bg-[#003B66] transition-colors select-none group"
-                      title={`Click to sort by ${f.label}`}
+                      className="py-3 px-3.5 transition-colors select-none group"
                     >
-                      <div className="flex items-center gap-1.5">
-                        <span>{f.label}</span>
-                        {f.mandatory && <span className="text-amber-300 font-bold">*</span>}
-                        <span className="text-white/60 group-hover:text-white transition-colors">
-                          {isSorted ? (
-                            sortDirection === 'asc' ? (
-                              <ArrowUp className="h-3.5 w-3.5 text-blue-300" />
-                            ) : (
-                              <ArrowDown className="h-3.5 w-3.5 text-blue-300" />
-                            )
-                          ) : (
-                            <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="flex items-center justify-between gap-2">
+                        <div
+                          onClick={() => handleSortToggle(f.key)}
+                          className="flex items-center gap-1.5 cursor-pointer hover:text-blue-200"
+                          title={`Click to sort by ${f.label}`}
+                        >
+                          <span>{f.label}</span>
+                          {f.mandatory && <span className="text-amber-300 font-bold">*</span>}
+                          {f.isCustom && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/40 text-purple-100 border border-purple-300/50 font-mono font-bold tracking-wide uppercase shadow-2xs">
+                              Custom
+                            </span>
                           )}
-                        </span>
+                          {f.displayInDealerApp && (
+                            <span
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/40 text-emerald-100 border border-emerald-300/50 font-mono font-bold tracking-wide uppercase inline-flex items-center gap-0.5 shadow-2xs"
+                              title={`Exposed in Dealer App (${f.dealerTargetModule || 'vehicle_journey'})`}
+                            >
+                              <Sparkles className="h-2.5 w-2.5 text-emerald-300" />
+                              <span>Dealer</span>
+                            </span>
+                          )}
+                          <span className="text-white/60 group-hover:text-white transition-colors">
+                            {isSorted ? (
+                              sortDirection === 'asc' ? (
+                                <ArrowUp className="h-3.5 w-3.5 text-blue-300" />
+                              ) : (
+                                <ArrowDown className="h-3.5 w-3.5 text-blue-300" />
+                              )
+                            ) : (
+                              <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            )}
+                          </span>
+                        </div>
+
+                        {(f.isCustom || f.displayInDealerApp || canCustomizeSchema) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenConfigureField(f);
+                            }}
+                            className="p-1.5 rounded-md bg-white/20 hover:bg-white/40 text-blue-100 hover:text-white transition-all cursor-pointer border border-white/25 flex items-center gap-1 shadow-2xs"
+                            title={`Configure Dealer Value Mapping & Exposure for ${f.label}`}
+                          >
+                            <Settings className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
                     </th>
                   );
@@ -1489,9 +1748,24 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                           );
                         }
 
+                        const hasMapping = f.valueMapping && val !== undefined && f.valueMapping[String(val)];
+
                         return (
                           <td key={f.key} className="py-2.5 px-3.5 text-slate-700">
-                            {val !== undefined && val !== null ? String(val) : '—'}
+                            {hasMapping ? (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-semibold text-emerald-950 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300 text-xs inline-flex items-center gap-1 shadow-2xs">
+                                  <span>{f.valueMapping![String(val)]}</span>
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200" title="Raw Code Value">
+                                  raw: {String(val)}
+                                </span>
+                              </div>
+                            ) : val !== undefined && val !== null ? (
+                              String(val)
+                            ) : (
+                              '—'
+                            )}
                           </td>
                         );
                       })}
@@ -1530,9 +1804,14 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
 
       {/* MODAL 1: SCHEMA-DRIVEN DYNAMIC FORM GENERATOR (Add / Edit Record) */}
       {isRecordModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-2xs p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden animate-fade-in text-xs max-h-[90vh] flex flex-col">
-            <div className="px-5 py-4 bg-[#002B49] text-white flex items-center justify-between shrink-0">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsRecordModalOpen(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-2xs p-3 overflow-y-auto"
+        >
+          <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden animate-fade-in text-xs max-h-[92vh] flex flex-col my-auto">
+            <div className="px-5 py-3.5 bg-[#002B49] text-white flex items-center justify-between shrink-0 sticky top-0 z-20 shadow-xs">
               <div>
                 <h3 className="font-bold text-sm">
                   {editingRecordId ? 'Edit Master Record' : 'Add New Master Row'}
@@ -1540,99 +1819,156 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                 <p className="text-[11px] text-blue-200">{master.name}</p>
               </div>
               <button
+                type="button"
                 onClick={() => setIsRecordModalOpen(false)}
-                className="text-white/60 hover:text-white cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold cursor-pointer border border-white/20 transition-all shadow-2xs hover:scale-105"
+                title="Close modal (Esc)"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4 text-white" />
+                <span>Close</span>
               </button>
             </div>
 
-            <form onSubmit={handleSaveRecord} className="p-5 space-y-3.5 overflow-y-auto flex-1">
-              {master.fields.map((f) => (
-                <div key={f.key} className="space-y-1">
-                  <label className="font-bold text-slate-700 flex items-center justify-between text-xs">
-                    <span>
-                      {f.label} {f.mandatory && <span className="text-rose-500">*</span>}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-400 font-normal">
-                      [{f.type}]
-                    </span>
-                  </label>
-
-                  {/* Dropdown Input */}
-                  {f.type === 'select' && f.options ? (
-                    <select
-                      value={formData[f.key] !== undefined ? formData[f.key] : f.options[0]}
-                      onChange={(e) => setFormData({ ...formData, [f.key]: e.target.value })}
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden bg-white"
-                    >
-                      {f.options.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  ) : f.type === 'number' ? (
-                    /* Number Input */
-                    <input
-                      type="number"
-                      step="any"
-                      value={formData[f.key] !== undefined ? formData[f.key] : ''}
-                      onChange={(e) =>
-                        setFormData({ ...formData, [f.key]: Number(e.target.value) })
-                      }
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-hidden"
-                      placeholder={`Enter ${f.label}`}
-                    />
-                  ) : f.type === 'date' ? (
-                    /* Date Input */
-                    <input
-                      type="date"
-                      value={formData[f.key] || ''}
-                      onChange={(e) => setFormData({ ...formData, [f.key]: e.target.value })}
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-hidden"
-                    />
-                  ) : f.type === 'boolean' ? (
-                    /* Boolean Toggle */
-                    <label className="flex items-center gap-2 cursor-pointer pt-1">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(formData[f.key])}
-                        onChange={(e) => setFormData({ ...formData, [f.key]: e.target.checked })}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-xs text-slate-600 font-semibold">Enabled / Active</span>
-                    </label>
-                  ) : (
-                    /* Text Input */
-                    <input
-                      type="text"
-                      value={formData[f.key] !== undefined ? formData[f.key] : ''}
-                      onChange={(e) => setFormData({ ...formData, [f.key]: e.target.value })}
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-hidden"
-                      placeholder={`Enter ${f.label}`}
-                    />
-                  )}
-
-                  {formErrors[f.key] && (
-                    <p className="text-[10px] text-rose-500 font-semibold">
-                      {formErrors[f.key]}
-                    </p>
-                  )}
+            {/* Form Validation Summary Banner */}
+            {Object.keys(formErrors).length > 0 && (
+              <div className="mx-5 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-xs text-rose-800 animate-fade-in shrink-0">
+                <AlertCircle className="h-4 w-4 text-rose-600 mt-0.5 shrink-0" />
+                <div className="space-y-0.5">
+                  <div className="font-bold">
+                    Validation required: {Object.keys(formErrors).length} field{Object.keys(formErrors).length > 1 ? 's have' : ' has'} issues
+                  </div>
+                  <div className="text-[11px] text-rose-700">
+                    Data types (Number, Date, Dropdown) and mandatory constraints are strictly validated.
+                  </div>
                 </div>
-              ))}
+              </div>
+            )}
 
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0">
+            <form onSubmit={handleSaveRecord} className="p-5 space-y-3.5 overflow-y-auto flex-1">
+              {master.fields.map((f) => {
+                const hasError = Boolean(formErrors[f.key]);
+                return (
+                  <div key={f.key} className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1">
+                        <span>{f.label}</span>
+                        {f.mandatory && <span className="text-rose-500 font-bold">*</span>}
+                        {f.isCustom && (
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-purple-100 text-purple-800 font-mono">
+                            Custom
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400 font-normal">
+                        [{f.type}]
+                      </span>
+                    </label>
+
+                    {/* Dropdown Input */}
+                    {f.type === 'select' && f.options ? (
+                      <select
+                        value={formData[f.key] !== undefined ? formData[f.key] : f.options[0]}
+                        onChange={(e) => handleFormFieldChange(f.key, e.target.value)}
+                        onBlur={() => handleFormFieldBlur(f)}
+                        className={`w-full px-3 py-1.5 border rounded-lg text-xs font-semibold focus:outline-hidden bg-white transition-colors cursor-pointer ${
+                          hasError
+                            ? 'border-rose-400 bg-rose-50/40 text-rose-900 focus:border-rose-500 focus:ring-1 focus:ring-rose-200'
+                            : 'border-slate-200 focus:border-blue-400'
+                        }`}
+                      >
+                        {!f.mandatory && <option value="">-- Select {f.label} --</option>}
+                        {f.options.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    ) : f.type === 'number' ? (
+                      /* Number Input */
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={formData[f.key] !== undefined ? formData[f.key] : ''}
+                        onChange={(e) => handleFormFieldChange(f.key, e.target.value)}
+                        onBlur={() => handleFormFieldBlur(f)}
+                        className={`w-full px-3 py-1.5 border rounded-lg text-xs focus:outline-hidden font-mono transition-colors ${
+                          hasError
+                            ? 'border-rose-400 bg-rose-50/40 text-rose-900 focus:border-rose-500 focus:ring-1 focus:ring-rose-200'
+                            : 'border-slate-200 focus:border-blue-400'
+                        }`}
+                        placeholder={
+                          f.validation?.min !== undefined && f.validation?.max !== undefined
+                            ? `Enter numeric value (${f.validation.min} to ${f.validation.max})`
+                            : f.validation?.min !== undefined
+                            ? `Enter numeric value (min: ${f.validation.min})`
+                            : `Enter ${f.label} (numeric)`
+                        }
+                      />
+                    ) : f.type === 'date' ? (
+                      /* Date Input */
+                      <input
+                        type="date"
+                        min={f.validation?.minDate}
+                        max={f.validation?.maxDate}
+                        value={formData[f.key] || ''}
+                        onChange={(e) => handleFormFieldChange(f.key, e.target.value)}
+                        onBlur={() => handleFormFieldBlur(f)}
+                        className={`w-full px-3 py-1.5 border rounded-lg text-xs focus:outline-hidden font-mono transition-colors ${
+                          hasError
+                            ? 'border-rose-400 bg-rose-50/40 text-rose-900 focus:border-rose-500 focus:ring-1 focus:ring-rose-200'
+                            : 'border-slate-200 focus:border-blue-400'
+                        }`}
+                      />
+                    ) : f.type === 'boolean' ? (
+                      /* Boolean Toggle */
+                      <label className="flex items-center gap-2 cursor-pointer pt-1">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(formData[f.key])}
+                          onChange={(e) => handleFormFieldChange(f.key, e.target.checked)}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-slate-600 font-semibold">Enabled / Active</span>
+                      </label>
+                    ) : (
+                      /* Text Input */
+                      <input
+                        type="text"
+                        value={formData[f.key] !== undefined ? formData[f.key] : ''}
+                        onChange={(e) => handleFormFieldChange(f.key, e.target.value)}
+                        onBlur={() => handleFormFieldBlur(f)}
+                        className={`w-full px-3 py-1.5 border rounded-lg text-xs focus:outline-hidden transition-colors ${
+                          hasError
+                            ? 'border-rose-400 bg-rose-50/40 text-rose-900 focus:border-rose-500 focus:ring-1 focus:ring-rose-200'
+                            : 'border-slate-200 focus:border-blue-400'
+                        }`}
+                        placeholder={`Enter ${f.label}`}
+                      />
+                    )}
+
+                    {/* Field Validation Error Badge */}
+                    {hasError && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-rose-600 font-medium pt-0.5 animate-fade-in">
+                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                        <span>{formErrors[f.key]}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0 sticky bottom-0 bg-slate-50 p-4 -mx-5 -mb-5 rounded-b-2xl">
                 <button
                   type="button"
                   onClick={() => setIsRecordModalOpen(false)}
-                  className="px-4 py-1.5 rounded-lg border border-slate-200 text-slate-600 font-semibold cursor-pointer"
+                  className="px-4 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs cursor-pointer shadow-2xs flex items-center gap-1.5 transition-colors"
                 >
-                  Cancel
+                  <X className="h-3.5 w-3.5" />
+                  <span>Close / Cancel</span>
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-blue-900 text-white font-bold cursor-pointer hover:bg-blue-800 transition-colors"
+                  className="px-4 py-1.5 rounded-lg bg-blue-900 text-white font-bold cursor-pointer hover:bg-blue-800 transition-colors shadow-xs"
                 >
                   {editingRecordId ? 'Update Row' : 'Insert Row'}
                 </button>
@@ -1644,9 +1980,15 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
 
       {/* MODAL 2: DYNAMIC SCHEMA FIELD BUILDER (Allows BUs to add custom fields) */}
       {isAddFieldModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-2xs p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden animate-fade-in text-xs">
-            <div className="px-5 py-4 bg-[#002B49] text-white flex items-center justify-between">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsAddFieldModalOpen(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-2xs p-3 overflow-y-auto"
+        >
+          <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden animate-fade-in text-xs flex flex-col max-h-[92vh] my-auto">
+            {/* Modal Header: Sticky at top with prominent Close button */}
+            <div className="px-5 py-3.5 bg-[#002B49] text-white flex items-center justify-between shrink-0 sticky top-0 z-20 shadow-xs">
               <div>
                 <h3 className="font-bold text-sm">Add Custom Schema Parameter</h3>
                 <p className="text-[11px] text-blue-200">
@@ -1654,112 +1996,386 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setIsAddFieldModalOpen(false)}
-                className="text-white/60 hover:text-white cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold cursor-pointer border border-white/20 transition-all shadow-2xs hover:scale-105"
+                title="Close modal (Esc)"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4 text-white" />
+                <span>Close</span>
               </button>
             </div>
 
-            <form onSubmit={handleAddCustomParameter} className="p-5 space-y-3.5">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">
-                  Parameter Display Label *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Failure Root Cause / Approval Date"
-                  value={newFieldLabel}
-                  onChange={(e) => setNewFieldLabel(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-hidden"
-                />
+            {/* Quick Test Presets Bar */}
+            <div className="bg-purple-50/90 border-b border-purple-200/80 px-5 py-2.5 flex items-center justify-between gap-2 shrink-0">
+              <span className="text-[11px] font-bold text-purple-950 flex items-center gap-1">
+                <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                <span>Quick Test Templates:</span>
+              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewFieldLabel('Extended Warranty Tier');
+                    setNewFieldKey('extended_warranty_tier');
+                    setNewFieldType('select');
+                    setNewFieldOptions('PLATINUM, GOLD, SILVER, STANDARD');
+                    setNewFieldMandatory(false);
+                    setNewFieldDefaultVal('PLATINUM');
+                    setNewFieldDisplayInDealerApp(true);
+                    setNewFieldDealerTargetModule('vehicle_journey');
+                    setNewFieldDealerDisplayLabel('Warranty & AMC Coverage Tier');
+                    setNewFieldValueMappings([
+                      { raw: 'PLATINUM', mapped: '🛡️ Platinum 5-Yr Comprehensive Cover' },
+                      { raw: 'GOLD', mapped: '⭐ Gold 3-Yr Drivetrain & Labour' },
+                      { raw: 'SILVER', mapped: '🥈 Silver 2-Yr Basic Scheduled Plan' },
+                      { raw: 'STANDARD', mapped: '🚗 Standard 1-Yr OEM Manufacturer Warranty' },
+                    ]);
+                  }}
+                  className="px-2 py-0.5 rounded bg-purple-200/80 hover:bg-purple-300 text-purple-900 font-bold text-[10px] transition-colors cursor-pointer border border-purple-300"
+                  title="Load Platinum Warranty Tier example"
+                >
+                  🛡️ Platinum Warranty
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewFieldLabel('Telematics Diagnostic Tier');
+                    setNewFieldKey('telematics_ota_status');
+                    setNewFieldType('select');
+                    setNewFieldOptions('OTA_ACTIVE, ECU_FLASH_REQ, NON_CONNECTED');
+                    setNewFieldMandatory(false);
+                    setNewFieldDefaultVal('OTA_ACTIVE');
+                    setNewFieldDisplayInDealerApp(true);
+                    setNewFieldDealerTargetModule('vehicle_journey');
+                    setNewFieldDealerDisplayLabel('iRA Connected Telematics Status');
+                    setNewFieldValueMappings([
+                      { raw: 'OTA_ACTIVE', mapped: '🟢 Connected Fleet OTA Active (v4.2)' },
+                      { raw: 'ECU_FLASH_REQ', mapped: '⚠️ Manual Bay Flash Required' },
+                      { raw: 'NON_CONNECTED', mapped: '⚪ Legacy Non-Telematics ECU' },
+                    ]);
+                  }}
+                  className="px-2 py-0.5 rounded bg-emerald-200/80 hover:bg-emerald-300 text-emerald-900 font-bold text-[10px] transition-colors cursor-pointer border border-emerald-300"
+                  title="Load Connected Telematics OTA example"
+                >
+                  🟢 Connected OTA
+                </button>
               </div>
+            </div>
 
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">
-                  Internal Field Key (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. failure_root_cause"
-                  value={newFieldKey}
-                  onChange={(e) => setNewFieldKey(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-hidden"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Data Type</label>
-                  <select
-                    value={newFieldType}
-                    onChange={(e) => setNewFieldType(e.target.value as any)}
-                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden bg-white"
-                  >
-                    <option value="text">Text String</option>
-                    <option value="number">Number</option>
-                    <option value="date">Date</option>
-                    <option value="select">Dropdown LOV</option>
-                    <option value="boolean">Boolean (Toggle)</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center pt-5">
-                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={newFieldMandatory}
-                      onChange={(e) => setNewFieldMandatory(e.target.checked)}
-                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>Is Mandatory</span>
-                  </label>
-                </div>
-              </div>
-
-              {newFieldType === 'select' && (
+            <form onSubmit={handleAddCustomParameter} className="flex flex-col flex-1 overflow-hidden min-h-0">
+              <div className="p-5 space-y-3.5 overflow-y-auto flex-1">
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
-                    Dropdown Options (Comma separated) *
+                    Parameter Display Label *
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="Option A, Option B, Option C"
-                    value={newFieldOptions}
-                    onChange={(e) => setNewFieldOptions(e.target.value)}
+                    placeholder="e.g. Failure Root Cause / Approval Date"
+                    value={newFieldLabel}
+                    onChange={(e) => setNewFieldLabel(e.target.value)}
                     className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-hidden"
                   />
                 </div>
-              )}
 
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">
-                  Default Value for Existing Rows
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Standard"
-                  value={newFieldDefaultVal}
-                  onChange={(e) => setNewFieldDefaultVal(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-hidden"
-                />
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Internal Field Key (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. failure_root_cause"
+                    value={newFieldKey}
+                    onChange={(e) => setNewFieldKey(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-hidden"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Data Type</label>
+                    <select
+                      value={newFieldType}
+                      onChange={(e) => setNewFieldType(e.target.value as any)}
+                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden bg-white"
+                    >
+                      <option value="text">Text String</option>
+                      <option value="number">Number</option>
+                      <option value="date">Date</option>
+                      <option value="select">Dropdown LOV</option>
+                      <option value="boolean">Boolean (Toggle)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center pt-5">
+                    <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={newFieldMandatory}
+                        onChange={(e) => setNewFieldMandatory(e.target.checked)}
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span>Is Mandatory</span>
+                    </label>
+                  </div>
+                </div>
+
+                {newFieldType === 'select' && (
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 block text-xs">
+                      Dropdown Options (Comma separated) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Option A, Option B, Option C"
+                      value={newFieldOptions}
+                      onChange={(e) => setNewFieldOptions(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-hidden"
+                    />
+                    <p className="text-[10px] text-blue-800">
+                      Enter at least 2 distinct comma-separated options. User entries will be strictly validated against these options.
+                    </p>
+                  </div>
+                )}
+
+                {newFieldType === 'number' && (
+                  <div className="grid grid-cols-2 gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1 text-[11px]">
+                        Minimum Value (Optional)
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 0"
+                        value={newFieldMinNum}
+                        onChange={(e) => setNewFieldMinNum(e.target.value)}
+                        className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white focus:outline-hidden font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1 text-[11px]">
+                        Maximum Value (Optional)
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 1000"
+                        value={newFieldMaxNum}
+                        onChange={(e) => setNewFieldMaxNum(e.target.value)}
+                        className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white focus:outline-hidden font-mono"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {newFieldType === 'date' && (
+                  <div className="grid grid-cols-2 gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1 text-[11px]">
+                        Earliest Allowed Date
+                      </label>
+                      <input
+                        type="date"
+                        value={newFieldMinDate}
+                        onChange={(e) => setNewFieldMinDate(e.target.value)}
+                        className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white focus:outline-hidden font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1 text-[11px]">
+                        Latest Allowed Date
+                      </label>
+                      <input
+                        type="date"
+                        value={newFieldMaxDate}
+                        onChange={(e) => setNewFieldMaxDate(e.target.value)}
+                        className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white focus:outline-hidden font-mono"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Default Value for Existing Rows
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={
+                      newFieldType === 'number'
+                        ? 'e.g. 0'
+                        : newFieldType === 'date'
+                        ? 'YYYY-MM-DD (e.g. 2026-09-30)'
+                        : newFieldType === 'select'
+                        ? 'Must match one of the dropdown options above'
+                        : 'e.g. Standard'
+                    }
+                    value={newFieldDefaultVal}
+                    onChange={(e) => setNewFieldDefaultVal(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-hidden"
+                  />
+                </div>
+
+                {/* Dealer Application Exposure & Value Mapping Section */}
+                <div className="rounded-xl border border-blue-200/80 bg-blue-50/50 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-blue-700" />
+                      <div>
+                        <div className="font-bold text-xs text-blue-950">
+                          Dealer Application Visibility &amp; Value Mapping
+                        </div>
+                        <div className="text-[10px] text-blue-800">
+                          Configure if and how this field appears in dealer workshop screens
+                        </div>
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-blue-950">
+                      <input
+                        type="checkbox"
+                        checked={newFieldDisplayInDealerApp}
+                        onChange={(e) => setNewFieldDisplayInDealerApp(e.target.checked)}
+                        className="rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span>Expose to Dealer App</span>
+                    </label>
+                  </div>
+
+                  {newFieldDisplayInDealerApp && (
+                    <div className="space-y-3 pt-2 border-t border-blue-200/60 animate-fade-in">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1 text-[11px]">
+                            Target Dealer Module
+                          </label>
+                          <select
+                            value={newFieldDealerTargetModule}
+                            onChange={(e) => setNewFieldDealerTargetModule(e.target.value as any)}
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden bg-white"
+                          >
+                            <option value="vehicle_journey">Vehicle Journey &amp; Job Card Detail</option>
+                            <option value="job_card">JC Creation &amp; Demanded Work</option>
+                            <option value="reception">Reception &amp; P&amp;D Transit</option>
+                            <option value="workshop_floor">Shop Floor &amp; Bay Dispatch</option>
+                            <option value="general">All Dealer Views (General)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1 text-[11px]">
+                            Dealer Display Label
+                          </label>
+                          <input
+                            type="text"
+                            placeholder={newFieldLabel || 'e.g. Protection Plan Tier'}
+                            value={newFieldDealerDisplayLabel}
+                            onChange={(e) => setNewFieldDealerDisplayLabel(e.target.value)}
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-hidden bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Value Mapping Key-Value Pairs */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="font-semibold text-slate-700 text-[11px] flex items-center gap-1">
+                            <span>Value Mapping (Raw Master Code → Dealer Display Text)</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (newFieldType === 'select' && newFieldOptions.trim()) {
+                                const opts = newFieldOptions.split(',').map((s) => s.trim()).filter(Boolean);
+                                setNewFieldValueMappings(opts.map((o) => ({ raw: o, mapped: `${o} (Verified)` })));
+                              } else {
+                                setNewFieldValueMappings([...newFieldValueMappings, { raw: '', mapped: '' }]);
+                              }
+                            }}
+                            className="text-[10px] font-bold text-blue-700 hover:text-blue-900 cursor-pointer"
+                          >
+                            {newFieldType === 'select' && newFieldOptions.trim()
+                              ? '+ Auto-populate from options'
+                              : '+ Add Mapping Row'}
+                          </button>
+                        </div>
+
+                        <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                          {newFieldValueMappings.map((m, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                placeholder="Raw Code (e.g. Y, GOLD)"
+                                value={m.raw}
+                                onChange={(e) => {
+                                  const next = [...newFieldValueMappings];
+                                  next[idx].raw = e.target.value;
+                                  setNewFieldValueMappings(next);
+                                }}
+                                className="w-1/3 px-2 py-1 text-xs border border-slate-200 rounded-md font-mono bg-white"
+                              />
+                              <span className="text-slate-400 font-bold">→</span>
+                              <input
+                                type="text"
+                                placeholder="Dealer Display (e.g. Active Protection)"
+                                value={m.mapped}
+                                onChange={(e) => {
+                                  const next = [...newFieldValueMappings];
+                                  next[idx].mapped = e.target.value;
+                                  setNewFieldValueMappings(next);
+                                }}
+                                className="flex-1 px-2 py-1 text-xs border border-slate-200 rounded-md bg-white font-medium"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setNewFieldValueMappings(newFieldValueMappings.filter((_, i) => i !== idx));
+                                }}
+                                className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddFieldModalOpen(false)}
-                  className="px-4 py-1.5 rounded-lg border border-slate-200 text-slate-600 font-semibold cursor-pointer"
-                >
-                  Cancel
-                </button>
+              {/* Modal Sticky Footer with clear Close / Cancel and Submit buttons */}
+              <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0 sticky bottom-0 z-10">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddFieldModalOpen(false)}
+                    className="px-4 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs cursor-pointer shadow-2xs flex items-center gap-1.5 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    <span>Close / Cancel</span>
+                  </button>
+                  {onOpenDealerPreview && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddFieldModalOpen(false);
+                        onOpenDealerPreview();
+                      }}
+                      className="px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold text-xs cursor-pointer flex items-center gap-1.5 transition-colors shadow-2xs"
+                      title="Test how this custom field looks and behaves in the live Dealer App Simulator"
+                    >
+                      <Smartphone className="h-3.5 w-3.5 text-emerald-700" />
+                      <span>Test in Dealer Simulator →</span>
+                    </button>
+                  )}
+                </div>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-blue-900 text-white font-bold cursor-pointer hover:bg-blue-800 transition-colors"
+                  className="px-4 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-white font-bold cursor-pointer text-xs flex items-center gap-1.5 shadow-xs transition-colors"
                 >
-                  Add Field to Schema
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Add Field to Schema</span>
                 </button>
               </div>
             </form>
@@ -1767,10 +2383,204 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
         </div>
       )}
 
+      {/* MODAL 2B: FIELD & VALUE MAPPING CONFIGURATION MODAL */}
+      {editingFieldConfig && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setEditingFieldConfig(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-2xs p-3 overflow-y-auto"
+        >
+          <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden animate-fade-in text-xs flex flex-col max-h-[92vh] my-auto">
+            {/* Modal Header: Sticky at top with prominent Close button */}
+            <div className="px-5 py-3.5 bg-[#002B49] text-white flex items-center justify-between shrink-0 sticky top-0 z-20 shadow-xs">
+              <div className="flex items-center gap-2">
+                <Settings className="h-4 w-4 text-blue-300" />
+                <div>
+                  <h3 className="font-bold text-sm">Dealer Value Mapping &amp; Configuration</h3>
+                  <p className="text-[11px] text-blue-200">
+                    Field: <span className="font-mono">{editingFieldConfig.key}</span> ({editingFieldConfig.label})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingFieldConfig(null)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold cursor-pointer border border-white/20 transition-all shadow-2xs hover:scale-105"
+                title="Close modal (Esc)"
+              >
+                <X className="h-4 w-4 text-white" />
+                <span>Close</span>
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-slate-800">Display in Dealer Application</div>
+                  <div className="text-[11px] text-slate-500">
+                    When enabled, this field appears on vehicle journey and dealer cards.
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-blue-900">
+                  <input
+                    type="checkbox"
+                    checked={editFieldDisplayInDealerApp}
+                    onChange={(e) => setEditFieldDisplayInDealerApp(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>Active</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Target Dealer Module</label>
+                  <select
+                    value={editFieldDealerTargetModule}
+                    onChange={(e) => setEditFieldDealerTargetModule(e.target.value as any)}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden bg-white"
+                  >
+                    <option value="vehicle_journey">Vehicle Journey &amp; Job Card</option>
+                    <option value="job_card">JC Creation &amp; Demanded Work</option>
+                    <option value="reception">Reception &amp; P&amp;D Transit</option>
+                    <option value="workshop_floor">Shop Floor &amp; Bay Dispatch</option>
+                    <option value="general">All Dealer Views</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Dealer Display Label</label>
+                  <input
+                    type="text"
+                    value={editFieldDealerDisplayLabel}
+                    onChange={(e) => setEditFieldDealerDisplayLabel(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Value Mapping Editor */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+                    <span>Value Mapping Dictionary</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditFieldValueMappings([...editFieldValueMappings, { raw: '', mapped: '' }]);
+                    }}
+                    className="text-xs font-bold text-blue-700 hover:text-blue-900 cursor-pointer"
+                  >
+                    + Add Mapping Rule
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Maps raw internal codes in {master.name} to clear, human-readable labels in the dealer portal.
+                </p>
+
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {editFieldValueMappings.map((m, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                      <div className="w-1/3">
+                        <label className="text-[10px] text-slate-400 block font-semibold">Raw Master Value</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Y, PLATINUM"
+                          value={m.raw}
+                          onChange={(e) => {
+                            const next = [...editFieldValueMappings];
+                            next[idx].raw = e.target.value;
+                            setEditFieldValueMappings(next);
+                          }}
+                          className="w-full px-2 py-1 text-xs border border-slate-200 rounded font-mono bg-white"
+                        />
+                      </div>
+                      <span className="text-slate-400 font-bold mt-3">→</span>
+                      <div className="flex-1">
+                        <label className="text-[10px] text-slate-400 block font-semibold">Dealer Display Label</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 🛡️ Platinum 5-Yr Comprehensive"
+                          value={m.mapped}
+                          onChange={(e) => {
+                            const next = [...editFieldValueMappings];
+                            next[idx].mapped = e.target.value;
+                            setEditFieldValueMappings(next);
+                          }}
+                          className="w-full px-2 py-1 text-xs border border-slate-200 rounded font-medium bg-white"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditFieldValueMappings(editFieldValueMappings.filter((_, i) => i !== idx));
+                        }}
+                        className="text-slate-400 hover:text-rose-600 mt-3 cursor-pointer"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  {editFieldValueMappings.length === 0 && (
+                    <div className="text-center py-4 text-slate-400 italic">
+                      No custom mappings defined. The dealer application will display the raw record value directly.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Sticky Footer */}
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0 sticky bottom-0 z-10">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingFieldConfig(null)}
+                  className="px-4 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs cursor-pointer shadow-2xs flex items-center gap-1.5 transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  <span>Close / Cancel</span>
+                </button>
+                {onOpenDealerPreview && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingFieldConfig(null);
+                      onOpenDealerPreview();
+                    }}
+                    className="px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold text-xs cursor-pointer flex items-center gap-1.5 transition-colors shadow-2xs"
+                    title="Test how this custom field mapping looks and behaves in the live Dealer App Simulator"
+                  >
+                    <Smartphone className="h-3.5 w-3.5 text-emerald-700" />
+                    <span>Test in Dealer Simulator →</span>
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveFieldConfiguration}
+                className="px-4 py-1.5 rounded-lg bg-blue-900 text-white font-bold cursor-pointer hover:bg-blue-800 transition-colors shadow-xs flex items-center gap-1.5"
+              >
+                <Check className="h-3.5 w-3.5" />
+                <span>Save Configuration</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL 3: DELETE CONFIRMATION MODAL */}
       {deletingRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-2xs p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full border border-slate-200 shadow-2xl p-5 text-xs text-center space-y-3 animate-fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDeletingRecord(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-2xs p-4 overflow-y-auto"
+        >
+          <div className="bg-white rounded-2xl max-w-sm w-full border border-slate-200 shadow-2xl p-5 text-xs text-center space-y-3 animate-fade-in my-auto">
             <div className="h-10 w-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
               <Trash2 className="h-5 w-5" />
             </div>
@@ -1782,14 +2592,16 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
             </div>
             <div className="flex justify-center gap-2 pt-2">
               <button
+                type="button"
                 onClick={() => setDeletingRecord(null)}
-                className="px-4 py-1.5 rounded-lg border border-slate-200 text-slate-600 font-semibold cursor-pointer"
+                className="px-4 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs cursor-pointer shadow-2xs"
               >
-                Cancel
+                Close / Cancel
               </button>
               <button
+                type="button"
                 onClick={handleConfirmDelete}
-                className="px-4 py-1.5 rounded-lg bg-rose-600 text-white font-bold cursor-pointer hover:bg-rose-700 transition-colors"
+                className="px-4 py-1.5 rounded-lg bg-rose-600 text-white font-bold cursor-pointer hover:bg-rose-700 transition-colors shadow-xs"
               >
                 Delete Row
               </button>
@@ -1800,9 +2612,14 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
 
       {/* MODAL 4: AUDIT TRAIL MODAL (Automated Middleware Log View) */}
       {isAuditTrailModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-2xs p-4">
-          <div className="bg-white rounded-2xl max-w-3xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-fade-in text-xs max-h-[85vh] flex flex-col">
-            <div className="px-5 py-4 bg-[#002B49] text-white flex items-center justify-between shrink-0">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsAuditTrailModalOpen(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-2xs p-4 overflow-y-auto"
+        >
+          <div className="bg-white rounded-2xl max-w-3xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-fade-in text-xs max-h-[88vh] flex flex-col my-auto">
+            <div className="px-5 py-3.5 bg-[#002B49] text-white flex items-center justify-between shrink-0 sticky top-0 z-20 shadow-xs">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-blue-300" />
                 <div>
@@ -1813,10 +2630,13 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsAuditTrailModalOpen(false)}
-                className="text-white/60 hover:text-white cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold cursor-pointer border border-white/20 transition-all shadow-2xs hover:scale-105"
+                title="Close modal (Esc)"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4 text-white" />
+                <span>Close</span>
               </button>
             </div>
 
@@ -1892,10 +2712,24 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
               )}
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+              {onOpenChangeLog ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAuditTrailModalOpen(false);
+                    onOpenChangeLog();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-bold text-xs transition-colors cursor-pointer shadow-2xs"
+                >
+                  <History className="h-3.5 w-3.5 text-indigo-700" />
+                  <span>Open Full Change Log Tab →</span>
+                </button>
+              ) : <div />}
               <button
+                type="button"
                 onClick={() => setIsAuditTrailModalOpen(false)}
-                className="px-4 py-1.5 rounded-lg bg-blue-900 text-white font-bold cursor-pointer hover:bg-blue-800"
+                className="px-4 py-1.5 rounded-lg bg-blue-900 text-white font-bold cursor-pointer hover:bg-blue-800 transition-colors shadow-xs"
               >
                 Close Audit View
               </button>
