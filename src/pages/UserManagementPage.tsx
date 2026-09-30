@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { useRouteSearchParam } from '../hooks/useRouteSearchParam';
 import { AppUser, UserType, UserStatus } from '../types';
 import { UserModal } from '../components/administration/UserModal';
 import { UserDetailDrawer } from '../components/administration/UserDetailDrawer';
@@ -22,6 +23,7 @@ export const UserManagementPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'users' | 'employees' | 'pending' | 'suspended'>('users');
   const [searchQuery, setSearchQuery] = useState('');
+  useRouteSearchParam(setSearchQuery);
   const [userTypeFilter, setUserTypeFilter] = useState<UserType | 'ALL'>('ALL');
   const [statusFilter, setStatusFilter] = useState<UserStatus | 'ALL'>('ALL');
   const [roleFilter, setRoleFilter] = useState('ALL');

@@ -11,6 +11,7 @@ import {
   ChevronRight,
   ExternalLink,
 } from 'lucide-react';
+import { parseDateTime } from '../../utils/dateUtil';
 
 interface JourneyTimelineProps {
   events: JourneyEvent[];
@@ -40,8 +41,8 @@ export const JourneyTimeline: React.FC<JourneyTimelineProps> = ({
 
   // Sort events
   const sortedEvents = [...filteredEvents].sort((a, b) => {
-    const timeA = new Date(a.timestamp).getTime();
-    const timeB = new Date(b.timestamp).getTime();
+    const timeA = parseDateTime(a.timestamp).getTime();
+    const timeB = parseDateTime(b.timestamp).getTime();
     return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
   });
 

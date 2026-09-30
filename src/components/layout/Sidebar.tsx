@@ -21,7 +21,7 @@ export const Sidebar: React.FC = () => {
   const isCurrent = (route: string) => {
     if (route === '/journey' && (currentRoute === '/journey' || currentRoute.startsWith('/journey?'))) return true;
     if (route === '/journey/JC20260930001234' && currentRoute.startsWith('/journey/')) return true;
-    return currentRoute === route;
+    return currentRoute.split('?')[0] === route;
   };
 
   const navItemClass = (active: boolean) =>

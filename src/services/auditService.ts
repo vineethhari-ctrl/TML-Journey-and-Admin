@@ -1,5 +1,7 @@
 import { AuditLogEntry } from '../types';
 
+let auditSeq = 0;
+
 export const auditService = {
   createEntry(
     action: string,
@@ -13,7 +15,7 @@ export const auditService = {
     const now = new Date();
     const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     return {
-      id: `AUD-${Math.floor(10000 + Math.random() * 90000)}`,
+      id: `AUD-${Date.now().toString(36).toUpperCase()}-${(++auditSeq).toString(36).toUpperCase()}`,
       timestamp: formatted,
       userId: user.userId,
       userName: user.userName,
@@ -32,7 +34,7 @@ export const auditService = {
     const rows = logs.map((log) => [
       `"${log.timestamp}"`,
       `"${log.userId}"`,
-      `"${log.userName}"`,
+      `"${log.userName.replace(/"/g, '""')}"`,
       `"${log.action.replace(/"/g, '""')}"`,
       `"${log.module.replace(/"/g, '""')}"`,
       `"${log.entity.replace(/"/g, '""')}"`,
@@ -42,13 +44,15 @@ export const auditService = {
       `"${log.status}"`,
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+    // Use a Blob URL: a data: URI run through encodeURI does not escape '#', which silently truncates the file.
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\r\n');
+    const url = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }));
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.setAttribute('href', url);
     link.setAttribute('download', `TML_Service_Audit_Log_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   },
 };

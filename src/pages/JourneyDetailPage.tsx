@@ -36,6 +36,65 @@ interface JourneyDetailPageProps {
 }
 
 export const JourneyDetailPage: React.FC<JourneyDetailPageProps> = ({ jcNumber = 'JC20260930001234' }) => {
+  const { serviceCases, navigate } = useApp();
+  const exists = serviceCases.some((c) => c.jcNumber === jcNumber);
+
+  if (!exists) {
+    const suggestions = serviceCases
+      .filter((c) => c.jcNumber.includes(jcNumber.slice(-4)) || c.vehicleRegistration.toLowerCase() === jcNumber.toLowerCase())
+      .slice(0, 5);
+    return (
+      <div className="max-w-lg mx-auto my-12 bg-white rounded-2xl border border-amber-200 p-8 shadow-xs text-center space-y-4">
+        <div className="h-12 w-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
+          <AlertTriangle className="h-6 w-6" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">Job Card not found</h2>
+          <p className="text-xs text-slate-500 mt-1">
+            No service case matches <span className="font-mono font-bold text-slate-800">{jcNumber}</span>.
+          </p>
+        </div>
+        {suggestions.length > 0 && (
+          <div className="text-left space-y-1.5">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Did you mean</p>
+            {suggestions.map((c) => (
+              <button
+                key={c.jcNumber}
+                onClick={() => navigate(`/journey/${c.jcNumber}`)}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-xs cursor-pointer"
+              >
+                <span className="font-mono font-bold text-blue-900">{c.jcNumber}</span>
+                <span className="text-slate-500">{c.vehicleRegistration} • {c.currentStage}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <button
+          onClick={() => navigate(`/journey?search=${encodeURIComponent(jcNumber)}`)}
+          className="px-4 py-2 bg-blue-900 text-white rounded-lg text-xs font-bold hover:bg-blue-800 transition-colors cursor-pointer"
+        >
+          Search journeys for "{jcNumber}"
+        </button>
+      </div>
+    );
+  }
+
+  // Keyed by JC so tab / selection state resets when switching between vehicles
+  return <JourneyDetailContent key={jcNumber} jcNumber={jcNumber} />;
+};
+
+const formatClock = (dateTime: string) => {
+  const [datePart, timePart = '00:00'] = dateTime.split(' ');
+  const [h, m] = timePart.split(':').map(Number);
+  const [y, mo, d] = datePart.split('-').map(Number);
+  const dt = new Date(y, (mo || 1) - 1, d || 1, h || 0, m || 0);
+  return {
+    time: dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
+    date: dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+  };
+};
+
+const JourneyDetailContent: React.FC<{ jcNumber: string }> = ({ jcNumber }) => {
   const { serviceCases, stages, events, exceptions, navigate, showToast, masterConfigs, vehicles } = useApp();
 
   const [activeTab, setActiveTab] = useState<'timeline' | 'exceptions' | 'performance' | 'master_mapping' | 'rules_engine'>('timeline');
@@ -56,15 +115,49 @@ export const JourneyDetailPage: React.FC<JourneyDetailPageProps> = ({ jcNumber =
 
   // Find target case or fallback to first
   const currentCase = serviceCases.find((c) => c.jcNumber === jcNumber) || serviceCases[0];
+  const started = formatClock(currentCase.createdAt);
   const matchingVehicle = useMemo(() => {
     return vehicles.find(
       (v) => v.vehicleId === currentCase.vehicleId || v.vin === currentCase.vin || v.registrationNumber === currentCase.vehicleRegistration
     );
   }, [vehicles, currentCase]);
 
-  const caseStages = stages[currentCase.jcNumber] || stages['JC20260930001234'] || [];
-  const caseEvents = events[currentCase.jcNumber] || events['JC20260930001234'] || [];
+  const caseStages = stages[currentCase.jcNumber] || [];
+  const caseEvents = events[currentCase.jcNumber] || [];
   const caseExceptions = exceptions.filter((e) => e.jcNumber === currentCase.jcNumber);
+  const activeStage =
+    caseStages.find((s) => s.status === 'IN PROGRESS' || s.status === 'BLOCKED') ||
+    caseStages.find((s) => s.module === currentCase.currentStage);
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}${window.location.pathname}#/journey/${currentCase.jcNumber}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Journey link copied to clipboard', 'success');
+    } catch {
+      window.prompt('Copy this journey link:', url);
+    }
+  };
+
+  const handleExportDossier = () => {
+    const dossier = {
+      exportedAt: new Date().toISOString(),
+      serviceCase: currentCase,
+      vehicle: matchingVehicle ?? null,
+      stages: caseStages,
+      events: caseEvents,
+      exceptions: caseExceptions,
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(dossier, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `TML_Journey_${currentCase.jcNumber}_${currentCase.vehicleRegistration}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast(`Journey dossier exported (${caseStages.length} stages, ${caseEvents.length} events)`, 'success');
+  };
 
   const handleStageSelect = (stage: JourneyStage) => {
     setSelectedStage((prev) => (prev?.stageId === stage.stageId ? null : stage));
@@ -151,14 +244,14 @@ export const JourneyDetailPage: React.FC<JourneyDetailPageProps> = ({ jcNumber =
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => showToast('Journey share link copied to clipboard', 'info')}
+            onClick={handleShare}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs"
           >
             <Share2 className="h-3.5 w-3.5" />
             <span>Share</span>
           </button>
           <button
-            onClick={() => showToast('Exporting complete journey dossier (PDF/JSON)...', 'success')}
+            onClick={handleExportDossier}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-white text-xs font-semibold shadow-xs"
           >
             <FileDown className="h-3.5 w-3.5" />
@@ -186,7 +279,7 @@ export const JourneyDetailPage: React.FC<JourneyDetailPageProps> = ({ jcNumber =
                 {currentCase.vehicleRegistration}
               </h1>
               <span className="text-base font-semibold text-slate-600">
-                Tata Nexon EV Empowered Plus
+                {matchingVehicle ? `Tata ${matchingVehicle.model}` : currentCase.serviceType}
               </span>
             </div>
 
@@ -228,6 +321,8 @@ export const JourneyDetailPage: React.FC<JourneyDetailPageProps> = ({ jcNumber =
                     ? 'bg-emerald-100 text-emerald-800'
                     : currentCase.overallStatus === 'DELAYED'
                     ? 'bg-rose-100 text-rose-800'
+                    : currentCase.overallStatus === 'BLOCKED'
+                    ? 'bg-rose-600 text-white shadow-xs'
                     : 'bg-blue-600 text-white shadow-xs'
                 }`}
               >
@@ -258,27 +353,27 @@ export const JourneyDetailPage: React.FC<JourneyDetailPageProps> = ({ jcNumber =
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-1">
           <StatCard
             title="Journey Started"
-            value="09:05 AM"
-            subtitle="Today, 30 Sep 2026"
+            value={started.time}
+            subtitle={started.date}
             icon={Clock}
           />
           <StatCard
             title="Elapsed Time"
             value={currentCase.elapsedTimeFormatted}
-            subtitle="Within expected SLA"
+            subtitle={currentCase.overallStatus === 'DELAYED' ? 'SLA breached' : currentCase.overallStatus === 'BLOCKED' ? 'Blocked — needs action' : 'Within expected SLA'}
             icon={Activity}
             variant="accent"
           />
           <StatCard
             title="Current Stage"
             value={currentCase.currentStage}
-            subtitle="Inspector: Amit Kumar"
+            subtitle={activeStage ? `Owner: ${activeStage.responsibleUser}` : '—'}
             icon={Layers}
           />
           <StatCard
             title="Pending Actions"
             value={currentCase.pendingActionsCount}
-            subtitle="Customer OTP approval"
+            subtitle={caseExceptions.length > 0 ? `${caseExceptions.filter((e) => e.status !== 'RESOLVED').length} open exception(s)` : currentCase.pendingActionsCount > 0 ? 'Awaiting approvals' : 'Nothing pending'}
             icon={AlertTriangle}
             variant={currentCase.pendingActionsCount > 0 ? 'warning' : 'default'}
             onClick={() => setActiveTab('exceptions')}

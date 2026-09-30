@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { masterExportUtil } from '../utils/masterExportUtil';
 import {
   Shield,
   Search,
@@ -749,7 +750,20 @@ export const RoleManagementPage: React.FC = () => {
                   <button
                     onClick={() => {
                       setIsMoreMenuOpen(false);
-                      showToast('Exporting Role Permissions CSV (Ratified Baseline)...', 'success');
+                      masterExportUtil.exportToCSV({
+                        masterName: 'Role Permission Matrix',
+                        category: 'Roles & Access',
+                        columns: [
+                          { key: 'code', label: 'Permission Code' },
+                          { key: 'description', label: 'Description' },
+                          { key: 'group', label: 'Group' },
+                          { key: 'domain', label: 'Domain' },
+                          { key: 'service', label: 'Service' },
+                          ...roles.map((r) => ({ key: r.id, label: r.name })),
+                        ],
+                        data: filteredPermissions.map((p) => ({ ...p, ...p.roles })),
+                      });
+                      showToast(`Exported ${filteredPermissions.length} role permissions to CSV`, 'success');
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-slate-50 text-left cursor-pointer"
                   >

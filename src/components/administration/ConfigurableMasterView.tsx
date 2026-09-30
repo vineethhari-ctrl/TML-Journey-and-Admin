@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { masterExportUtil } from '../../utils/masterExportUtil';
 import {
   MasterConfig,
   MasterFieldDef,
@@ -291,7 +292,14 @@ export const ConfigurableMasterView: React.FC<ConfigurableMasterViewProps> = ({
               {filteredRecords.length} / {master.records.length} records • {master.fields.length} schema fields
             </span>
             <button
-              onClick={() => showToast(`Exported ${master.name} as CSV`, 'success')}
+              onClick={() => {
+                masterExportUtil.exportToCSV({
+                  masterName: master.name,
+                  columns: master.fields.map((f) => ({ key: f.key, label: f.label })),
+                  data: filteredRecords,
+                });
+                showToast(`Exported ${filteredRecords.length} ${master.name} records as CSV`, 'success');
+              }}
               className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
               title="Export CSV"
             >

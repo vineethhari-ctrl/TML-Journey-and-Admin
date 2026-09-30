@@ -1,75 +1,268 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Car, FileText, User, Smartphone, Clock, X, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  Search,
+  Car,
+  FileText,
+  User,
+  Smartphone,
+  Clock,
+  X,
+  ArrowRight,
+  CornerDownLeft,
+  Compass,
+  History,
+  Zap,
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { NAV_PAGES } from '../../config/navigation';
 
 interface GlobalSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+interface PaletteItem {
+  id: string;
+  section: string;
+  icon: React.ElementType;
+  title: string;
+  subtitle?: string;
+  hint: string;
+  mono?: boolean;
+  run: () => void;
+}
+
+const RECENT_KEY = 'tml_recent_searches_v1';
+const MAX_RECENT = 6;
+
+const loadRecent = (): string[] => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+    return Array.isArray(raw) ? raw.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveRecent = (query: string) => {
+  const q = query.trim();
+  if (!q) return;
+  try {
+    const next = [q, ...loadRecent().filter((r) => r.toLowerCase() !== q.toLowerCase())].slice(0, MAX_RECENT);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    // storage unavailable — recents are a convenience only
+  }
+};
+
+/**
+ * Command palette: search every entity (vehicles, JCs, users, devices, sessions),
+ * jump to any page the active role can access, and drive it all from the keyboard.
+ */
 export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
-  const { searchGlobal, navigate } = useApp();
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [recent, setRecent] = useState<string[]>([]);
+  const { searchGlobal, navigate, canAccessRoute } = useApp();
+  const listRef = useRef<HTMLDivElement>(null);
 
-  // Listen for Escape key to close modal
+  // Reset each time the palette opens
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
     if (isOpen) {
-      window.addEventListener('keydown', handleKeyDown);
+      setQuery('');
+      setActiveIndex(0);
+      setRecent(loadRecent());
     }
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
+  const items = useMemo<PaletteItem[]>(() => {
+    if (!isOpen) return [];
+    const q = query.trim();
+    const ql = q.toLowerCase();
+    const go = (route: string) => () => {
+      if (q) saveRecent(q);
+      navigate(route);
+      onClose();
     };
-  }, [isOpen, onClose]);
+    const list: PaletteItem[] = [];
+
+    if (!q) {
+      recent.forEach((r, i) =>
+        list.push({
+          id: `recent-${i}`,
+          section: 'Recent searches',
+          icon: History,
+          title: r,
+          hint: 'Search',
+          mono: true,
+          run: () => setQuery(r),
+        })
+      );
+      NAV_PAGES.filter((p) => canAccessRoute(p.route)).forEach((p) =>
+        list.push({
+          id: `page-${p.route}`,
+          section: 'Go to',
+          icon: Compass,
+          title: p.label,
+          subtitle: p.group,
+          hint: 'Open',
+          run: go(p.route),
+        })
+      );
+      return list;
+    }
+
+    const results = searchGlobal(q);
+    const canJourney = canAccessRoute('/journey');
+
+    // Exact JC hit → offer a direct jump first
+    const exactJc = results.serviceCases.find((sc) => sc.jcNumber.toLowerCase() === ql);
+    if (exactJc && canJourney) {
+      list.push({
+        id: `jump-${exactJc.jcNumber}`,
+        section: 'Best match',
+        icon: Zap,
+        title: `Open journey ${exactJc.jcNumber}`,
+        subtitle: `${exactJc.vehicleRegistration} • ${exactJc.currentStage} • ${exactJc.overallStatus}`,
+        hint: 'Open',
+        mono: true,
+        run: go(`/journey/${exactJc.jcNumber}`),
+      });
+    }
+
+    NAV_PAGES.filter(
+      (p) => canAccessRoute(p.route) && `${p.label} ${p.group} ${p.keywords}`.toLowerCase().includes(ql)
+    ).forEach((p) =>
+      list.push({
+        id: `page-${p.route}`,
+        section: 'Pages',
+        icon: Compass,
+        title: p.label,
+        subtitle: p.group,
+        hint: 'Open',
+        run: go(p.route),
+      })
+    );
+
+    if (canJourney) {
+      results.serviceCases.slice(0, 5).forEach((sc) => {
+        if (exactJc?.jcNumber === sc.jcNumber) return;
+        list.push({
+          id: `jc-${sc.jcNumber}`,
+          section: `Job Cards (${results.serviceCases.length})`,
+          icon: FileText,
+          title: sc.jcNumber,
+          subtitle: `${sc.vehicleRegistration} • ${sc.currentStage} • ${sc.customerName}`,
+          hint: 'Timeline',
+          mono: true,
+          run: go(`/journey/${sc.jcNumber}`),
+        });
+      });
+      results.vehicles.slice(0, 4).forEach((v) =>
+        list.push({
+          id: `veh-${v.vehicleId}`,
+          section: `Vehicles (${results.vehicles.length})`,
+          icon: Car,
+          title: v.registrationNumber,
+          subtitle: `${v.model} • ${v.customerName} • VIN ${v.vin}`,
+          hint: 'Journeys',
+          mono: true,
+          run: go(`/journey?search=${encodeURIComponent(v.registrationNumber)}`),
+        })
+      );
+    }
+
+    if (canAccessRoute('/admin/users')) {
+      results.users.slice(0, 4).forEach((u) =>
+        list.push({
+          id: `user-${u.userId}`,
+          section: `Users (${results.users.length})`,
+          icon: User,
+          title: u.name,
+          subtitle: `${u.userId} • ${u.role} • ${u.status}`,
+          hint: 'Manage',
+          run: go(`/admin/users?search=${encodeURIComponent(u.userId)}`),
+        })
+      );
+    }
+    if (canAccessRoute('/admin/devices')) {
+      results.devices.slice(0, 3).forEach((d) =>
+        list.push({
+          id: `dev-${d.deviceId}`,
+          section: `Devices (${results.devices.length})`,
+          icon: Smartphone,
+          title: d.deviceId,
+          subtitle: `${d.assignedUserName} • ${d.deviceType} • ${d.status}`,
+          hint: 'Manage',
+          mono: true,
+          run: go(`/admin/devices?search=${encodeURIComponent(d.deviceId)}`),
+        })
+      );
+    }
+    if (canAccessRoute('/admin/sessions')) {
+      results.sessions.slice(0, 3).forEach((s) =>
+        list.push({
+          id: `sess-${s.sessionId}`,
+          section: `Sessions (${results.sessions.length})`,
+          icon: Clock,
+          title: s.sessionId,
+          subtitle: `${s.userName} • ${s.ipAddress} • ${s.status}`,
+          hint: 'Manage',
+          mono: true,
+          run: go(`/admin/sessions?search=${encodeURIComponent(s.sessionId)}`),
+        })
+      );
+    }
+
+    // Always offer a full journey search as the fallback action
+    if (canJourney) {
+      list.push({
+        id: 'search-all',
+        section: 'Search',
+        icon: Search,
+        title: `Search all journeys for "${q}"`,
+        hint: 'Search',
+        run: go(`/journey?search=${encodeURIComponent(q)}`),
+      });
+    }
+    return list;
+  }, [isOpen, query, recent, searchGlobal, navigate, canAccessRoute, onClose]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query]);
+
+  // Keep the highlighted row visible while arrowing through results
+  useEffect(() => {
+    listRef.current?.querySelector(`[data-index="${activeIndex}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex]);
 
   if (!isOpen) return null;
 
-  const results = searchGlobal(query);
-  const totalResults =
-    results.vehicles.length +
-    results.serviceCases.length +
-    results.users.length +
-    results.devices.length +
-    results.sessions.length;
-
-  const handleSelectVehicle = (reg: string) => {
-    navigate(`/journey?search=${encodeURIComponent(reg)}`);
-    onClose();
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex((i) => (items.length ? (i + 1) % items.length : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((i) => (items.length ? (i - 1 + items.length) % items.length : 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      items[activeIndex]?.run();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+    }
   };
 
-  const handleSelectJC = (jc: string) => {
-    navigate(`/journey/${jc}`);
-    onClose();
-  };
-
-  const handleSelectUser = () => {
-    navigate('/admin/users');
-    onClose();
-  };
-
-  const handleSelectDevice = () => {
-    navigate('/admin/devices');
-    onClose();
-  };
-
-  const handleSelectSession = () => {
-    navigate('/admin/sessions');
-    onClose();
-  };
+  let lastSection = '';
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div
-        className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
-        onClick={onClose}
-      />
+    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Command palette">
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity" onClick={onClose} />
       <div className="flex min-h-full items-start justify-center p-4 pt-16">
         <div
-          className="relative w-full max-w-2xl rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden transform transition-all"
+          className="relative w-full max-w-2xl rounded-xl bg-white shadow-2xl border border-slate-200 overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Search Input Bar */}
@@ -78,10 +271,12 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
             <input
               type="text"
               autoFocus
-              placeholder="Search by Vehicle No (e.g. MH01AB1234), VIN, JC, Employee ID, User ID..."
+              placeholder="Search vehicles, JCs, VINs, users, devices… or jump to a page"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
               className="flex-1 bg-transparent text-sm text-slate-900 placeholder-slate-400 focus:outline-hidden"
+              aria-activedescendant={items[activeIndex] ? `palette-${items[activeIndex].id}` : undefined}
             />
             {query && (
               <button
@@ -93,209 +288,78 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
                 <X className="h-4 w-4" />
               </button>
             )}
-            {/* Prominent Close Button */}
             <button
               type="button"
               onClick={onClose}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-200/80 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-300 hover:border-rose-300 text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0"
-              title="Close search modal (Esc)"
+              className="px-2 py-1 rounded-md bg-white text-slate-500 border border-slate-300 text-[10px] font-mono font-bold hover:bg-slate-100 cursor-pointer shrink-0"
+              title="Close (Esc)"
             >
-              <X className="h-4 w-4" />
-              <span>Close</span>
-              <kbd className="hidden sm:inline-block ml-0.5 px-1 py-0.2 text-[9px] font-mono font-medium text-slate-500 bg-white border border-slate-200 rounded">
-                ESC
-              </kbd>
+              ESC
             </button>
           </div>
 
-          {/* Quick presets if empty */}
-          {!query.trim() && (
-            <div className="p-5 text-xs text-slate-500 space-y-3">
-              <p className="font-semibold text-slate-700 uppercase tracking-wider text-[11px]">
-                Quick Search Suggestions:
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setQuery('MH01AB1234')}
-                  className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md border border-blue-200 hover:bg-blue-100 font-mono"
-                >
-                  MH01AB1234 (Demo EV)
-                </button>
-                <button
-                  onClick={() => setQuery('JC20260930001234')}
-                  className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md border border-slate-200 hover:bg-slate-200 font-mono"
-                >
-                  JC20260930001234
-                </button>
-                <button
-                  onClick={() => setQuery('Amit Kumar')}
-                  className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md border border-slate-200 hover:bg-slate-200"
-                >
-                  Amit Kumar (Technician)
-                </button>
-                <button
-                  onClick={() => setQuery('Priya Shinde')}
-                  className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md border border-slate-200 hover:bg-slate-200"
-                >
-                  Priya Shinde (Advisor)
-                </button>
+          {/* Results */}
+          <div ref={listRef} className="max-h-[60vh] overflow-y-auto p-2" role="listbox">
+            {items.length === 0 ? (
+              <div className="py-10 text-center text-sm text-slate-500">
+                No matching records found for "{query}"
               </div>
+            ) : (
+              items.map((item, index) => {
+                const showHeader = item.section !== lastSection;
+                lastSection = item.section;
+                const Icon = item.icon;
+                const active = index === activeIndex;
+                return (
+                  <React.Fragment key={item.id}>
+                    {showHeader && (
+                      <div className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        {item.section}
+                      </div>
+                    )}
+                    <div
+                      id={`palette-${item.id}`}
+                      data-index={index}
+                      role="option"
+                      aria-selected={active}
+                      onMouseMove={() => !active && setActiveIndex(index)}
+                      onClick={item.run}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-xs transition-colors ${
+                        active ? 'bg-blue-900 text-white' : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-blue-200' : 'text-slate-400'}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className={`font-semibold truncate ${item.mono ? 'font-mono' : ''}`}>{item.title}</div>
+                        {item.subtitle && (
+                          <div className={`text-[11px] truncate ${active ? 'text-blue-200' : 'text-slate-400'}`}>
+                            {item.subtitle}
+                          </div>
+                        )}
+                      </div>
+                      <span
+                        className={`flex items-center gap-1 text-[10px] font-semibold shrink-0 ${
+                          active ? 'text-white' : 'text-slate-400'
+                        }`}
+                      >
+                        {item.hint}
+                        {active ? <CornerDownLeft className="h-3 w-3" /> : <ArrowRight className="h-3 w-3" />}
+                      </span>
+                    </div>
+                  </React.Fragment>
+                );
+              })
+            )}
+          </div>
+
+          {/* Footer: keyboard hints */}
+          <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-500">
+            <div className="flex items-center gap-3">
+              <span><kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-300 font-mono text-[10px]">↑</kbd> <kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-300 font-mono text-[10px]">↓</kbd> navigate</span>
+              <span><kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-300 font-mono text-[10px]">Enter</kbd> open</span>
+              <span><kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-300 font-mono text-[10px]">Esc</kbd> close</span>
             </div>
-          )}
-
-          {/* Results list */}
-          {query.trim() && (
-            <div className="max-h-[60vh] overflow-y-auto p-4 space-y-4 divide-y divide-slate-100">
-              {totalResults === 0 ? (
-                <div className="py-8 text-center text-sm text-slate-500">
-                  No matching records found for "{query}"
-                </div>
-              ) : (
-                <>
-                  {/* Vehicles */}
-                  {results.vehicles.length > 0 && (
-                    <div className="pt-2">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-900 uppercase tracking-wider mb-2">
-                        <Car className="h-3.5 w-3.5" />
-                        Vehicles ({results.vehicles.length})
-                      </div>
-                      <div className="space-y-1.5">
-                        {results.vehicles.slice(0, 4).map((v) => (
-                          <div
-                            key={v.vehicleId}
-                            onClick={() => handleSelectVehicle(v.registrationNumber)}
-                            className="flex items-center justify-between p-2 rounded-lg hover:bg-blue-50 cursor-pointer text-xs transition-colors border border-transparent hover:border-blue-200"
-                          >
-                            <div>
-                              <span className="font-bold text-slate-900 font-mono text-sm">
-                                {v.registrationNumber}
-                              </span>
-                              <span className="ml-2 text-slate-600 font-medium">{v.model}</span>
-                              <p className="text-slate-400 text-[11px]">
-                                VIN: {v.vin} • Customer: {v.customerName}
-                              </p>
-                            </div>
-                            <span className="text-blue-600 flex items-center gap-1 font-medium">
-                              View Journey <ArrowRight className="h-3 w-3" />
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Job Cards */}
-                  {results.serviceCases.length > 0 && (
-                    <div className="pt-3">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-900 uppercase tracking-wider mb-2">
-                        <FileText className="h-3.5 w-3.5" />
-                        Job Cards / Service Cases ({results.serviceCases.length})
-                      </div>
-                      <div className="space-y-1.5">
-                        {results.serviceCases.slice(0, 4).map((sc) => (
-                          <div
-                            key={sc.jcNumber}
-                            onClick={() => handleSelectJC(sc.jcNumber)}
-                            className="flex items-center justify-between p-2 rounded-lg hover:bg-indigo-50 cursor-pointer text-xs transition-colors border border-transparent hover:border-indigo-200"
-                          >
-                            <div>
-                              <span className="font-bold text-indigo-900 font-mono">
-                                {sc.jcNumber}
-                              </span>
-                              <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-800">
-                                {sc.currentStage}
-                              </span>
-                              <p className="text-slate-500 text-[11px]">
-                                {sc.vehicleRegistration} • {sc.dealerName} • {sc.customerName}
-                              </p>
-                            </div>
-                            <span className="text-indigo-600 flex items-center gap-1 font-medium">
-                              Open Timeline <ArrowRight className="h-3 w-3" />
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Users */}
-                  {results.users.length > 0 && (
-                    <div className="pt-3">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-                        <User className="h-3.5 w-3.5" />
-                        Users / Employees ({results.users.length})
-                      </div>
-                      <div className="space-y-1.5">
-                        {results.users.slice(0, 4).map((u) => (
-                          <div
-                            key={u.userId}
-                            onClick={handleSelectUser}
-                            className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 cursor-pointer text-xs transition-colors"
-                          >
-                            <div>
-                              <span className="font-semibold text-slate-900">{u.name}</span>
-                              <span className="ml-2 text-slate-500 font-mono text-[11px]">
-                                {u.userId}
-                              </span>
-                              <p className="text-slate-400 text-[11px]">
-                                {u.role} • {u.dealer} • {u.userType}
-                              </p>
-                            </div>
-                            <span className="text-slate-600 font-medium">Manage</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Devices & Sessions */}
-                  {(results.devices.length > 0 || results.sessions.length > 0) && (
-                    <div className="pt-3 flex gap-4 text-xs">
-                      {results.devices.length > 0 && (
-                        <div className="flex-1">
-                          <div className="flex items-center gap-1.5 font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                            <Smartphone className="h-3.5 w-3.5" /> Devices ({results.devices.length})
-                          </div>
-                          <button
-                            onClick={handleSelectDevice}
-                            className="text-blue-600 hover:underline"
-                          >
-                            View matching devices →
-                          </button>
-                        </div>
-                      )}
-                      {results.sessions.length > 0 && (
-                        <div className="flex-1">
-                          <div className="flex items-center gap-1.5 font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                            <Clock className="h-3.5 w-3.5" /> Sessions ({results.sessions.length})
-                          </div>
-                          <button
-                            onClick={handleSelectSession}
-                            className="text-blue-600 hover:underline"
-                          >
-                            View matching sessions →
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Modal Footer with explicit Close action */}
-          <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-t border-slate-200 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5 text-[11px]">
-              <span>Press <kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-300 font-mono text-[10px]">ESC</kbd> or click outside to dismiss</span>
-            </span>
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3.5 py-1 rounded-lg bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-300 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
-            >
-              Close
-            </button>
+            <span className="hidden sm:inline">Open anywhere with <kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-300 font-mono text-[10px]">Ctrl/⌘ K</kbd> or <kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-300 font-mono text-[10px]">/</kbd></span>
           </div>
         </div>
       </div>

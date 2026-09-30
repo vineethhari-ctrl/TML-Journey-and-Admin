@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { journeyService } from '../services/journeyService';
+import { journeyService, detectSearchType, JourneySearchBy } from '../services/journeyService';
 import { Pagination } from '../components/common/Pagination';
 import {
   Search,
@@ -21,9 +21,9 @@ import {
 import { ModuleType } from '../types';
 
 export const JourneySearchPage: React.FC = () => {
-  const { serviceCases, navigate, currentRoute } = useApp();
+  const { serviceCases, vehicles, navigate, currentRoute } = useApp();
 
-  const [searchBy, setSearchBy] = useState<'registration' | 'vin' | 'jc' | 'phone' | 'name'>('registration');
+  const [searchBy, setSearchBy] = useState<JourneySearchBy>('auto');
   const [queryInput, setQueryInput] = useState('MH01AB1234');
   const [activeQuery, setActiveQuery] = useState('MH01AB1234');
 
@@ -46,6 +46,23 @@ export const JourneySearchPage: React.FC = () => {
 
   // React to route query parameters from Dashboard cards
   useEffect(() => {
+    // Deep link from global search / command palette: /journey?search=<value>
+    const searchParam = new URLSearchParams(currentRoute.split('?')[1] || '').get('search');
+    if (searchParam !== null) {
+      setQueryInput(searchParam);
+      setActiveQuery(searchParam);
+      setSearchBy('auto');
+      setZone('ALL');
+      setRegion('ALL');
+      setDealer('ALL');
+      setOverallStatus('ALL');
+      setCurrentStage('ALL');
+      setInWorkshopOnly(false);
+      setHasPendingActionsOnly(false);
+      setActiveFilterLabel(null);
+      setCurrentPage(1);
+      return;
+    }
     if (currentRoute.includes('filter=')) {
       const param = currentRoute.split('filter=')[1]?.split('&')[0];
       if (param === 'delayed') {
@@ -162,10 +179,32 @@ export const JourneySearchPage: React.FC = () => {
     navigate('/journey');
   };
 
+  // Quick demo presets are derived from real data so they always return results
+  const quickDemoVehicles = useMemo(() => {
+    const seen = new Set<string>();
+    return serviceCases
+      .filter((c) => (seen.has(c.vehicleRegistration) ? false : (seen.add(c.vehicleRegistration), true)))
+      .slice(0, 3)
+      .map((c) => ({
+        reg: c.vehicleRegistration,
+        model: vehicles.find((v) => v.vehicleId === c.vehicleId)?.model.split(' ').slice(0, 2).join(' ') || c.serviceType,
+      }));
+  }, [serviceCases, vehicles]);
+
+  const detectedType = searchBy === 'auto' ? detectSearchType(queryInput) : null;
+  const detectedLabel: Record<JourneySearchBy, string> = {
+    auto: 'Any identifier',
+    registration: 'Vehicle Registration',
+    vin: 'VIN / Chassis',
+    jc: 'JC Number',
+    phone: 'Mobile Number',
+    name: 'Customer Name',
+  };
+
   const handleQuickPreset = (val: string) => {
     setQueryInput(val);
     setActiveQuery(val);
-    setSearchBy('registration');
+    setSearchBy('auto');
     setActiveFilterLabel(null);
     setInWorkshopOnly(false);
     setHasPendingActionsOnly(false);
@@ -231,7 +270,7 @@ export const JourneySearchPage: React.FC = () => {
               onClick={() => handleApplyPresetFilter('all')}
               title="All 1,284 active vehicles currently in the network (936 JCs + 348 incoming appointments)"
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                !activeFilterLabel && !overallStatus && !inWorkshopOnly && !hasPendingActionsOnly
+                !activeFilterLabel && overallStatus === 'ALL' && currentStage === 'ALL' && !inWorkshopOnly && !hasPendingActionsOnly
                   ? 'bg-blue-900 text-white shadow-xs'
                   : 'text-slate-700 hover:bg-slate-100'
               }`}
@@ -362,6 +401,7 @@ export const JourneySearchPage: React.FC = () => {
                   onChange={(e) => setSearchBy(e.target.value as typeof searchBy)}
                   className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-hidden cursor-pointer"
                 >
+                  <option value="auto">✨ Auto-detect (any)</option>
                   <option value="registration">Vehicle Registration</option>
                   <option value="vin">VIN / Chassis Number</option>
                   <option value="jc">JC Number</option>
@@ -382,10 +422,15 @@ export const JourneySearchPage: React.FC = () => {
                   type="text"
                   value={queryInput}
                   onChange={(e) => setQueryInput(e.target.value)}
-                  placeholder="Enter e.g. MH01AB1234, JC20260930001234..."
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pl-10 text-xs font-mono font-medium text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-hidden"
+                  placeholder="Type a Reg No, VIN, JC, mobile or customer name…"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pl-10 pr-36 text-xs font-mono font-medium text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-hidden"
                 />
                 <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+                {detectedType && queryInput.trim() && (
+                  <span className="absolute right-2 top-2 px-2 py-1 rounded-md bg-blue-50 border border-blue-200 text-[10px] font-bold text-blue-800 pointer-events-none">
+                    Detected: {detectedLabel[detectedType]}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -428,27 +473,20 @@ export const JourneySearchPage: React.FC = () => {
             <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1">
               <Sparkles className="h-3 w-3 text-blue-500" /> Quick Demos:
             </span>
-            <button
-              type="button"
-              onClick={() => handleQuickPreset('MH01AB1234')}
-              className="px-2 py-0.5 rounded-md font-mono text-[11px] font-bold bg-blue-100/70 text-blue-800 hover:bg-blue-200 transition-colors cursor-pointer"
-            >
-              MH01AB1234 (Demo EV)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickPreset('MH02CR9910')}
-              className="px-2 py-0.5 rounded-md font-mono text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
-            >
-              MH02CR9910 (Harrier)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickPreset('DL08BV4412')}
-              className="px-2 py-0.5 rounded-md font-mono text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
-            >
-              DL08BV4412 (Safari)
-            </button>
+            {quickDemoVehicles.map((v, idx) => (
+              <button
+                key={v.reg}
+                type="button"
+                onClick={() => handleQuickPreset(v.reg)}
+                className={`px-2 py-0.5 rounded-md font-mono text-[11px] transition-colors cursor-pointer ${
+                  idx === 0
+                    ? 'font-bold bg-blue-100/70 text-blue-800 hover:bg-blue-200'
+                    : 'font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {v.reg} ({idx === 0 ? 'Demo EV' : v.model})
+              </button>
+            ))}
             <button
               type="button"
               onClick={handleReset}

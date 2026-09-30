@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { Toast } from '../common/Toast';
 import { useApp } from '../../context/AppContext';
 import { ChevronRight, Home, ShieldAlert } from 'lucide-react';
+import { NAV_PAGES } from '../../config/navigation';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -12,62 +13,70 @@ interface AppLayoutProps {
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { currentRoute, navigate, canAccessRoute, currentUser, setActiveRoleId } = useApp();
   const isPermitted = canAccessRoute(currentRoute);
+  const homeRoute = NAV_PAGES.find((p) => canAccessRoute(p.route))?.route;
+  const mainRef = useRef<HTMLElement>(null);
+
+  // <main> is the scroll container (not window), so reset it on every navigation
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+  }, [currentRoute]);
 
   const getBreadcrumbs = () => {
-    if (currentRoute === '/dashboard') {
+    const path = currentRoute.split('?')[0];
+    if (path === '/dashboard') {
       return [{ label: 'Dashboard', path: '/dashboard' }];
     }
-    if (currentRoute === '/journey' || currentRoute.startsWith('/journey?')) {
+    if (path === '/journey') {
       return [
         { label: 'TML Journey', path: '/journey' },
         { label: 'Journey Search', path: '/journey' },
       ];
     }
-    if (currentRoute.startsWith('/journey/')) {
-      const jc = currentRoute.split('/')[2];
+    if (path.startsWith('/journey/')) {
+      const jc = decodeURIComponent(path.split('/')[2] || '');
       return [
         { label: 'TML Journey', path: '/journey' },
         { label: 'Vehicle Journey Details', path: currentRoute },
         { label: jc, path: currentRoute },
       ];
     }
-    if (currentRoute === '/admin/masters') {
+    if (path === '/admin/masters') {
       return [
         { label: 'Administration', path: '/admin/masters' },
         { label: 'Masters Maintenance', path: '/admin/masters' },
       ];
     }
-    if (currentRoute === '/admin/users') {
+    if (path === '/admin/users') {
       return [
         { label: 'Administration', path: '/admin/users' },
         { label: 'Employee / User Management', path: '/admin/users' },
       ];
     }
-    if (currentRoute === '/admin/roles') {
+    if (path === '/admin/roles') {
       return [
         { label: 'Administration', path: '/admin/roles' },
         { label: 'Role & Access Management', path: '/admin/roles' },
       ];
     }
-    if (currentRoute === '/admin/devices') {
+    if (path === '/admin/devices') {
       return [
         { label: 'Administration', path: '/admin/devices' },
         { label: 'Device Management', path: '/admin/devices' },
       ];
     }
-    if (currentRoute === '/admin/sessions') {
+    if (path === '/admin/sessions') {
       return [
         { label: 'Administration', path: '/admin/sessions' },
         { label: 'Session Management', path: '/admin/sessions' },
       ];
     }
-    if (currentRoute === '/admin/config') {
+    if (path === '/admin/config') {
       return [
         { label: 'Administration', path: '/admin/config' },
         { label: 'Administrative Configuration', path: '/admin/config' },
       ];
     }
-    if (currentRoute === '/admin/audit') {
+    if (path === '/admin/audit') {
       return [
         { label: 'Administration', path: '/admin/audit' },
         { label: 'Audit Log', path: '/admin/audit' },
@@ -85,7 +94,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
 
-        <main className="flex-1 overflow-y-auto flex flex-col">
+        <main ref={mainRef} className="flex-1 overflow-y-auto flex flex-col">
           {/* Breadcrumb strip */}
           <div className="border-b border-slate-200/80 bg-white/70 px-6 py-2.5 flex items-center text-xs text-slate-500">
             <button
@@ -132,12 +141,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   >
                     Switch to Super Administrator
                   </button>
-                  <button
-                    onClick={() => navigate('/journey')}
-                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
-                  >
-                    Go to Journey
-                  </button>
+                  {homeRoute && (
+                    <button
+                      onClick={() => navigate(homeRoute)}
+                      className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                    >
+                      Go to {NAV_PAGES.find((p) => p.route === homeRoute)?.label}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
