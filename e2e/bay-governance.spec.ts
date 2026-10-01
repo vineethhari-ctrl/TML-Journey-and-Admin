@@ -65,9 +65,11 @@ test('dealer inactivation → bell notification → TML Admin rejects with a not
   await openBayConsole(page);
   await expect(page.getByRole('button', { name: 'TML Admin', exact: true })).toBeDisabled();
 
-  await bayRow(page, 'BAY-06').getByRole('button', { name: /Inactivate/ }).click();
-  await page.getByLabel(/Reason/).selectOption('Manpower shortage');
-  await page.getByRole('button', { name: 'Send for Approval' }).click();
+  await bayRow(page, 'BAY-06').click();
+  await page.getByTestId('bay-details').getByRole('button', { name: /Inactivate/ }).click();
+  const statusForm = page.getByRole('form', { name: 'Change bay status' });
+  await statusForm.getByLabel(/Reason/).selectOption('Manpower shortage');
+  await statusForm.getByRole('button', { name: 'Send for Approval' }).click();
   await expect(page.getByTestId('email-preview')).toContainText('tml.admin.support@tatamotors.com');
   await page.getByRole('button', { name: /Done/ }).click();
   await expect(bayRow(page, 'BAY-06')).toContainText('Status change pending');
@@ -107,4 +109,27 @@ test('TML Admin sets an allocation and the dealer can then add within it', async
   await expect(form.getByTestId('allocation-check')).toContainText('0 of 2 used');
   await form.getByRole('button', { name: 'Add Bay' }).click();
   await expect(page.locator('[data-bay-id]', { hasText: 'Electrical Bay 02' })).toContainText('Active');
+});
+
+test('dealer saves a bay as Draft, then selects it and sends it for approval', async ({ page }) => {
+  await openBayConsole(page);
+  await page.getByRole('button', { name: 'Dealer Admin', exact: true }).click();
+  await page.getByRole('button', { name: /New Bay/ }).click();
+  const form = page.getByRole('form', { name: 'Add bay' });
+  await form.getByLabel(/Bay Name/).fill('AC Bay 02');
+  await form.getByLabel('Bay Type').selectOption('AC');
+  await form.getByRole('button', { name: 'Save as Draft' }).click();
+  const row = page.locator('[data-bay-id]', { hasText: 'AC Bay 02' });
+  await expect(row).toContainText('Draft');
+
+  await row.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Send for Approval (1)' }).click();
+  const send = page.getByRole('form', { name: 'Send for approval' });
+  await expect(send).toContainText('To TML Network Manager'); // AC allocation 1, already used
+  await send.getByLabel(/Justification/).fill('Summer AC service campaign');
+  await send.getByRole('button', { name: /Send/ }).click();
+  await expect(page.getByTestId('email-preview')).toContainText('AC Bay 02');
+  await page.getByRole('button', { name: /Done/ }).click();
+  await expect(row).toContainText('Pending Approval');
+  await expect(row.getByRole('checkbox')).toBeDisabled();
 });

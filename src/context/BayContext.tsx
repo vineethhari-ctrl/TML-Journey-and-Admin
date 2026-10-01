@@ -14,6 +14,7 @@ import {
   changeBayStatus,
   decideRequest,
   resubmitBay,
+  submitBay,
   setAllocation,
 } from '../utils/bayGovernance';
 
@@ -32,6 +33,8 @@ interface BayContextType extends BayState {
   addBay: (input: NewBayInput, actor: Actor) => Result<any>;
   importBays: (inputs: NewBayInput[], actor: Actor) => { added: number; pending: number; errors: string[] };
   resubmitBay: (bayId: string, justification: string, actor: Actor) => Result<any>;
+  /** "Send for Approval" on selected Draft / Rejected bays. */
+  submitBays: (bayIds: string[], justification: string, actor: Actor) => { approved: number; pending: number; errors: string[] };
   changeBayStatus: (bayId: string, toStatus: BayStatus, reason: string, actor: Actor) => Result<any>;
   decideRequest: (requestId: string, decision: 'APPROVED' | 'REJECTED', note: string, approver: Actor) => Result<any>;
   setAllocation: (key: AllocationKey, allocated: number, actor: Actor) => Result<any>;
@@ -147,6 +150,45 @@ export const BayProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setLastEmail(emails[0] ?? null);
       }
       return { added, pending, errors };
+    },
+
+    submitBays: (bayIds, justification, actor) => {
+      let s = state;
+      let approved = 0;
+      let pending = 0;
+      const errors: string[] = [];
+      const emails: typeof state.emails = [];
+      bayIds.forEach((id) => {
+        const res = submitBay(s, id, justification, actor, appBaseUrl(), nowStamp());
+        if (!res.ok) {
+          errors.push(res.error || `${id}: not sent`);
+          return;
+        }
+        s = res.state;
+        if (res.value === 'APPROVED') approved++;
+        else {
+          pending++;
+          if (res.email) emails.push(res.email);
+          const r = res.request!;
+          logAudit('Approval Requested', 'Bay Management', `${r.id} (${r.bayName}, ${r.dealerCode})`, r.kind, `Sent to ${r.approverRole}`);
+        }
+      });
+      if (approved + pending === 0) {
+        showToast(errors[0] || 'Nothing was sent', 'error');
+        return { approved, pending, errors };
+      }
+      setState(s);
+      logAudit('Bays Sent for Approval', 'Bay Management', `${bayIds.length} bay(s)`, 'Draft/Rejected', `${approved} approved within allocation, ${pending} sent to TML Network Manager`);
+      if (pending > 0) {
+        addNotification({
+          type: 'APPROVAL',
+          title: pending === 1 ? 'Additional bay awaiting approval' : `${pending} additional bays awaiting approval`,
+          message: 'Bays sent beyond the TML bay allocation.',
+          targetPath: emails.length === 1 ? `/admin/bay-approvals?request=${emails[0].requestId}` : '/admin/bay-approvals',
+        });
+        setLastEmail(emails[0] ?? null);
+      }
+      return { approved, pending, errors };
     },
 
     resubmitBay: (bayId, justification, actor) => commit(resubmitBay(state, bayId, justification, actor, appBaseUrl(), nowStamp())),

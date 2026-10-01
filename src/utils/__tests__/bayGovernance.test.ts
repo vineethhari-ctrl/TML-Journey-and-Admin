@@ -5,6 +5,7 @@ import {
   changeBayStatus,
   decideRequest,
   resubmitBay,
+  submitBay,
   setAllocation,
   approvalLink,
   Actor,
@@ -169,5 +170,43 @@ describe('bay status changes', () => {
 describe('approval link', () => {
   it('strips any existing hash and deep-links to the request', () => {
     expect(approvalLink('https://x.io/app/#/admin/masters', 'BREQ-1')).toBe('https://x.io/app/#/admin/bay-approvals?request=BREQ-1');
+  });
+});
+
+describe('draft and send for approval', () => {
+  it('a draft is inactive, does not use the allocation and needs no justification', () => {
+    const res = addBay(seed(), mechanical({ bayType: 'Electrical', asDraft: true }), dealer, URL, NOW);
+    expect(res.ok).toBe(true);
+    expect(res.value).toMatchObject({ approvalStatus: 'Draft', bayStatus: 'Inactive' });
+    expect(res.request).toBeUndefined();
+  });
+
+  it('sending a draft within the allocation approves it', () => {
+    const res = submitBay(seed(), 'BAY-10', '', dealer, URL, NOW);
+    expect(res.value).toBe('APPROVED');
+    expect(res.state.bays.find((b) => b.id === 'BAY-10')).toMatchObject({ approvalStatus: 'Approved', bayStatus: 'Active' });
+    expect(res.state.requests).toHaveLength(seed().requests.length);
+  });
+
+  it('sending beyond the allocation needs a justification and goes to the Network Manager', () => {
+    const drafted = addBay(seed(), mechanical({ bayName: 'Electrical Bay 02', bayType: 'Electrical', asDraft: true }), dealer, URL, NOW);
+    const id = drafted.value!.id;
+    expect(submitBay(drafted.state, id, ' ', dealer, URL, NOW).ok).toBe(false);
+    const res = submitBay(drafted.state, id, 'Fleet contract', dealer, URL, NOW);
+    expect(res.value).toBe('PENDING_APPROVAL');
+    expect(res.request).toMatchObject({ kind: 'ADD_BAY', approverRole: 'TML Network Manager' });
+    expect(res.email?.link).toContain(res.request!.id);
+    expect(res.state.bays.find((b) => b.id === id)?.approvalStatus).toBe('Pending Approval');
+  });
+
+  it('TML Admin sends beyond the allocation without approval', () => {
+    const drafted = addBay(seed(), mechanical({ bayName: 'Electrical Bay 02', bayType: 'Electrical', asDraft: true }), dealer, URL, NOW);
+    expect(submitBay(drafted.state, drafted.value!.id, '', tml, URL, NOW).value).toBe('APPROVED');
+  });
+
+  it('a rejected bay is resent; approved and pending bays cannot be sent', () => {
+    expect(submitBay(seed(), 'BAY-08', '', dealer, URL, NOW).value).toBe('APPROVED'); // BodyShop 1 of 2 used
+    expect(submitBay(seed(), 'BAY-01', 'x', dealer, URL, NOW).ok).toBe(false);
+    expect(submitBay(seed(), 'BAY-03', 'x', dealer, URL, NOW).ok).toBe(false);
   });
 });

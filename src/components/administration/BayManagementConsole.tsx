@@ -5,13 +5,17 @@ import {
   FileSpreadsheet,
   ShieldCheck,
   Power,
-  RotateCcw,
   Mail,
   ExternalLink,
   Copy,
   Clock,
   Layers,
   Settings2,
+  Bell,
+  Send,
+  Search,
+  X,
+  Lock,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useBays } from '../../context/BayContext';
@@ -20,6 +24,7 @@ import { DEALER_DIVISIONS } from '../../data/bayData';
 import { masterExportUtil } from '../../utils/masterExportUtil';
 import {
   Actor,
+  APPROVAL_STATUSES,
   Bay,
   BayStatus,
   BAY_TYPES,
@@ -29,6 +34,7 @@ import {
   STATUS_REASONS,
   NewBayInput,
   allocationUsage,
+  submitBay,
 } from '../../utils/bayGovernance';
 
 export interface DealerInfo {
@@ -44,6 +50,11 @@ interface Props {
 }
 
 const sel = 'w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-800 focus:border-blue-500 focus:outline-hidden';
+const filterSel = `${sel} disabled:bg-slate-100 disabled:text-slate-500`;
+const card = 'rounded-xl border border-slate-200 bg-white shadow-xs';
+
+/** Only bays that haven't been (or are no longer) with an approver can be sent for approval. */
+export const isSelectable = (b: Bay) => (b.approvalStatus === 'Draft' || b.approvalStatus === 'Rejected') && !b.pendingRequestId;
 
 const StatusBadge: React.FC<{ bay: Bay }> = ({ bay }) => (
   <span
@@ -65,12 +76,24 @@ const ApprovalBadge: React.FC<{ bay: Bay; pendingKind?: string }> = ({ bay, pend
   }
   const cls =
     bay.approvalStatus === 'Approved'
-      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+      ? 'bg-emerald-100 text-emerald-800'
       : bay.approvalStatus === 'Pending Approval'
       ? 'bg-amber-100 text-amber-800'
+      : bay.approvalStatus === 'Draft'
+      ? 'bg-sky-100 text-sky-800'
       : 'bg-rose-100 text-rose-800';
   return <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${cls}`}>{bay.approvalStatus}</span>;
 };
+
+interface Filters {
+  division: string;
+  bu: string;
+  bayType: string;
+  status: string;
+  approval: string;
+  name: string;
+}
+const NO_FILTERS: Filters = { division: 'All', bu: 'All', bayType: 'All', status: 'All', approval: 'All', name: '' };
 
 export const BayManagementConsole: React.FC<Props> = ({ adminRole, dealers, onBulkUpload }) => {
   const { currentUser, navigate, showToast, activeRoleId } = useApp();
@@ -84,30 +107,47 @@ export const BayManagementConsole: React.FC<Props> = ({ adminRole, dealers, onBu
     ? { name: currentUser.name, role: 'DEALER_ADMIN', email: currentUser.email }
     : { name: 'K. Venkatesh', role: 'DEALER_ADMIN', email: 'k.venkatesh@prerana.tatamotors.com' };
 
-  // ---- Filters
+  // ---- Scope: a Dealer Admin is locked to their own dealership
   const [dealerCode, setDealerCode] = useState(dealers[0]?.code ?? 'DLR1001');
-  const [division, setDivision] = useState('All');
-  const [bu, setBu] = useState('All');
-  const [bayType, setBayType] = useState('All');
-  const [status, setStatus] = useState('All');
-  const [approval, setApproval] = useState('All');
-  const [nameQuery, setNameQuery] = useState('');
+  useEffect(() => {
+    if (!isTml) setDealerCode(dealers[0]?.code ?? 'DLR1001');
+  }, [isTml, dealers]);
   const dealer = dealers.find((d) => d.code === dealerCode) ?? dealers[0];
   const divisions = DEALER_DIVISIONS[dealerCode] ?? ['Main Workshop'];
 
+  // ---- Filters: edited in a draft and applied with Search
+  const [draft, setDraft] = useState<Filters>(NO_FILTERS);
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+
   const requestById = useMemo(() => new Map(requests.map((r) => [r.id, r])), [requests]);
   const dealerBays = bays.filter((b) => b.dealerCode === dealerCode);
-  const filteredBays = dealerBays.filter(
-    (b) =>
-      (division === 'All' || b.division === division) &&
-      (bu === 'All' || b.bu === bu) &&
-      (bayType === 'All' || b.bayType === bayType) &&
-      (status === 'All' || b.bayStatus === status) &&
-      (approval === 'All' || b.approvalStatus === approval) &&
-      (!nameQuery.trim() || b.bayName.toLowerCase().includes(nameQuery.trim().toLowerCase()))
-  );
-  const pendingForDealer = requests.filter((r) => r.dealerCode === dealerCode && r.status === 'PENDING').length;
+  const filteredBays = dealerBays
+    .filter(
+      (b) =>
+        (filters.division === 'All' || b.division === filters.division) &&
+        (filters.bu === 'All' || b.bu === filters.bu) &&
+        (filters.bayType === 'All' || b.bayType === filters.bayType) &&
+        (filters.status === 'All' || b.bayStatus === filters.status) &&
+        (filters.approval === 'All' || b.approvalStatus === filters.approval) &&
+        (!filters.name.trim() || b.bayName.toLowerCase().includes(filters.name.trim().toLowerCase()))
+    )
+    .sort((a, b) => a.no - b.no);
+  const dealerRequests = requests.filter((r) => r.dealerCode === dealerCode);
+  const pendingForDealer = dealerRequests.filter((r) => r.status === 'PENDING').length;
   const pendingAll = requests.filter((r) => r.status === 'PENDING').length;
+  const bellCount = isTml ? pendingAll : pendingForDealer;
+
+  // ---- Bay details panel
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = bays.find((b) => b.id === selectedId && b.dealerCode === dealerCode) ?? null;
+
+  // ---- Selection (Draft / Rejected only)
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectable = filteredBays.filter(isSelectable);
+  const selectedBays = bays.filter((b) => selectedIds.includes(b.id) && isSelectable(b));
+  const allSelected = selectable.length > 0 && selectable.every((b) => selectedIds.includes(b.id));
+  const toggleSelect = (id: string) =>
+    setSelectedIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
 
   // ---- Allocation editor (TML)
   const dealerAllocations = allocations.filter((a) => a.dealerCode === dealerCode);
@@ -115,7 +155,10 @@ export const BayManagementConsole: React.FC<Props> = ({ adminRole, dealers, onBu
   const [newAlloc, setNewAlloc] = useState({ division: divisions[0], bu: 'PV' as Bay['bu'], bayType: 'Mechanical' as Bay['bayType'], allocated: '1' });
   useEffect(() => {
     setNewAlloc((n) => ({ ...n, division: (DEALER_DIVISIONS[dealerCode] ?? ['Main Workshop'])[0] }));
-    setDivision('All');
+    setDraft(NO_FILTERS);
+    setFilters(NO_FILTERS);
+    setSelectedIds([]);
+    setSelectedId(null);
   }, [dealerCode]);
 
   // ---- New bay dialog
@@ -135,107 +178,363 @@ export const BayManagementConsole: React.FC<Props> = ({ adminRole, dealers, onBu
     justification: '',
   });
   const [newBay, setNewBay] = useState<NewBayInput | null>(null);
+  const saveNewBay = (asDraft: boolean) => {
+    if (!newBay) return;
+    const res = bayStore.addBay({ ...newBay, asDraft }, actor);
+    if (!res.ok) return;
+    setNewBay(null);
+    setSelectedId(res.value.id);
+    if (asDraft) showToast(`${res.value.bayName} saved as Draft — select it and use Send for Approval`, 'success');
+    else if (!res.request) showToast(`${res.value.bayName} added and active`, 'success');
+  };
   const newBayUsage = newBay ? allocationUsage(bayStore, newBay) : null;
   const newBayBeyond = !!newBayUsage && newBayUsage.used >= newBayUsage.allocated;
 
   // ---- Status change dialog
   const [statusDialog, setStatusDialog] = useState<{ bay: Bay; to: BayStatus; reason: string; other: string } | null>(null);
   const statusNeedsApproval = !isTml && policy.dealerStatusChangeNeedsApproval;
-
-  // ---- Resubmit dialog
-  const [resubmit, setResubmit] = useState<{ bay: Bay; text: string } | null>(null);
-
-  // ---- Inspector (non-governed attributes only)
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = bays.find((b) => b.id === selectedId) ?? null;
-
   const canChangeStatus = isTml || policy.dealerCanChangeStatus;
+
+  // ---- Send for Approval dialog: preview each bay's outcome in order (earlier ones use up the allocation)
+  const [sendDialog, setSendDialog] = useState<{ ids: string[]; justification: string } | null>(null);
+  const sendPreview = useMemo(() => {
+    if (!sendDialog) return [];
+    let s = { bays, allocations, requests, emails: bayStore.emails, policy };
+    return sendDialog.ids.flatMap((id) => {
+      const bay = s.bays.find((b) => b.id === id);
+      if (!bay) return [];
+      const res = submitBay(s, id, 'preview', actor, '', '');
+      if (res.ok) s = res.state;
+      return [{ bay, outcome: res.ok ? res.value : undefined, error: res.error }];
+    });
+  }, [sendDialog?.ids.join(), bays, allocations, requests, policy, isTml]);
+  const sendNeedsJustification = sendPreview.some((p) => p.outcome === 'PENDING_APPROVAL');
+
+
+  const exportBays = () => {
+    masterExportUtil.exportToExcel({
+      masterName: 'Bay Management Master',
+      category: 'Dealer Network',
+      currentUser: { userId: currentUser.userId, name: currentUser.name },
+      columns: [
+        { key: 'no', label: 'No.' },
+        { key: 'region', label: 'Region' },
+        { key: 'dealerCode', label: 'Dealer Code' },
+        { key: 'dealerName', label: 'Dealer Name' },
+        { key: 'division', label: 'Division' },
+        { key: 'bu', label: 'BU' },
+        { key: 'bayName', label: 'Bay Name' },
+        { key: 'bayType', label: 'Bay Type' },
+        { key: 'bayStatus', label: 'Bay Status' },
+        { key: 'approvalStatus', label: 'Approval Status' },
+        { key: 'floor', label: 'Floor' },
+        { key: 'liftAvailability', label: 'Lift' },
+        { key: 'techSupervisor', label: 'Tech Supervisor' },
+      ],
+      data: filteredBays,
+    });
+    showToast(`Exported ${filteredBays.length} bays to Excel`, 'success');
+  };
+
+  const filterFields: [string, keyof Filters, string[]][] = [
+    ['Bay Type', 'bayType', ['All', ...BAY_TYPES]],
+    ['Bay Status', 'status', ['All', 'Active', 'Inactive']],
+  ];
 
   return (
     <div className="space-y-4">
-      {/* Governance banner */}
-      <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3.5 text-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <div className="font-bold text-blue-950 flex items-center gap-1.5">
-            <ShieldCheck className="h-4 w-4 text-blue-700" /> Bay governance — acting as{' '}
-            <span className="px-1.5 py-0.5 rounded bg-blue-900 text-white text-[10px]">{adminRole}</span>
+      {/* sWorkshop header */}
+      <div className="rounded-xl bg-[#0b2a5b] text-white px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="leading-none">
+            <div className="text-[11px] font-black tracking-[0.2em]">TATA MOTORS</div>
+            <div className="text-[10px] text-blue-200 font-semibold">sWorkshop</div>
           </div>
-          <ul className="text-[11px] text-slate-600 space-y-0.5">
-            <li>• Bays within the TML allocation go live immediately; beyond it they go to the <strong>TML Network Manager</strong>.</li>
-            <li>
-              • Active ⇄ Inactive:{' '}
-              {!policy.dealerCanChangeStatus
-                ? 'TML Admin only.'
-                : policy.dealerStatusChangeNeedsApproval
-                ? 'Dealer Admin requests need TML Admin approval; TML Admin changes apply immediately.'
-                : 'Dealer Admin and TML Admin can change directly.'}
-            </li>
-          </ul>
+          <span className="h-7 w-px bg-blue-300/40" />
+          <h2 className="text-base font-bold tracking-tight">Bay Management</h2>
         </div>
-        <div className="flex items-center gap-2">
-          {pendingForDealer > 0 && (
-            <span className="px-2 py-1 rounded-lg bg-amber-100 text-amber-900 font-bold text-[11px]">
-              {pendingForDealer} request(s) pending for {dealerCode}
-            </span>
-          )}
-          {isTml && (
-            <button
-              onClick={() => navigate('/admin/bay-approvals')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-900 text-white font-bold hover:bg-blue-800 cursor-pointer"
-            >
-              <ShieldCheck className="h-3.5 w-3.5" /> Bay Approvals {pendingAll > 0 ? `(${pendingAll})` : ''}
-            </button>
-          )}
+        <div className="flex items-center gap-3 text-xs">
+          <span className="px-2.5 py-1 rounded-lg bg-white/10 border border-white/20 font-bold" title="Switch with the Dealer Admin / TML Admin toggle above">
+            {adminRole}
+          </span>
+          <button
+            type="button"
+            title={isTml ? 'Pending bay approvals' : 'My pending requests'}
+            aria-label={`${bellCount} pending bay request(s)`}
+            onClick={() =>
+              isTml ? navigate('/admin/bay-approvals') : document.querySelector('[data-testid="bay-requests"]')?.scrollIntoView({ behavior: 'smooth' })
+            }
+            className="relative p-1.5 rounded-lg hover:bg-white/10 cursor-pointer"
+          >
+            <Bell className="h-4 w-4" />
+            {bellCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-[9px] font-black flex items-center justify-center">
+                {bellCount}
+              </span>
+            )}
+          </button>
+          <span className="font-semibold">
+            {dealer?.code} - {dealer?.name}
+          </span>
         </div>
       </div>
 
-      {/* Dealer + filters */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 text-xs">
+      {/* Governance note */}
+      <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-[11px] text-slate-600 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="font-bold text-blue-950 flex items-center gap-1">
+          <ShieldCheck className="h-3.5 w-3.5 text-blue-700" /> Bay governance — acting as {adminRole}
+        </span>
+        <span>Within the TML allocation → approved automatically; beyond it → TML Network Manager.</span>
+        <span>
+          Active ⇄ Inactive:{' '}
+          {!policy.dealerCanChangeStatus
+            ? 'TML Admin only.'
+            : policy.dealerStatusChangeNeedsApproval
+            ? 'Dealer Admin requests need TML Admin approval.'
+            : 'Dealer Admin and TML Admin can change directly.'}
+        </span>
+      </div>
+
+      {/* Filters */}
+      <form
+        aria-label="Bay filters"
+        className={`${card} p-4`}
+        onSubmit={(e) => {
+          e.preventDefault();
+          setFilters(draft);
+        }}
+      >
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 text-xs items-end">
+          <div>
+            <label htmlFor="bay-region" className="text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
+              Region <Lock className="h-3 w-3 text-slate-400" />
+            </label>
+            <select id="bay-region" className={filterSel} disabled value={dealer?.zone}>
+              <option>{dealer?.zone}</option>
+            </select>
+          </div>
           <div className="col-span-2">
-            <label htmlFor="bay-dealer" className="text-[11px] font-semibold text-slate-600 block mb-1">Dealer</label>
-            <select id="bay-dealer" className={sel} value={dealerCode} onChange={(e) => setDealerCode(e.target.value)}>
+            <label htmlFor="bay-dealer" className="text-[11px] font-semibold text-slate-600 mb-1 flex items-center gap-1">
+              Dealer {!isTml && <Lock className="h-3 w-3 text-slate-400" />}
+            </label>
+            <select id="bay-dealer" className={filterSel} disabled={!isTml} value={dealerCode} onChange={(e) => setDealerCode(e.target.value)}>
               {dealers.map((d) => (
-                <option key={d.code} value={d.code}>{d.code} - {d.name}</option>
+                <option key={d.code} value={d.code}>
+                  {d.code} - {d.name}
+                </option>
               ))}
             </select>
           </div>
-          {(
-            [
-              ['Division', division, setDivision, ['All', ...divisions]],
-              ['BU', bu, setBu, ['All', ...BUS]],
-              ['Bay Type', bayType, setBayType, ['All', ...BAY_TYPES]],
-              ['Bay Status', status, setStatus, ['All', 'Active', 'Inactive']],
-              ['Approval', approval, setApproval, ['All', 'Approved', 'Pending Approval', 'Rejected']],
-            ] as const
-          ).map(([label, value, setter, options]) => (
-            <div key={label}>
-              <label htmlFor={`bay-f-${label}`} className="text-[11px] font-semibold text-slate-600 block mb-1">{label}</label>
-              <select id={`bay-f-${label}`} className={sel} value={value} onChange={(e) => (setter as (v: string) => void)(e.target.value)}>
+          {filterFields.map(([label, key, options]) => (
+            <div key={key}>
+              <label htmlFor={`bay-f-${key}`} className="text-[11px] font-semibold text-slate-600 block mb-1">{label}</label>
+              <select id={`bay-f-${key}`} className={filterSel} value={draft[key]} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}>
                 {options.map((o) => (
-                  <option key={o} value={o}>{o}</option>
+                  <option key={o} value={o}>{o === 'All' ? 'All' : o}</option>
                 ))}
               </select>
             </div>
           ))}
           <div>
             <label htmlFor="bay-f-name" className="text-[11px] font-semibold text-slate-600 block mb-1">Bay Name</label>
-            <input id="bay-f-name" className={sel} value={nameQuery} placeholder="Search" onChange={(e) => setNameQuery(e.target.value)} />
+            <input id="bay-f-name" className={sel} value={draft.name} placeholder="Contains…" onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           </div>
+          <div>
+            <label htmlFor="bay-f-approval" className="text-[11px] font-semibold text-slate-600 block mb-1">Approval Status</label>
+            <select id="bay-f-approval" className={filterSel} value={draft.approval} onChange={(e) => setDraft({ ...draft, approval: e.target.value })}>
+              {['All', ...APPROVAL_STATUSES].map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="bay-f-division" className="text-[11px] font-semibold text-slate-600 block mb-1">Division</label>
+            <select id="bay-f-division" className={filterSel} value={draft.division} onChange={(e) => setDraft({ ...draft, division: e.target.value })}>
+              {['All', ...divisions].map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="bay-f-bu" className="text-[11px] font-semibold text-slate-600 block mb-1">BU</label>
+            <select id="bay-f-bu" className={filterSel} value={draft.bu} onChange={(e) => setDraft({ ...draft, bu: e.target.value })}>
+              {['All', ...BUS].map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-span-2 lg:col-span-6 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(NO_FILTERS);
+                setFilters(NO_FILTERS);
+              }}
+              className="flex items-center gap-1 px-4 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" /> Clear
+            </button>
+            <button type="submit" className="flex items-center gap-1 px-4 py-1.5 rounded-lg bg-[#0b2a5b] text-white font-bold hover:bg-blue-900 cursor-pointer">
+              <Search className="h-3.5 w-3.5" /> Search
+            </button>
+          </div>
+        </div>
+      </form>
+
+      {/* Bays */}
+      <div className={`${card} overflow-hidden`}>
+        <div className="flex flex-wrap items-center justify-between px-4 py-3 border-b border-slate-200 gap-3">
+          <h3 className="text-sm font-bold text-slate-900 tracking-tight">Bays</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setNewBay(emptyBay())}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0b2a5b] hover:bg-blue-900 text-xs font-bold text-white shadow-2xs cursor-pointer"
+            >
+              <Plus className="h-3.5 w-3.5" /> New Bay
+            </button>
+            <button
+              onClick={onBulkUpload}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-2xs cursor-pointer"
+            >
+              <Upload className="h-3.5 w-3.5 text-blue-600" /> Bulk Upload
+            </button>
+            <button
+              disabled={selectedBays.length === 0}
+              onClick={() => setSendDialog({ ids: selectedBays.map((b) => b.id), justification: '' })}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white shadow-2xs cursor-pointer disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+            >
+              <Send className="h-3.5 w-3.5" /> Send for Approval{selectedBays.length ? ` (${selectedBays.length})` : ''}
+            </button>
+            <button
+              onClick={exportBays}
+              title="Export the listed bays to Excel"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-2xs cursor-pointer"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" /> Export
+            </button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs whitespace-nowrap">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
+              <tr>
+                <th className="pl-4 pr-2 py-2.5 w-8">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all Draft and Rejected bays"
+                    disabled={selectable.length === 0}
+                    checked={allSelected}
+                    onChange={() => setSelectedIds(allSelected ? [] : selectable.map((b) => b.id))}
+                  />
+                </th>
+                <th className="px-2 py-2.5">No.</th>
+                <th className="px-3 py-2.5">Region</th>
+                <th className="px-3 py-2.5">Dealer Code</th>
+                <th className="px-3 py-2.5">Dealer Name</th>
+                <th className="px-3 py-2.5">Division / BU</th>
+                <th className="px-3 py-2.5">Bay Name</th>
+                <th className="px-3 py-2.5">Bay Type</th>
+                <th className="px-3 py-2.5">Bay Status</th>
+                <th className="px-3 py-2.5">Approval Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredBays.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="px-4 py-6 text-center text-slate-400">No bays match the filters.</td>
+                </tr>
+              )}
+              {filteredBays.map((b) => {
+                const pendingKind = b.pendingRequestId ? requestById.get(b.pendingRequestId)?.kind : undefined;
+                const canSelect = isSelectable(b);
+                return (
+                  <tr
+                    key={b.id}
+                    data-bay-id={b.id}
+                    onClick={() => setSelectedId(b.id)}
+                    className={`cursor-pointer transition-colors ${selectedId === b.id ? 'bg-blue-50' : 'hover:bg-slate-50/70'}`}
+                  >
+                    <td className="pl-4 pr-2 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${b.bayName}`}
+                        disabled={!canSelect}
+                        title={canSelect ? undefined : 'Only Draft and Rejected bays can be selected'}
+                        checked={canSelect && selectedIds.includes(b.id)}
+                        onChange={() => toggleSelect(b.id)}
+                      />
+                    </td>
+                    <td className="px-2 py-2.5 font-mono text-slate-600">{b.no}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{b.region}</td>
+                    <td className="px-3 py-2.5 font-mono text-slate-700">{b.dealerCode}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{b.dealerName}</td>
+                    <td className="px-3 py-2.5 text-slate-600">{b.division} · {b.bu}</td>
+                    <td className="px-3 py-2.5 font-bold text-blue-900">{b.bayName}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{b.bayType}</td>
+                    <td className="px-3 py-2.5"><StatusBadge bay={b} /></td>
+                    <td className="px-3 py-2.5"><ApprovalBadge bay={b} pendingKind={pendingKind} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-between px-4 py-2 border-t border-slate-200 bg-slate-50/60 text-[11px] text-slate-500">
+          <span>Only Draft and Rejected bays can be selected.</span>
+          <span data-testid="bay-record-count">{filteredBays.length} records</span>
         </div>
       </div>
 
+      {/* Bay details */}
+      <div className={`${card} p-4 space-y-3 text-xs`} data-testid="bay-details">
+        <h3 className="text-sm font-bold text-slate-900">Bay Details</h3>
+        {!selected ? (
+          <p className="text-slate-400">Select a bay from the list, or use New Bay to add one.</p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-bold text-slate-900">{selected.bayName}</span>
+                <span className="font-mono text-[11px] text-slate-400">{selected.id}</span>
+                <StatusBadge bay={selected} />
+                <ApprovalBadge bay={selected} pendingKind={selected.pendingRequestId ? requestById.get(selected.pendingRequestId)?.kind : undefined} />
+              </div>
+              <div className="flex items-center gap-2">
+                {selected.approvalStatus === 'Approved' && !selected.pendingRequestId && canChangeStatus && (
+                  <button
+                    onClick={() => setStatusDialog({ bay: selected, to: selected.bayStatus === 'Active' ? 'Inactive' : 'Active', reason: '', other: '' })}
+                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold border cursor-pointer ${
+                      selected.bayStatus === 'Active' ? 'border-rose-200 text-rose-700 hover:bg-rose-50' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                    }`}
+                  >
+                    <Power className="h-3.5 w-3.5" /> {selected.bayStatus === 'Active' ? 'Inactivate' : 'Activate'}
+                  </button>
+                )}
+                {isSelectable(selected) && (
+                  <button
+                    onClick={() => setSendDialog({ ids: [selected.id], justification: '' })}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg font-bold border border-emerald-200 text-emerald-700 hover:bg-emerald-50 cursor-pointer"
+                  >
+                    <Send className="h-3.5 w-3.5" /> {selected.approvalStatus === 'Rejected' ? 'Resubmit' : 'Send for Approval'}
+                  </button>
+                )}
+                {selected.pendingRequestId && <span className="text-[11px] text-amber-700 font-semibold">Awaiting TML decision</span>}
+              </div>
+            </div>
+            <BayInspector key={selected.id} bay={selected} />
+          </>
+        )}
+      </div>
+
       {/* TML allocation */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden" data-testid="bay-allocations">
-        <div className="flex flex-wrap items-center justify-between gap-2 p-4 border-b border-slate-200">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-              <Layers className="h-4 w-4 text-blue-700" /> TML Bay Allocation — {dealer?.name}
-            </h3>
-            <p className="text-[11px] text-slate-500">
-              Set by TML Admin per division and BU. {isTml ? 'Edit counts below.' : 'Read-only for Dealer Admin.'}
-            </p>
-          </div>
+      <div className={`${card} overflow-hidden`} data-testid="bay-allocations">
+        <div className="px-4 py-3 border-b border-slate-200">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+            <Layers className="h-4 w-4 text-blue-700" /> TML Bay Allocation — {dealer?.name}
+          </h3>
+          <p className="text-[11px] text-slate-500">
+            Set by TML Admin per division and BU. {isTml ? 'Edit counts below.' : 'Read-only for Dealer Admin.'}
+          </p>
         </div>
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px]">
@@ -332,131 +631,20 @@ export const BayManagementConsole: React.FC<Props> = ({ adminRole, dealers, onBu
         </table>
       </div>
 
-      {/* Bays */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between p-4 border-b border-slate-200 gap-3">
-          <h2 className="text-sm font-bold text-slate-900 tracking-tight">Workshop Bays ({filteredBays.length})</h2>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setNewBay(emptyBay())}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-xs font-bold text-white shadow-2xs cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5" /> New Bay
-            </button>
-            <button
-              onClick={() => {
-                masterExportUtil.exportToExcel({
-                  masterName: 'Bay Management Master',
-                  category: 'Dealer Network',
-                  currentUser: { userId: currentUser.userId, name: currentUser.name },
-                  columns: [
-                    { key: 'id', label: 'Bay ID' },
-                    { key: 'dealerCode', label: 'Dealer Code' },
-                    { key: 'division', label: 'Division' },
-                    { key: 'bu', label: 'BU' },
-                    { key: 'bayName', label: 'Bay Name' },
-                    { key: 'bayType', label: 'Bay Type' },
-                    { key: 'bayStatus', label: 'Status' },
-                    { key: 'approvalStatus', label: 'Approval' },
-                    { key: 'floor', label: 'Floor' },
-                    { key: 'liftAvailability', label: 'Lift' },
-                    { key: 'techSupervisor', label: 'Tech Supervisor' },
-                  ],
-                  data: filteredBays,
-                });
-                showToast(`Exported ${filteredBays.length} bays to Excel`, 'success');
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-2xs cursor-pointer"
-            >
-              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" /> Export to Excel
-            </button>
-            <button
-              onClick={onBulkUpload}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-2xs cursor-pointer"
-            >
-              <Upload className="h-3.5 w-3.5 text-blue-600" /> Bulk Upload
-            </button>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs whitespace-nowrap">
-            <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
-              <tr>
-                <th className="px-3 py-3">No.</th>
-                <th className="px-3 py-3">Division</th>
-                <th className="px-3 py-3">BU</th>
-                <th className="px-4 py-3">Bay Name</th>
-                <th className="px-3 py-3">Bay Type</th>
-                <th className="px-3 py-3">Bay Status</th>
-                <th className="px-3 py-3">Approval</th>
-                <th className="px-3 py-3">Lift</th>
-                <th className="px-3 py-3">Floor</th>
-                <th className="px-3 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredBays.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="px-4 py-6 text-center text-slate-400">No bays match the filters.</td>
-                </tr>
-              )}
-              {filteredBays.map((b) => {
-                const pendingKind = b.pendingRequestId ? requestById.get(b.pendingRequestId)?.kind : undefined;
-                const target: BayStatus = b.bayStatus === 'Active' ? 'Inactive' : 'Active';
-                return (
-                  <tr
-                    key={b.id}
-                    data-bay-id={b.id}
-                    onClick={() => setSelectedId(b.id)}
-                    className={`cursor-pointer transition-colors ${selectedId === b.id ? 'bg-blue-50/70' : 'hover:bg-slate-50/70'}`}
-                  >
-                    <td className="px-3 py-2.5 font-mono text-slate-600">{b.no}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{b.division}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{b.bu}</td>
-                    <td className="px-4 py-2.5 font-bold text-slate-900">{b.bayName}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{b.bayType}</td>
-                    <td className="px-3 py-2.5"><StatusBadge bay={b} /></td>
-                    <td className="px-3 py-2.5"><ApprovalBadge bay={b} pendingKind={pendingKind} /></td>
-                    <td className="px-3 py-2.5 text-slate-600">{b.liftAvailability}</td>
-                    <td className="px-3 py-2.5 text-slate-600">{b.floor}</td>
-                    <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                      {b.approvalStatus === 'Approved' && !b.pendingRequestId && canChangeStatus && (
-                        <button
-                          onClick={() => setStatusDialog({ bay: b, to: target, reason: '', other: '' })}
-                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border cursor-pointer ${
-                            target === 'Inactive'
-                              ? 'border-rose-200 text-rose-700 hover:bg-rose-50'
-                              : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-                          }`}
-                        >
-                          <Power className="h-3 w-3" /> {target === 'Inactive' ? 'Inactivate' : 'Activate'}
-                        </button>
-                      )}
-                      {b.approvalStatus === 'Rejected' && !isTml && (
-                        <button
-                          onClick={() => setResubmit({ bay: b, text: '' })}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border border-blue-200 text-blue-800 hover:bg-blue-50 cursor-pointer"
-                        >
-                          <RotateCcw className="h-3 w-3" /> Resubmit
-                        </button>
-                      )}
-                      {b.pendingRequestId && <span className="text-[10px] text-amber-700">Awaiting TML</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Inspector: physical attributes only (type / division / BU / status are governed) */}
-      {selected && <BayInspector key={selected.id} bay={selected} />}
-
       {/* Requests for this dealer */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-2" data-testid="bay-requests">
-        <h3 className="text-sm font-bold text-slate-900">Approval requests — {dealerCode}</h3>
-        {requests.filter((r) => r.dealerCode === dealerCode).length === 0 ? (
+      <div className={`${card} p-4 space-y-2`} data-testid="bay-requests">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-slate-900">Approval requests — {dealerCode}</h3>
+          {isTml && (
+            <button
+              onClick={() => navigate('/admin/bay-approvals')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-900 text-white text-xs font-bold hover:bg-blue-800 cursor-pointer"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" /> Open Bay Approvals {pendingAll > 0 ? `(${pendingAll})` : ''}
+            </button>
+          )}
+        </div>
+        {dealerRequests.length === 0 ? (
           <p className="text-xs text-slate-400">No requests yet.</p>
         ) : (
           <table className="w-full text-left text-xs">
@@ -471,33 +659,31 @@ export const BayManagementConsole: React.FC<Props> = ({ adminRole, dealers, onBu
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {requests
-                .filter((r) => r.dealerCode === dealerCode)
-                .map((r) => (
-                  <tr key={r.id}>
-                    <td className="py-1.5 font-mono text-[11px]">{r.id}</td>
-                    <td>{r.kind === 'ADD_BAY' ? 'Additional bay' : `Status → ${r.toStatus}`}</td>
-                    <td className="font-semibold">{r.bayName}</td>
-                    <td>{r.approverRole}</td>
-                    <td>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          r.status === 'PENDING' ? 'bg-amber-100 text-amber-800' : r.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                        }`}
-                      >
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="text-slate-500">{r.decisionNote ?? '—'}</td>
-                  </tr>
-                ))}
+              {dealerRequests.map((r) => (
+                <tr key={r.id}>
+                  <td className="py-1.5 font-mono text-[11px]">{r.id}</td>
+                  <td>{r.kind === 'ADD_BAY' ? 'Additional bay' : `Status → ${r.toStatus}`}</td>
+                  <td className="font-semibold">{r.bayName}</td>
+                  <td>{r.approverRole}</td>
+                  <td>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        r.status === 'PENDING' ? 'bg-amber-100 text-amber-800' : r.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                      }`}
+                    >
+                      {r.status}
+                    </span>
+                  </td>
+                  <td className="text-slate-500">{r.decisionNote ?? '—'}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}
       </div>
 
       {/* Policy (TML only can change) */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-2 text-xs" data-testid="bay-policy">
+      <div className={`${card} p-4 space-y-2 text-xs`} data-testid="bay-policy">
         <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
           <Settings2 className="h-4 w-4 text-slate-500" /> Bay status policy {isTml ? '' : '(set by TML Admin)'}
         </h3>
@@ -523,17 +709,14 @@ export const BayManagementConsole: React.FC<Props> = ({ adminRole, dealers, onBu
       </div>
 
       {/* ---------- Dialogs ---------- */}
-      <Modal isOpen={!!newBay} onClose={() => setNewBay(null)} title="Add Bay" subtitle={`${dealer?.code} – ${dealer?.name}`} maxWidth="2xl">
+      <Modal isOpen={!!newBay} onClose={() => setNewBay(null)} title="New Bay" subtitle={`${dealer?.code} – ${dealer?.name} · ${dealer?.zone}`} maxWidth="2xl">
         {newBay && (
           <form
             aria-label="Add bay"
             className="space-y-3 text-xs"
             onSubmit={(e) => {
               e.preventDefault();
-              const res = bayStore.addBay(newBay, actor);
-              if (!res.ok) return;
-              setNewBay(null);
-              if (!res.request) showToast(`${res.value.bayName} added and active`, 'success');
+              saveNewBay(false);
             }}
           >
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -608,8 +791,73 @@ export const BayManagementConsole: React.FC<Props> = ({ adminRole, dealers, onBu
 
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" onClick={() => setNewBay(null)} className="px-4 py-1.5 rounded-lg border border-slate-200 font-semibold cursor-pointer">Cancel</button>
+              <button type="button" onClick={() => saveNewBay(true)} className="px-4 py-1.5 rounded-lg border border-sky-200 text-sky-800 font-bold hover:bg-sky-50 cursor-pointer">
+                Save as Draft
+              </button>
               <button type="submit" className="px-4 py-1.5 rounded-lg bg-blue-900 text-white font-bold hover:bg-blue-800 cursor-pointer">
                 {newBayBeyond && !isTml ? 'Send for Approval' : 'Add Bay'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={!!sendDialog}
+        onClose={() => setSendDialog(null)}
+        title={`Send ${sendPreview.length} bay(s) for approval`}
+        subtitle="Within the TML allocation bays are approved automatically; the rest go to the TML Network Manager"
+        maxWidth="2xl"
+      >
+        {sendDialog && (
+          <form
+            aria-label="Send for approval"
+            className="space-y-3 text-xs"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const res = bayStore.submitBays(sendDialog.ids, sendDialog.justification, actor);
+              if (res.approved + res.pending === 0) return;
+              setSendDialog(null);
+              setSelectedIds([]);
+              showToast(
+                `${res.approved} approved within allocation, ${res.pending} sent to TML Network Manager${res.errors.length ? `, ${res.errors.length} not sent` : ''}`,
+                res.errors.length ? 'error' : 'success'
+              );
+            }}
+          >
+            <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200" data-testid="send-preview">
+              {sendPreview.map(({ bay, outcome, error }) => (
+                <li key={bay.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span>
+                    <strong>{bay.bayName}</strong> <span className="text-slate-500">· {bay.division} / {bay.bu} / {bay.bayType}</span>
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      outcome === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' : outcome ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                    }`}
+                  >
+                    {outcome === 'APPROVED' ? 'Auto-approved (within allocation)' : outcome ? 'To TML Network Manager' : error}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {sendNeedsJustification && (
+              <div>
+                <label htmlFor="sd-just" className="font-semibold text-slate-600 block mb-1">Justification for the TML Network Manager *</label>
+                <textarea
+                  id="sd-just"
+                  rows={2}
+                  className={sel}
+                  value={sendDialog.justification}
+                  onChange={(e) => setSendDialog({ ...sendDialog, justification: e.target.value })}
+                  placeholder="Why are additional bays needed?"
+                />
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setSendDialog(null)} className="px-4 py-1.5 rounded-lg border border-slate-200 font-semibold cursor-pointer">Cancel</button>
+              <button type="submit" className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-500 cursor-pointer">
+                <Send className="h-3.5 w-3.5" /> Send
               </button>
             </div>
           </form>
@@ -656,26 +904,6 @@ export const BayManagementConsole: React.FC<Props> = ({ adminRole, dealers, onBu
         )}
       </Modal>
 
-      <Modal isOpen={!!resubmit} onClose={() => setResubmit(null)} title={resubmit ? `Resubmit ${resubmit.bay.bayName}` : ''} subtitle="Sent to the TML Network Manager" maxWidth="md">
-        {resubmit && (
-          <form
-            aria-label="Resubmit bay"
-            className="space-y-3 text-xs"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (bayStore.resubmitBay(resubmit.bay.id, resubmit.text, actor).ok) setResubmit(null);
-            }}
-          >
-            <label htmlFor="rs-text" className="font-semibold text-slate-600 block">New justification *</label>
-            <textarea id="rs-text" rows={3} className={sel} value={resubmit.text} onChange={(e) => setResubmit({ ...resubmit, text: e.target.value })} />
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setResubmit(null)} className="px-4 py-1.5 rounded-lg border border-slate-200 font-semibold cursor-pointer">Cancel</button>
-              <button type="submit" className="px-4 py-1.5 rounded-lg bg-blue-900 text-white font-bold cursor-pointer">Resubmit</button>
-            </div>
-          </form>
-        )}
-      </Modal>
-
       <EmailSentModal />
     </div>
   );
@@ -687,29 +915,21 @@ const BayInspector: React.FC<{ bay: Bay }> = ({ bay }) => {
   const { logAudit, showToast } = useApp();
   const bayStore = useBays();
   const dirty = JSON.stringify(draft) !== JSON.stringify(bay);
+  const readOnly = (label: string, value: string) => (
+    <div>
+      <div className="font-semibold text-slate-600 mb-1">{label}</div>
+      <div className="px-2.5 py-1.5 rounded-lg border border-slate-100 bg-slate-50 text-slate-700">{value}</div>
+    </div>
+  );
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3 text-xs" data-testid="bay-inspector">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-bold text-slate-900">{bay.bayName} <span className="font-mono text-[11px] text-slate-400">{bay.id}</span></h3>
-          <p className="text-[11px] text-slate-500">
-            {bay.division} · {bay.bu} · {bay.bayType} · {bay.bayStatus}
-            {bay.statusReason ? ` (${bay.statusReason})` : ''} — type, division, BU and status are governed and can't be edited here.
-          </p>
-        </div>
-        <button
-          disabled={!dirty || !draft.bayName.trim()}
-          onClick={() => {
-            bayStore.updateBayDetails(draft);
-            logAudit('Bay Details Updated', 'Bay Management', `${bay.id} (${bay.dealerCode})`, `${bay.bayName}/${bay.floor}/${bay.liftAvailability}`, `${draft.bayName}/${draft.floor}/${draft.liftAvailability}`);
-            showToast(`Saved ${draft.bayName}`, 'success');
-          }}
-          className="px-4 py-1.5 bg-blue-900 hover:bg-blue-800 text-white font-bold rounded-lg disabled:opacity-40 cursor-pointer"
-        >
-          Save Bay Details
-        </button>
-      </div>
+    <div className="space-y-3" data-testid="bay-inspector">
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        {readOnly('Region', bay.region)}
+        {readOnly('Dealer', `${bay.dealerCode} - ${bay.dealerName}`)}
+        {readOnly('Division', bay.division)}
+        {readOnly('BU', bay.bu)}
+        {readOnly('Bay Type', bay.bayType)}
+        {readOnly('Status reason', bay.statusReason || '—')}
         <div className="col-span-2">
           <label htmlFor="bi-name" className="font-semibold text-slate-600 block mb-1">Bay Name</label>
           <input id="bi-name" className={sel} value={draft.bayName} onChange={(e) => setDraft({ ...draft, bayName: e.target.value })} />
@@ -734,6 +954,20 @@ const BayInspector: React.FC<{ bay: Bay }> = ({ bay }) => {
           <label htmlFor="bi-t1" className="font-semibold text-slate-600 block mb-1">Technician 1</label>
           <input id="bi-t1" className={sel} value={draft.tech1} onChange={(e) => setDraft({ ...draft, tech1: e.target.value })} />
         </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] text-slate-500">Type, division, BU and status are governed and can't be edited here.</p>
+        <button
+          disabled={!dirty || !draft.bayName.trim()}
+          onClick={() => {
+            bayStore.updateBayDetails(draft);
+            logAudit('Bay Details Updated', 'Bay Management', `${bay.id} (${bay.dealerCode})`, `${bay.bayName}/${bay.floor}/${bay.liftAvailability}`, `${draft.bayName}/${draft.floor}/${draft.liftAvailability}`);
+            showToast(`Saved ${draft.bayName}`, 'success');
+          }}
+          className="px-4 py-1.5 bg-blue-900 hover:bg-blue-800 text-white font-bold rounded-lg disabled:opacity-40 cursor-pointer"
+        >
+          Save Bay Details
+        </button>
       </div>
     </div>
   );
