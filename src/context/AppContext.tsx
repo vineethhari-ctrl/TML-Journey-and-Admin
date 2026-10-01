@@ -434,7 +434,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           'securityGuard',
         ].includes(activeRoleId);
       }
-      if (route === '/admin/masters') {
+      if (route === '/admin/masters' || route === '/admin/masters-guide') {
         return ['superAdmin', 'dealerAdmin'].includes(activeRoleId);
       }
       if (

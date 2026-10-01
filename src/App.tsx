@@ -16,6 +16,7 @@ import { SessionManagementPage } from './pages/SessionManagementPage';
 import { ConfigurationPage } from './pages/ConfigurationPage';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { MastersMaintenancePage } from './pages/MastersMaintenancePage';
+import { MasterGuidePage } from './pages/MasterGuidePage';
 
 const AppRouter: React.FC = () => {
   const { currentRoute } = useApp();
@@ -32,6 +33,9 @@ const AppRouter: React.FC = () => {
     if (path.startsWith('/journey/')) {
       const jcNumber = decodeURIComponent(path.split('/')[2] || '') || 'JC20260930001234';
       return <JourneyDetailPage jcNumber={jcNumber} />;
+    }
+    if (path === '/admin/masters-guide') {
+      return <MasterGuidePage />;
     }
     if (path === '/admin/masters') {
       return <MastersMaintenancePage />;

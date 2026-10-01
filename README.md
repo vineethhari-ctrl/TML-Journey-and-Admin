@@ -20,8 +20,10 @@ React 19 + TypeScript + Vite + Tailwind. All data is generated in-memory (`src/d
 
 ## Defining masters without a deployment
 
-Masters Maintenance has **Create New Master** (form) and **Import BA Workbook** (Excel). See
-[`docs/BA_MASTER_GUIDE.md`](docs/BA_MASTER_GUIDE.md) and the templates in [`docs/templates`](docs/templates).
+Masters Maintenance has **Create New Master** (form) and **Import BA Workbook** (Excel). BAs use the in-app guide
+(`#/admin/masters-guide`, sidebar → *BA Guide: Masters*, source `src/pages/MasterGuidePage.tsx`) with downloads served from
+`public/downloads`; repo copies and a Markdown guide are in [`docs/`](docs/BA_MASTER_GUIDE.md). `npm run templates` regenerates
+both copies of the Excel files (a test fails if they are out of date).
 Logic lives in `src/utils/masterWorkbook.ts` (build / parse / validate) and is covered by unit + E2E tests.
 
 ## Conventions (please keep these)

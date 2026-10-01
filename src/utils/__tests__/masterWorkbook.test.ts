@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as XLSX from 'xlsx';
 import {
   buildTemplateWorkbook,
+  buildPracticeWorkbook,
   buildMasterWorkbook,
   parseMasterWorkbook,
   applyMasterImport,
@@ -199,15 +200,32 @@ describe('definition helpers', () => {
   });
 });
 
-describe('committed BA template files (docs/templates)', () => {
-  it('the template file imports cleanly; existing-masters catalogue re-imports without errors', async () => {
+describe('practice workbook', () => {
+  it('creates one master and adds a missed field to ppl_master in update mode', () => {
+    const parsed = parseMasterWorkbook(roundTrip(buildPracticeWorkbook()), MASTER_COLLECTIONS, 'update');
+    expect(parsed.issues.filter((i) => i.severity === 'error')).toEqual([]);
+    expect(parsed.summary.map((s) => [s.id, s.action, s.newFieldCount, s.recordCount])).toEqual([
+      ['courtesy_car_master', 'create', 3, 3],
+      ['ppl_master', 'update', 1, 2],
+    ]);
+    const ppl = parsed.masters.find((m) => m.id === 'ppl_master')!;
+    expect(ppl.records.find((r) => r.id === 'PPL-01')).toMatchObject({ adas_level: 'L2', pplName: 'Nexon' });
+  });
+
+  it('in the default "skip" mode only the new master is imported', () => {
+    const parsed = parseMasterWorkbook(roundTrip(buildPracticeWorkbook()), MASTER_COLLECTIONS, 'skip');
+    expect(parsed.masters.map((m) => m.id)).toEqual(['courtesy_car_master']);
+  });
+});
+
+describe('downloadable BA files (docs/templates and public/downloads)', () => {
+  it.each(['docs/templates', 'public/downloads'])('%s: every file is present and imports without errors', async (dir) => {
     const fs = await import('fs');
     const path = await import('path');
-    const dir = path.resolve(process.cwd(), 'docs/templates');
-    const template = readWorkbook(new Uint8Array(fs.readFileSync(path.join(dir, 'TML_Master_Definition_Template.xlsx'))));
-    expect(parseMasterWorkbook(template, MASTER_COLLECTIONS).hasErrors).toBe(false);
-    const catalogue = readWorkbook(new Uint8Array(fs.readFileSync(path.join(dir, 'TML_Existing_Masters_Catalogue.xlsx'))));
-    const parsed = parseMasterWorkbook(catalogue, MASTER_COLLECTIONS, 'update');
-    expect(parsed.issues.filter((i) => i.severity === 'error')).toEqual([]);
+    const read = (name: string) => readWorkbook(new Uint8Array(fs.readFileSync(path.resolve(process.cwd(), dir, name))));
+    expect(parseMasterWorkbook(read('TML_Master_Definition_Template.xlsx'), MASTER_COLLECTIONS).hasErrors).toBe(false);
+    expect(parseMasterWorkbook(read('TML_Master_Practice_Workbook.xlsx'), MASTER_COLLECTIONS, 'update').hasErrors).toBe(false);
+    const catalogue = parseMasterWorkbook(read('TML_Existing_Masters_Catalogue.xlsx'), MASTER_COLLECTIONS, 'update');
+    expect(catalogue.issues.filter((i) => i.severity === 'error')).toEqual([]);
   });
 });

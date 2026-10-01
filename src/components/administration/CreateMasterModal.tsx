@@ -54,7 +54,7 @@ const inputCls =
   'w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs focus:border-blue-500 focus:outline-hidden';
 
 export const CreateMasterModal: React.FC<CreateMasterModalProps> = ({ isOpen, onClose, defaultGroup, isAdminTml, onCreated }) => {
-  const { masterConfigs, createMaster } = useApp();
+  const { masterConfigs, createMaster, navigate } = useApp();
 
   const [name, setName] = useState('');
   const [id, setId] = useState('');
@@ -301,7 +301,17 @@ export const CreateMasterModal: React.FC<CreateMasterModalProps> = ({ isOpen, on
             </div>
           ))}
           <p className="text-[11px] text-slate-500">
-            After creating the master you can add records, more fields, validation ranges and value mappings from its table, or bulk upload rows.
+            After creating the master you can add records, more fields, validation ranges and value mappings from its table, or bulk upload rows.{' '}
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                navigate('/admin/masters-guide');
+              }}
+              className="font-bold text-blue-800 underline cursor-pointer"
+            >
+              BA Guide
+            </button>
           </p>
         </div>
 
