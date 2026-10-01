@@ -757,7 +757,7 @@ export const DealerAppPreviewSimulator: React.FC<DealerAppPreviewSimulatorProps>
                         const errorMsg = validationRes.errors[0];
 
                         return (
-                          <div key={rule.key} className="space-y-1">
+                          <div key={rule.key} data-field-key={rule.key} className="space-y-1">
                             <div className="flex items-center justify-between text-xs">
                               <label className="font-bold text-slate-800 flex items-center gap-1">
                                 <span>{rule.dealerDisplayLabel || rule.label}</span>
