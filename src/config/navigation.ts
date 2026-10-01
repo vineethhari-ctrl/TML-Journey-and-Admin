@@ -14,6 +14,7 @@ export const NAV_PAGES: NavPage[] = [
   { route: '/journey?filter=pending', label: 'Pending Actions', group: 'TML Journey', keywords: 'approval blocked waiting' },
   { route: '/journey?filter=in_workshop', label: 'Vehicles In Workshop', group: 'TML Journey', keywords: 'bay floor' },
   { route: '/admin/masters', label: 'Masters Maintenance', group: 'Administration', keywords: 'master data fields schema bay' },
+  { route: '/admin/bay-approvals', label: 'Bay Approvals', group: 'Administration', keywords: 'bay approve reject network manager allocation inactive request' },
   { route: '/admin/masters-guide', label: 'BA Guide: Adding Masters', group: 'Administration', keywords: 'help guide template workbook import excel ba how to' },
   { route: '/admin/users', label: 'Employee / Users', group: 'Administration', keywords: 'user employee staff create' },
   { route: '/admin/roles', label: 'Roles & Access', group: 'Administration', keywords: 'permission rbac matrix' },

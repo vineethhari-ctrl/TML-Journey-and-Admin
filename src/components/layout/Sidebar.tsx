@@ -13,11 +13,14 @@ import {
   Database,
   Layers,
   BookOpen,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useBays } from '../../context/BayContext';
 
 export const Sidebar: React.FC = () => {
   const { currentRoute, navigate, canAccessRoute, activeRoleId } = useApp();
+  const pendingBayRequests = useBays().requests.filter((r) => r.status === 'PENDING').length;
 
   const isCurrent = (route: string) => {
     if (route === '/journey' && (currentRoute === '/journey' || currentRoute.startsWith('/journey?'))) return true;
@@ -112,6 +115,21 @@ export const Sidebar: React.FC = () => {
                 <span className="text-[9px] font-bold px-1.5 py-0.2 bg-blue-100 text-blue-900 rounded">
                   OEM/DLR
                 </span>
+              </button>
+            )}
+
+            {canAccessRoute('/admin/bay-approvals') && (
+              <button
+                onClick={() => navigate('/admin/bay-approvals')}
+                className={`w-full cursor-pointer ${navItemClass(isCurrent('/admin/bay-approvals'))}`}
+              >
+                <ClipboardCheck className="h-4 w-4" />
+                <span className="flex-1 text-left">Bay Approvals</span>
+                {pendingBayRequests > 0 && (
+                  <span data-testid="bay-approvals-count" className="text-[10px] font-bold px-1.5 rounded-full bg-amber-500 text-white">
+                    {pendingBayRequests}
+                  </span>
+                )}
               </button>
             )}
 

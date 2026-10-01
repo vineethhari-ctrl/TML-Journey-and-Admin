@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, ShieldAlert, User, Smartphone, Sliders, Check, ExternalLink } from 'lucide-react';
+import { AlertTriangle, ShieldAlert, User, Smartphone, Sliders, Check, ExternalLink, ClipboardCheck } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 interface NotificationCenterProps {
@@ -20,6 +20,8 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ isOpen, 
         return <ShieldAlert className="h-4 w-4 text-rose-600 shrink-0" />;
       case 'USER':
         return <User className="h-4 w-4 text-blue-600 shrink-0" />;
+      case 'APPROVAL':
+        return <ClipboardCheck className="h-4 w-4 text-emerald-600 shrink-0" />;
       case 'DEVICE':
         return <Smartphone className="h-4 w-4 text-purple-600 shrink-0" />;
       default:

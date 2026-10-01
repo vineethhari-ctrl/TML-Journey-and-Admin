@@ -14,6 +14,9 @@ import { RulesEngineStudio } from '../components/administration/RulesEngineStudi
 import { DealerAppPreviewSimulator } from '../components/administration/DealerAppPreviewSimulator';
 import { CreateMasterModal } from '../components/administration/CreateMasterModal';
 import { MasterWorkbookImportModal } from '../components/administration/MasterWorkbookImportModal';
+import { BayManagementConsole } from '../components/administration/BayManagementConsole';
+import { useBays } from '../context/BayContext';
+import { Actor, Bay } from '../utils/bayGovernance';
 import {
   Building2,
   Wrench,
@@ -64,26 +67,6 @@ import {
 import { masterExportUtil } from '../utils/masterExportUtil';
 import { mergeImportedRecords } from '../utils/recordMerge';
 
-interface BayRecord {
-  id: string;
-  no: number;
-  region: 'South' | 'North' | 'West' | 'East';
-  dealerCode: string;
-  dealerName: string;
-  bayName: string;
-  bayType: 'Mechanical' | 'Electrical' | 'EV' | 'Fleet' | 'Speedo' | 'AC' | 'BodyShop';
-  bayStatus: 'Active' | 'Inactive';
-  inactiveFrom?: string;
-  inactiveTo?: string;
-  approvalStatus: 'Approved' | 'Pending Approval' | 'Draft' | 'Rejected';
-  floor: 'Floor 1' | 'Floor 2' | 'Ground' | 'Basement';
-  liftAvailability: 'No Lift' | '2 post lift' | '4 post lift';
-  specialEquipments: string[];
-  techSupervisor: string;
-  tech1: string;
-  tech2: string;
-}
-
 interface HolidayOverride {
   id: string;
   date: string;
@@ -110,6 +93,7 @@ const getGroupIcon = (iconName: string, className = 'h-4 w-4') => {
 
 export const MastersMaintenancePage: React.FC = () => {
   const {
+    activeRoleId,
     currentRoute,
     navigate,
     showToast,
@@ -121,7 +105,11 @@ export const MastersMaintenancePage: React.FC = () => {
   } = useApp();
 
   // Dual Admin Role Context: [Dealer Admin] vs [TML Admin] - default to TML Admin to enable full enterprise schema customization
-  const [adminRole, setAdminRole] = useState<'Dealer Admin' | 'TML Admin'>('TML Admin');
+  // A platform Dealer Admin always works in the Dealer Admin context; others default to TML Admin
+  const [adminRole, setAdminRole] = useState<'Dealer Admin' | 'TML Admin'>(activeRoleId === 'dealerAdmin' ? 'Dealer Admin' : 'TML Admin');
+  useEffect(() => {
+    if (activeRoleId === 'dealerAdmin') setAdminRole('Dealer Admin');
+  }, [activeRoleId]);
 
   // Primary Navigation Tab: 'catalogues' (Parameter master tables) vs 'changelog' (Change Log) vs 'rules_engine' (Rules Engine Studio) vs 'dealer_preview' (Dealer App Preview Simulator)
   const [activeMainTab, setActiveMainTab] = useState<'catalogues' | 'changelog' | 'rules_engine' | 'dealer_preview'>('catalogues');
@@ -146,9 +134,19 @@ export const MastersMaintenancePage: React.FC = () => {
   useEffect(() => {
     const open = new URLSearchParams(currentRoute.split('?')[1] || '').get('open');
     if (open === 'create') setIsCreateMasterOpen(true);
+    if (open === 'bays') {
+      setActiveMainTab('catalogues');
+      setActiveLogicalGroup('Dealer Network');
+      setSelectedMasterId('bay_management_interactive');
+      setActiveLayout('workspace');
+    }
     if (open === 'import') {
-      setAdminRole('TML Admin');
-      setIsWorkbookImportOpen(true);
+      if (activeRoleId === 'dealerAdmin') {
+        showToast('Importing BA master workbooks is a TML Admin task', 'error');
+      } else {
+        setAdminRole('TML Admin');
+        setIsWorkbookImportOpen(true);
+      }
     }
   }, [currentRoute]);
 
@@ -168,190 +166,13 @@ export const MastersMaintenancePage: React.FC = () => {
   // ---------------------------------------------------------------------------
   // BAY MANAGEMENT STATE (Dealer Network & Facilities)
   // ---------------------------------------------------------------------------
-  const [filterRegion, setFilterRegion] = useState('South');
-  const [filterDealer, setFilterDealer] = useState('All');
-  const [filterBayType, setFilterBayType] = useState('All');
-  const [filterBayStatus, setFilterBayStatus] = useState('All');
-  const [filterBayName, setFilterBayName] = useState('');
-  const [filterApprovalStatus, setFilterApprovalStatus] = useState('All');
-
-  const [selectedBayIds, setSelectedBayIds] = useState<string[]>([]);
-  const [activeSelectedBayId, setActiveSelectedBayId] = useState<string>('BAY-01');
   const [isBayImportModalOpen, setIsBayImportModalOpen] = useState(false);
-
-  const [bays, setBays] = useState<BayRecord[]>([
-    {
-      id: 'BAY-01',
-      no: 1,
-      region: 'South',
-      dealerCode: 'DLR1001',
-      dealerName: 'Sample Motors Hyderabad',
-      bayName: 'Mechanical Bay 01',
-      bayType: 'Mechanical',
-      bayStatus: 'Active',
-      inactiveFrom: '',
-      inactiveTo: '',
-      approvalStatus: 'Approved',
-      floor: 'Floor 1',
-      liftAvailability: '2 post lift',
-      specialEquipments: ['Nut Runner', 'Oil Dispensing Unit'],
-      techSupervisor: 'Ram',
-      tech1: 'Shyam',
-      tech2: 'Rohit',
-    },
-    {
-      id: 'BAY-02',
-      no: 2,
-      region: 'South',
-      dealerCode: 'DLR1001',
-      dealerName: 'Sample Motors Hyderabad',
-      bayName: 'Mechanical Bay 02',
-      bayType: 'Mechanical',
-      bayStatus: 'Active',
-      inactiveFrom: '',
-      inactiveTo: '',
-      approvalStatus: 'Approved',
-      floor: 'Floor 1',
-      liftAvailability: '2 post lift',
-      specialEquipments: ['Nut Runner', 'Brake rivet machine'],
-      techSupervisor: 'Ram',
-      tech1: 'Sunil Kumar',
-      tech2: 'Anil Rao',
-    },
-    {
-      id: 'BAY-03',
-      no: 3,
-      region: 'South',
-      dealerCode: 'DLR1001',
-      dealerName: 'Sample Motors Hyderabad',
-      bayName: 'Electrical Bay 01',
-      bayType: 'Electrical',
-      bayStatus: 'Active',
-      inactiveFrom: '',
-      inactiveTo: '',
-      approvalStatus: 'Pending Approval',
-      floor: 'Floor 1',
-      liftAvailability: 'No Lift',
-      specialEquipments: ['Nut Runner', 'EV Charger'],
-      techSupervisor: 'Madhu',
-      tech1: 'Raghavan K',
-      tech2: 'Venkat S',
-    },
-    {
-      id: 'BAY-04',
-      no: 4,
-      region: 'South',
-      dealerCode: 'DLR1001',
-      dealerName: 'Sample Motors Hyderabad',
-      bayName: 'EV High-Voltage Bay 01',
-      bayType: 'EV',
-      bayStatus: 'Active',
-      inactiveFrom: '',
-      inactiveTo: '',
-      approvalStatus: 'Approved',
-      floor: 'Floor 1',
-      liftAvailability: '2 post lift',
-      specialEquipments: ['EV Charger', 'Nut Runner', 'Oil Dispensing Unit'],
-      techSupervisor: 'Madhu',
-      tech1: 'Arjun Das (EV Level 3)',
-      tech2: 'Kiran Verma',
-    },
-    {
-      id: 'BAY-05',
-      no: 5,
-      region: 'South',
-      dealerCode: 'DLR1001',
-      dealerName: 'Sample Motors Hyderabad',
-      bayName: 'Fleet Service Bay 01',
-      bayType: 'Fleet',
-      bayStatus: 'Active',
-      inactiveFrom: '',
-      inactiveTo: '',
-      approvalStatus: 'Draft',
-      floor: 'Floor 1',
-      liftAvailability: '4 post lift',
-      specialEquipments: ['Nut Runner', 'Brake rivet machine'],
-      techSupervisor: 'Ram',
-      tech1: 'Gopal S',
-      tech2: 'Manoj P',
-    },
-    {
-      id: 'BAY-06',
-      no: 6,
-      region: 'South',
-      dealerCode: 'DLR1001',
-      dealerName: 'Sample Motors Hyderabad',
-      bayName: 'Speedo Express Bay 01',
-      bayType: 'Speedo',
-      bayStatus: 'Active',
-      inactiveFrom: '',
-      inactiveTo: '',
-      approvalStatus: 'Approved',
-      floor: 'Floor 1',
-      liftAvailability: '2 post lift',
-      specialEquipments: ['Oil Dispensing Unit', 'Nut Runner'],
-      techSupervisor: 'Madhu',
-      tech1: 'Mahesh Reddy',
-      tech2: 'Devendra T',
-    },
-    {
-      id: 'BAY-07',
-      no: 7,
-      region: 'South',
-      dealerCode: 'DLR1001',
-      dealerName: 'Sample Motors Hyderabad',
-      bayName: 'Air Conditioning Bay 01',
-      bayType: 'AC',
-      bayStatus: 'Active',
-      inactiveFrom: '',
-      inactiveTo: '',
-      approvalStatus: 'Approved',
-      floor: 'Floor 1',
-      liftAvailability: 'No Lift',
-      specialEquipments: ['Nut Runner'],
-      techSupervisor: 'Ram',
-      tech1: 'Santosh Kumar',
-      tech2: 'Naveen B',
-    },
-    {
-      id: 'BAY-08',
-      no: 8,
-      region: 'South',
-      dealerCode: 'DLR1001',
-      dealerName: 'Sample Motors Hyderabad',
-      bayName: 'BodyShop Paint Prep 01',
-      bayType: 'BodyShop',
-      bayStatus: 'Inactive',
-      inactiveFrom: '2026-09-25',
-      inactiveTo: '2026-10-05',
-      approvalStatus: 'Rejected',
-      floor: 'Basement',
-      liftAvailability: 'No Lift',
-      specialEquipments: ['Brake rivet machine'],
-      techSupervisor: 'Madhu',
-      tech1: 'Premchand',
-      tech2: 'Farhan Ali',
-    },
-    {
-      id: 'BAY-09',
-      no: 9,
-      region: 'South',
-      dealerCode: 'DLR1001',
-      dealerName: 'Sample Motors Hyderabad',
-      bayName: 'BodyShop Denting 01',
-      bayType: 'BodyShop',
-      bayStatus: 'Active',
-      inactiveFrom: '',
-      inactiveTo: '',
-      approvalStatus: 'Draft',
-      floor: 'Basement',
-      liftAvailability: '2 post lift',
-      specialEquipments: ['Nut Runner', 'Brake rivet machine'],
-      techSupervisor: 'Ram',
-      tech1: 'Kishore J',
-      tech2: 'Sanjay Rawat',
-    },
-  ]);
+  const bayStore = useBays();
+  const bays = bayStore.bays;
+  const bayActor: Actor =
+    adminRole === 'TML Admin'
+      ? { name: currentUser.name, role: 'TML_ADMIN', email: currentUser.email }
+      : { name: activeRoleId === 'dealerAdmin' ? currentUser.name : 'K. Venkatesh', role: 'DEALER_ADMIN' };
 
   const bayMasterConfig: MasterConfig = useMemo(
     () => ({
@@ -364,14 +185,13 @@ export const MastersMaintenancePage: React.FC = () => {
       moduleName: 'JC Tracking & Bay Dispatch',
       description: 'Workshop floor service bay operational and capacity definitions.',
       fields: [
-        { key: 'region', label: 'Region', type: 'select', options: ['South', 'North', 'West', 'East'], mandatory: true },
-        { key: 'dealerCode', label: 'Dealer Code', type: 'text', mandatory: true },
-        { key: 'dealerName', label: 'Dealer Name', type: 'text', mandatory: true },
+        { key: 'dealerCode', label: 'Dealer Code', type: 'select', options: ['DLR1001', 'DLR1002', 'DLR1003', 'DLR1004', 'DLR1005'], mandatory: true },
+        { key: 'division', label: 'Division', type: 'text', mandatory: true },
+        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], mandatory: true },
         { key: 'bayName', label: 'Bay Name', type: 'text', mandatory: true },
         { key: 'bayType', label: 'Bay Type', type: 'select', options: ['Mechanical', 'Electrical', 'EV', 'Fleet', 'Speedo', 'AC', 'BodyShop'], mandatory: true },
         { key: 'floor', label: 'Floor', type: 'select', options: ['Ground', 'Floor 1', 'Floor 2', 'Basement'], mandatory: true },
         { key: 'liftAvailability', label: 'Lift Availability', type: 'select', options: ['No Lift', '2 post lift', '4 post lift'], mandatory: true },
-        { key: 'bayStatus', label: 'Bay Status', type: 'select', options: ['Active', 'Inactive'], mandatory: true },
         { key: 'techSupervisor', label: 'Tech Supervisor', type: 'text' },
         { key: 'tech1', label: 'Technician 1', type: 'text' },
         { key: 'tech2', label: 'Technician 2', type: 'text' },
@@ -381,125 +201,32 @@ export const MastersMaintenancePage: React.FC = () => {
     [bays]
   );
 
-  const nextBayNumber = () => bays.reduce((max, b) => Math.max(max, b.no), 0) + 1;
-
+  // Bulk-uploaded bays follow the same allocation rules as bays added one by one
   const handleBayImportComplete = (importedRows: Array<Record<string, any>>) => {
-    const existingIds = new Set(bays.map((b) => b.id));
-    const startNo = nextBayNumber();
-    const newBays: BayRecord[] = importedRows.map((r, idx) => ({
-      // Never reuse an id that already exists (duplicate ids break selection & approval)
-      id: r.id && !existingIds.has(r.id) ? r.id : `BAY-${String(startNo + idx).padStart(2, '0')}`,
-      no: startNo + idx,
-      region: (r.region as any) || 'South',
-      dealerCode: r.dealerCode || 'DLR1001',
-      dealerName: r.dealerName || 'Sample Motors Hyderabad',
-      bayName: r.bayName || `Bay ${bays.length + idx + 1}`,
-      bayType: (r.bayType as any) || 'Mechanical',
-      bayStatus: (r.bayStatus as any) || 'Active',
-      inactiveFrom: '',
-      inactiveTo: '',
-      approvalStatus: 'Approved',
-      floor: r.floor || 'Ground',
-      liftAvailability: (r.liftAvailability as any) || 'No Lift',
-      specialEquipments: [],
-      techSupervisor: r.techSupervisor || 'Suresh Kumar',
-      tech1: r.tech1 || 'M. Rajesh',
-      tech2: r.tech2 || 'P. Vinay',
-    }));
-    setBays((prev) => [...newBays, ...prev]);
-    showToast(`Successfully imported ${newBays.length} bays into workshop layout`, 'success');
-  };
-
-  const filteredBays = bays.filter((b) => {
-    if (filterRegion !== 'All' && b.region !== filterRegion) return false;
-    if (filterDealer !== 'All' && b.dealerCode !== filterDealer) return false;
-    if (filterBayType !== 'All' && b.bayType !== filterBayType) return false;
-    if (filterBayStatus !== 'All' && b.bayStatus !== filterBayStatus) return false;
-    if (filterApprovalStatus !== 'All' && b.approvalStatus !== filterApprovalStatus) return false;
-    if (filterBayName.trim() && !b.bayName.toLowerCase().includes(filterBayName.toLowerCase())) return false;
-    return true;
-  });
-
-  const selectedBay = bays.find((b) => b.id === activeSelectedBayId) || bays[0];
-
-  const handleToggleSelectBay = (id: string, approvalStatus: string) => {
-    if (approvalStatus !== 'Draft' && approvalStatus !== 'Rejected') {
-      showToast('Only Draft and Rejected bays can be selected for approval.', 'error');
-      return;
-    }
-    if (selectedBayIds.includes(id)) {
-      setSelectedBayIds(selectedBayIds.filter((item) => item !== id));
-    } else {
-      setSelectedBayIds([...selectedBayIds, id]);
-    }
-  };
-
-  // Editable copy of the bay open in the inspector; saved explicitly via "Save Bay Setup"
-  const [bayDraft, setBayDraft] = useState<BayRecord | null>(null);
-  useEffect(() => {
-    setBayDraft(selectedBay ? { ...selectedBay } : null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSelectedBayId, selectedBay?.id]);
-
-  const handleCreateBay = () => {
-    const no = nextBayNumber();
-    const dealer = dealersList.find((d) => d.code === filterDealer) || dealersList[0];
-    const newBay: BayRecord = {
-      id: `BAY-${String(no).padStart(2, '0')}`,
-      no,
-      region: (filterRegion !== 'All' ? filterRegion : dealer.zone) as BayRecord['region'],
-      dealerCode: dealer.code,
-      dealerName: dealer.name,
-      bayName: `New Bay ${no}`,
-      bayType: 'Mechanical',
-      bayStatus: 'Active',
-      inactiveFrom: '',
-      inactiveTo: '',
-      approvalStatus: 'Draft',
-      floor: 'Ground',
-      liftAvailability: 'No Lift',
-      specialEquipments: [],
-      techSupervisor: '',
-      tech1: '',
-      tech2: '',
-    };
-    setBays((prev) => [newBay, ...prev]);
-    setActiveSelectedBayId(newBay.id);
-    // Make sure the new draft isn't hidden by the current filters
-    setFilterBayType('All');
-    setFilterBayStatus('All');
-    setFilterApprovalStatus('All');
-    setFilterBayName('');
-    logAudit('Bay Created', 'Masters Maintenance', `${newBay.id} (${newBay.dealerCode})`, 'None', 'Draft bay created');
-    showToast(`Draft ${newBay.id} created — edit its details below and save`, 'info');
-  };
-
-  const handleSaveBay = () => {
-    if (!bayDraft) return;
-    if (!bayDraft.bayName.trim()) {
-      showToast('Bay name is required', 'error');
-      return;
-    }
-    const before = bays.find((b) => b.id === bayDraft.id);
-    setBays((prev) => prev.map((b) => (b.id === bayDraft.id ? { ...bayDraft, bayName: bayDraft.bayName.trim() } : b)));
-    logAudit(
-      'Bay Updated',
-      'Masters Maintenance',
-      `${bayDraft.id} (${bayDraft.dealerCode})`,
-      before ? `${before.bayName} / ${before.bayType} / ${before.floor} / ${before.liftAvailability}` : '—',
-      `${bayDraft.bayName} / ${bayDraft.bayType} / ${bayDraft.floor} / ${bayDraft.liftAvailability}`
+    const result = bayStore.importBays(
+      importedRows.map((r) => {
+        const dealer = dealersList.find((d) => d.code === r.dealerCode) || dealersList[0];
+        return {
+          dealerCode: dealer.code,
+          dealerName: dealer.name,
+          region: dealer.zone as Bay['region'],
+          division: r.division,
+          bu: r.bu,
+          bayType: r.bayType,
+          bayName: r.bayName,
+          floor: r.floor,
+          liftAvailability: r.liftAvailability,
+          techSupervisor: r.techSupervisor,
+          tech1: r.tech1,
+          tech2: r.tech2,
+        };
+      }),
+      bayActor
     );
-    showToast(`Saved changes for ${bayDraft.bayName}`, 'success');
-  };
-
-  const handleSendForApproval = () => {
-    if (selectedBayIds.length === 0) return;
-    setBays((prev) =>
-      prev.map((b) => (selectedBayIds.includes(b.id) ? { ...b, approvalStatus: 'Pending Approval' } : b))
+    showToast(
+      `Bays: ${result.added} added, ${result.pending} sent for TML approval${result.errors.length ? `, ${result.errors.length} rejected` : ''}`,
+      result.errors.length ? 'error' : 'success'
     );
-    logAudit('Bays Sent for Approval', 'Masters Maintenance', selectedBayIds.join(', '), 'Draft / Rejected', 'Pending Approval');
-    showToast(`Sent ${selectedBayIds.length} bay(s) for TML Admin approval!`, 'success');
-    setSelectedBayIds([]);
   };
 
   // ---------------------------------------------------------------------------
@@ -703,6 +430,8 @@ export const MastersMaintenancePage: React.FC = () => {
           { key: 'region', label: 'Region' },
           { key: 'dealerCode', label: 'Dealer Code' },
           { key: 'dealerName', label: 'Dealer Name' },
+          { key: 'division', label: 'Division' },
+          { key: 'bu', label: 'BU' },
           { key: 'bayName', label: 'Bay Name' },
           { key: 'bayType', label: 'Bay Type' },
           { key: 'floor', label: 'Floor' },
@@ -798,7 +527,7 @@ export const MastersMaintenancePage: React.FC = () => {
           { key: 'tech1', label: 'Tech 1' },
           { key: 'tech2', label: 'Tech 2' },
         ],
-        data: filteredBays,
+        data: bays,
       });
     } else if (currentMaster.id === 'holiday_calendar_master') {
       masterExportUtil.exportToCSV({
@@ -993,6 +722,8 @@ export const MastersMaintenancePage: React.FC = () => {
               Dealer Admin
             </button>
             <button
+              disabled={activeRoleId === 'dealerAdmin'}
+              title={activeRoleId === 'dealerAdmin' ? 'Not available for the Dealer Admin role' : undefined}
               onClick={() => {
                 setAdminRole('TML Admin');
                 showToast('Switched context to TML Central OEM Governance', 'info');
@@ -1763,403 +1494,14 @@ export const MastersMaintenancePage: React.FC = () => {
 
           {/* MASTER CONTENT RENDERING */}
           {(() => {
-            // Case 1: Bay Management Interactive Console
+            // Case 1: Bay Management (allocation, approvals, status governance)
             if (currentMaster.id === 'bay_management_interactive') {
               return (
-                <div className="space-y-4">
-                  {/* Filter Bar */}
-                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
-                      <div>
-                        <label className="text-[11px] font-semibold text-slate-600 block mb-1">Region</label>
-                        <select
-                          value={filterRegion}
-                          onChange={(e) => setFilterRegion(e.target.value)}
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-slate-800 focus:outline-hidden"
-                        >
-                          <option value="All">All</option>
-                          <option value="South">South</option>
-                          <option value="North">North</option>
-                          <option value="West">West</option>
-                          <option value="East">East</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-[11px] font-semibold text-slate-600 block mb-1">Dealer</label>
-                        <select
-                          value={filterDealer}
-                          onChange={(e) => setFilterDealer(e.target.value)}
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-slate-800 focus:outline-hidden"
-                        >
-                          <option value="All">All</option>
-                          {dealersList.map((d) => (
-                            <option key={d.code} value={d.code}>
-                              {d.code} - {d.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-[11px] font-semibold text-slate-600 block mb-1">Bay Type</label>
-                        <select
-                          value={filterBayType}
-                          onChange={(e) => setFilterBayType(e.target.value)}
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-slate-800 focus:outline-hidden"
-                        >
-                          <option value="All">All</option>
-                          <option value="Mechanical">Mechanical</option>
-                          <option value="Electrical">Electrical</option>
-                          <option value="EV">EV</option>
-                          <option value="Fleet">Fleet</option>
-                          <option value="Speedo">Speedo</option>
-                          <option value="AC">AC</option>
-                          <option value="BodyShop">BodyShop</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-[11px] font-semibold text-slate-600 block mb-1">Bay Status</label>
-                        <select
-                          value={filterBayStatus}
-                          onChange={(e) => setFilterBayStatus(e.target.value)}
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-slate-800 focus:outline-hidden"
-                        >
-                          <option value="All">All</option>
-                          <option value="Active">Active</option>
-                          <option value="Inactive">Inactive</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-[11px] font-semibold text-slate-600 block mb-1">Bay Name</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Mechanical"
-                          value={filterBayName}
-                          onChange={(e) => setFilterBayName(e.target.value)}
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-slate-800 focus:outline-hidden"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[11px] font-semibold text-slate-600 block mb-1">Approval Status</label>
-                        <select
-                          value={filterApprovalStatus}
-                          onChange={(e) => setFilterApprovalStatus(e.target.value)}
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50/50 text-slate-800 focus:outline-hidden"
-                        >
-                          <option value="All">All</option>
-                          <option value="Approved">Approved</option>
-                          <option value="Pending Approval">Pending Approval</option>
-                          <option value="Draft">Draft</option>
-                          <option value="Rejected">Rejected</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-slate-100">
-                      <button
-                        onClick={() => {
-                          setFilterRegion('All');
-                          setFilterDealer('All');
-                          setFilterBayType('All');
-                          setFilterBayStatus('All');
-                          setFilterBayName('');
-                          setFilterApprovalStatus('All');
-                        }}
-                        className="px-4 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
-                      >
-                        Clear
-                      </button>
-                      <button
-                        onClick={() => showToast('Refreshed filtered bay list', 'info')}
-                        className="px-5 py-1.5 rounded-lg bg-[#002B49] text-white text-xs font-bold hover:bg-[#003B66] shadow-xs cursor-pointer"
-                      >
-                        Search
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Bays Table */}
-                  <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
-                    <div className="flex flex-wrap items-center justify-between p-4 border-b border-slate-200 gap-3">
-                      <h2 className="text-sm font-bold text-slate-900 tracking-tight">
-                        Workshop Bays ({filteredBays.length})
-                      </h2>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={handleCreateBay}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-2xs cursor-pointer"
-                        >
-                          <Plus className="h-3.5 w-3.5 text-blue-600" />
-                          <span>+ New Bay</span>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            masterExportUtil.exportToExcel({
-                              masterName: 'Bay Management Master',
-                              category: 'Dealer Network',
-                              buFilter: filterBayType,
-                              currentUser: { userId: currentUser.userId, name: currentUser.name },
-                              columns: [
-                                { key: 'no', label: 'No' },
-                                { key: 'region', label: 'Region' },
-                                { key: 'dealerCode', label: 'Dealer Code' },
-                                { key: 'dealerName', label: 'Dealer Name' },
-                                { key: 'bayName', label: 'Bay Name' },
-                                { key: 'bayType', label: 'Bay Type' },
-                                { key: 'floor', label: 'Floor' },
-                                { key: 'liftAvailability', label: 'Lift' },
-                                { key: 'bayStatus', label: 'Status' },
-                                { key: 'approvalStatus', label: 'Approval Status' },
-                                { key: 'techSupervisor', label: 'Tech Supervisor' },
-                                { key: 'tech1', label: 'Tech 1' },
-                                { key: 'tech2', label: 'Tech 2' },
-                              ],
-                              data: filteredBays,
-                            });
-                            showToast(`Exported ${filteredBays.length} bays to Excel`, 'success');
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-2xs cursor-pointer"
-                        >
-                          <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
-                          <span>Export to Excel</span>
-                        </button>
-
-                        <button
-                          onClick={() => setIsBayImportModalOpen(true)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-2xs cursor-pointer"
-                        >
-                          <Upload className="h-3.5 w-3.5 text-blue-600" />
-                          <span>⬆ Bulk Upload</span>
-                        </button>
-
-                        <button
-                          disabled={selectedBayIds.length === 0}
-                          onClick={handleSendForApproval}
-                          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-all ${
-                            selectedBayIds.length > 0
-                              ? 'bg-blue-900 hover:bg-blue-800 text-white cursor-pointer'
-                              : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                          }`}
-                        >
-                          <Send className="h-3.5 w-3.5" />
-                          <span>
-                            Send for Approval {selectedBayIds.length > 0 ? `(${selectedBayIds.length})` : ''}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs whitespace-nowrap">
-                        <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
-                          <tr>
-                            <th className="px-4 py-3 w-8">
-                              <span className="sr-only">Select</span>
-                            </th>
-                            <th className="px-3 py-3">No.</th>
-                            <th className="px-3 py-3">Region</th>
-                            <th className="px-3 py-3">Dealer Code</th>
-                            <th className="px-4 py-3">Dealer Name</th>
-                            <th className="px-4 py-3">Bay Name</th>
-                            <th className="px-3 py-3">Bay Type</th>
-                            <th className="px-3 py-3">Bay Status</th>
-                            <th className="px-3 py-3">Lift Type</th>
-                            <th className="px-3 py-3">Floor</th>
-                            <th className="px-3 py-3">Approval Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {filteredBays.map((b) => {
-                            const isSelectable = b.approvalStatus === 'Draft' || b.approvalStatus === 'Rejected';
-                            const isSelected = selectedBayIds.includes(b.id);
-                            const isInspecting = activeSelectedBayId === b.id;
-
-                            return (
-                              <tr
-                                key={b.id}
-                                onClick={() => setActiveSelectedBayId(b.id)}
-                                className={`transition-colors cursor-pointer ${
-                                  isInspecting
-                                    ? 'bg-blue-50/70 border-l-4 border-l-blue-600'
-                                    : 'hover:bg-slate-50/70'
-                                }`}
-                              >
-                                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    disabled={!isSelectable}
-                                    onChange={() => handleToggleSelectBay(b.id, b.approvalStatus)}
-                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
-                                  />
-                                </td>
-                                <td className="px-3 py-3 font-mono font-medium text-slate-600">{b.no}</td>
-                                <td className="px-3 py-3 text-slate-700">{b.region}</td>
-                                <td className="px-3 py-3 font-mono font-bold text-blue-900">{b.dealerCode}</td>
-                                <td className="px-4 py-3 font-medium text-slate-800">{b.dealerName}</td>
-                                <td className="px-4 py-3 font-bold text-slate-900">
-                                  <span className="flex items-center gap-1.5">
-                                    {b.bayName}
-                                    {isInspecting && (
-                                      <span className="text-[10px] text-blue-600 font-normal">(Editing)</span>
-                                    )}
-                                  </span>
-                                </td>
-                                <td className="px-3 py-3 text-slate-700">{b.bayType}</td>
-                                <td className="px-3 py-3">
-                                  <span
-                                    className={`font-semibold ${
-                                      b.bayStatus === 'Active' ? 'text-emerald-700' : 'text-slate-400'
-                                    }`}
-                                  >
-                                    {b.bayStatus}
-                                  </span>
-                                </td>
-                                <td className="px-3 py-3 text-slate-600 font-medium">{b.liftAvailability}</td>
-                                <td className="px-3 py-3 text-slate-600">{b.floor}</td>
-                                <td className="px-3 py-3">
-                                  <span
-                                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
-                                      b.approvalStatus === 'Approved'
-                                        ? 'bg-emerald-100 text-emerald-800'
-                                        : b.approvalStatus === 'Pending Approval'
-                                        ? 'bg-amber-100 text-amber-800'
-                                        : b.approvalStatus === 'Draft'
-                                        ? 'bg-slate-100 text-slate-700'
-                                        : 'bg-rose-100 text-rose-800'
-                                    }`}
-                                  >
-                                    {b.approvalStatus}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* Selected Bay Inspection Form (editable draft, saved explicitly) */}
-                  {bayDraft && (
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                          <span>Bay Inspection &amp; Hardware: {selectedBay.bayName}</span>
-                          <span className="text-[11px] px-2 py-0.2 rounded bg-blue-100 text-blue-900 font-mono font-bold">
-                            {bayDraft.dealerCode}
-                          </span>
-                        </h3>
-                        <p className="text-xs text-slate-500">
-                          Physical bay parameters, 2-post/4-post lift setup, special tooling, and floor assignments.
-                        </p>
-                      </div>
-                      <button
-                        onClick={handleSaveBay}
-                        disabled={JSON.stringify(bayDraft) === JSON.stringify(selectedBay)}
-                        className="px-4 py-1.5 bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        Save Bay Setup
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
-                      <div>
-                        <label className="text-slate-500 font-semibold block mb-1">Bay Name</label>
-                        <input
-                          type="text"
-                          value={bayDraft.bayName}
-                          onChange={(e) => setBayDraft({ ...bayDraft, bayName: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-slate-500 font-semibold block mb-1">Bay Classification</label>
-                        <select
-                          value={bayDraft.bayType}
-                          onChange={(e) => setBayDraft({ ...bayDraft, bayType: e.target.value as BayRecord['bayType'] })}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
-                        >
-                          {['Mechanical', 'Electrical', 'EV', 'Fleet', 'Speedo', 'AC', 'BodyShop'].map((t) => (
-                            <option key={t} value={t}>{t}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-slate-500 font-semibold block mb-1">Floor Level</label>
-                        <select
-                          value={bayDraft.floor}
-                          onChange={(e) => setBayDraft({ ...bayDraft, floor: e.target.value as BayRecord['floor'] })}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
-                        >
-                          {['Ground', 'Floor 1', 'Floor 2', 'Basement'].map((f) => (
-                            <option key={f} value={f}>{f}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-slate-500 font-semibold block mb-1">Lift Availability</label>
-                        <select
-                          value={bayDraft.liftAvailability}
-                          onChange={(e) =>
-                            setBayDraft({ ...bayDraft, liftAvailability: e.target.value as BayRecord['liftAvailability'] })
-                          }
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
-                        >
-                          {['No Lift', '2 post lift', '4 post lift'].map((l) => (
-                            <option key={l} value={l}>{l}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-slate-500 font-semibold block mb-1">Bay Status</label>
-                        <select
-                          value={bayDraft.bayStatus}
-                          onChange={(e) => setBayDraft({ ...bayDraft, bayStatus: e.target.value as BayRecord['bayStatus'] })}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
-                        >
-                          <option value="Active">Active</option>
-                          <option value="Inactive">Inactive</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-slate-500 font-semibold block mb-1">Technical Supervisor</label>
-                        <input
-                          type="text"
-                          value={bayDraft.techSupervisor}
-                          onChange={(e) => setBayDraft({ ...bayDraft, techSupervisor: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-slate-500 font-semibold block mb-1">Technician 1</label>
-                        <input
-                          type="text"
-                          value={bayDraft.tech1}
-                          onChange={(e) => setBayDraft({ ...bayDraft, tech1: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-slate-500 font-semibold block mb-1">Technician 2</label>
-                        <input
-                          type="text"
-                          value={bayDraft.tech2}
-                          onChange={(e) => setBayDraft({ ...bayDraft, tech2: e.target.value })}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-bold focus:border-blue-500 focus:outline-hidden"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  )}
-                </div>
+                <BayManagementConsole
+                  adminRole={adminRole}
+                  dealers={dealersList}
+                  onBulkUpload={() => setIsBayImportModalOpen(true)}
+                />
               );
             }
 
