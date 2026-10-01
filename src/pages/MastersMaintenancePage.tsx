@@ -15,6 +15,10 @@ import { DealerAppPreviewSimulator } from '../components/administration/DealerAp
 import { CreateMasterModal } from '../components/administration/CreateMasterModal';
 import { MasterWorkbookImportModal } from '../components/administration/MasterWorkbookImportModal';
 import { BayManagementConsole } from '../components/administration/BayManagementConsole';
+import { HolidayCalendarConsole } from '../components/administration/HolidayCalendarConsole';
+import { calendarKey, createSeedCalendars } from '../data/holidayData';
+import { DEALER_DIVISIONS } from '../data/bayData';
+import { DivisionCalendar, effectiveHours, toIsoDate } from '../utils/holidayCalendar';
 import { useBays } from '../context/BayContext';
 import { Actor, Bay } from '../utils/bayGovernance';
 import {
@@ -66,15 +70,6 @@ import {
 } from 'lucide-react';
 import { masterExportUtil } from '../utils/masterExportUtil';
 import { mergeImportedRecords } from '../utils/recordMerge';
-
-interface HolidayOverride {
-  id: string;
-  date: string;
-  name: string;
-  type: string;
-  hours: string;
-  isClosed: boolean;
-}
 
 // Icon helper function for rendering module icons
 const getGroupIcon = (iconName: string, className = 'h-4 w-4') => {
@@ -232,66 +227,39 @@ export const MastersMaintenancePage: React.FC = () => {
   // ---------------------------------------------------------------------------
   // HOLIDAY CALENDAR STATE (Dealer Network & Facilities)
   // ---------------------------------------------------------------------------
-  const [weeklyPattern, setWeeklyPattern] = useState([
-    { day: 'Monday', isWeekOff: false, open: '09:00', close: '19:00' },
-    { day: 'Tuesday', isWeekOff: false, open: '09:00', close: '19:00' },
-    { day: 'Wednesday', isWeekOff: false, open: '09:00', close: '19:00' },
-    { day: 'Thursday', isWeekOff: false, open: '09:00', close: '19:00' },
-    { day: 'Friday', isWeekOff: false, open: '09:00', close: '19:00' },
-    { day: 'Saturday', isWeekOff: false, open: '09:00', close: '19:00' },
-    { day: 'Sunday', isWeekOff: true, open: '09:00', close: '13:00' },
-  ]);
-
-  const [dateHolidays, setDateHolidays] = useState<HolidayOverride[]>([
-    {
-      id: 'HOL-SEP-01',
-      date: '2026-09-17',
-      name: 'Vishwakarma Jayanti',
-      type: 'Workshop Puja & Half Day',
-      hours: '09:00 - 13:00',
-      isClosed: false,
-    },
-    {
-      id: 'HOL-SEP-02',
-      date: '2026-09-28',
-      name: 'Anant Chaturdashi / Ganesh Visarjan',
-      type: 'Festival Closure',
-      hours: 'Closed',
-      isClosed: true,
-    },
-  ]);
-
-  const [holidayDraft, setHolidayDraft] = useState<{ date: string; name: string; isClosed: boolean; hours: string } | null>(null);
-
-  const handleAddHoliday = () => {
-    if (!holidayDraft) return;
-    if (!holidayDraft.date || !holidayDraft.name.trim()) {
-      showToast('Date and occasion name are required', 'error');
-      return;
+  const HOLIDAY_STORAGE_KEY = 'tml_holiday_calendar_v1';
+  const [calendars, setCalendars] = useState<Record<string, DivisionCalendar>>(() => {
+    const seed = createSeedCalendars();
+    try {
+      const saved = JSON.parse(localStorage.getItem(HOLIDAY_STORAGE_KEY) || 'null');
+      return saved && typeof saved === 'object' ? { ...seed, ...saved } : seed;
+    } catch {
+      return seed;
     }
-    if (dateHolidays.some((h) => h.date === holidayDraft.date)) {
-      showToast(`An override already exists for ${holidayDraft.date}`, 'error');
-      return;
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(HOLIDAY_STORAGE_KEY, JSON.stringify(calendars));
+    } catch {
+      // storage unavailable — keep in memory
     }
-    const entry: HolidayOverride = {
-      id: `HOL-${holidayDraft.date}`,
-      date: holidayDraft.date,
-      name: holidayDraft.name.trim(),
-      type: holidayDraft.isClosed ? 'Festival Closure' : 'Half Day Override',
-      hours: holidayDraft.isClosed ? 'Closed' : holidayDraft.hours || '09:00 - 13:00',
-      isClosed: holidayDraft.isClosed,
-    };
-    setDateHolidays((prev) => [...prev, entry].sort((a, b) => a.date.localeCompare(b.date)));
-    logAudit('Holiday Override Added', 'Masters Maintenance', `${entry.date} (${entry.name})`, 'None', entry.hours);
-    showToast(`Added ${entry.name} on ${entry.date}`, 'success');
-    setHolidayDraft(null);
-  };
+  }, [calendars]);
 
-  const handleToggleWeeklyOff = (dayName: string) => {
-    setWeeklyPattern(
-      weeklyPattern.map((d) => (d.day === dayName ? { ...d, isWeekOff: !d.isWeekOff } : d))
-    );
-  };
+  /** Flat list of every date override, for CSV / Excel exports. */
+  const holidayRows = Object.entries(calendars).flatMap(([key, cal]) => {
+    const [dealerCode, division] = key.split('|');
+    return Object.values(cal.dates)
+      .sort((x, y) => x.date.localeCompare(y.date))
+      .map((d) => ({
+        dealerCode,
+        division,
+        date: d.date,
+        name: d.name,
+        isHoliday: d.isHoliday ? 'Yes' : 'No',
+        hours: effectiveHours(d.date, cal).label,
+        remark: d.remark,
+      }));
+  });
 
   // ---------------------------------------------------------------------------
   // DEALERS REGISTRY STATE (Dealer Network & Facilities)
@@ -443,13 +411,15 @@ export const MastersMaintenancePage: React.FC = () => {
           { key: 'tech2', label: 'Tech 2' },
         ];
       } else if (m.id === 'holiday_calendar_master') {
-        recordsData = dateHolidays.map((h) => ({ ...h, isClosed: h.isClosed ? 'Closed' : 'Half Day' }));
+        recordsData = holidayRows;
         fieldsData = [
+          { key: 'dealerCode', label: 'Dealer Code' },
+          { key: 'division', label: 'Division' },
           { key: 'date', label: 'Date' },
-          { key: 'name', label: 'Occasion / Holiday Name' },
-          { key: 'type', label: 'Classification' },
-          { key: 'hours', label: 'Operating Hours' },
-          { key: 'isClosed', label: 'Status' },
+          { key: 'name', label: 'Holiday Name' },
+          { key: 'isHoliday', label: 'Holiday?' },
+          { key: 'hours', label: 'Effective Hours' },
+          { key: 'remark', label: 'Remark' },
         ];
       } else if (m.id === 'time_slot_quotas_master') {
         recordsData = timeSlots;
@@ -535,13 +505,15 @@ export const MastersMaintenancePage: React.FC = () => {
         category: 'Dealer Network',
         currentUser: { userId: currentUser.userId, name: currentUser.name },
         columns: [
-          { key: 'date', label: 'Holiday Date' },
-          { key: 'name', label: 'Occasion / Holiday Name' },
-          { key: 'type', label: 'Classification' },
-          { key: 'hours', label: 'Operating Hours' },
-          { key: 'isClosed', label: 'Full Day Closed' },
+          { key: 'dealerCode', label: 'Dealer Code' },
+          { key: 'division', label: 'Division' },
+          { key: 'date', label: 'Date' },
+          { key: 'name', label: 'Holiday Name' },
+          { key: 'isHoliday', label: 'Holiday?' },
+          { key: 'hours', label: 'Effective Hours' },
+          { key: 'remark', label: 'Remark' },
         ],
-        data: dateHolidays.map((h) => ({ ...h, isClosed: h.isClosed ? 'Yes' : 'No' })),
+        data: holidayRows,
       });
     } else if (currentMaster.id === 'time_slot_quotas_master') {
       masterExportUtil.exportToCSV({
@@ -1505,191 +1477,24 @@ export const MastersMaintenancePage: React.FC = () => {
               );
             }
 
-            // Case 2: Holiday Calendar Console
+            // Case 2: Non-Operational Hours & Holiday Calendar
             if (currentMaster.id === 'holiday_calendar_master') {
+              const scopes = dealersList
+                .filter((d) => adminRole === 'TML Admin' || d.code === dealersList[0].code)
+                .flatMap((d) =>
+                  (DEALER_DIVISIONS[d.code] ?? ['Main Workshop']).map((division) => ({
+                    key: calendarKey(d.code, division),
+                    label: `${d.name} — ${division}`,
+                  }))
+                );
               return (
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
-                    <div>
-                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                        WEEKLY OPERATING PATTERN (7 DAYS)
-                      </h3>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Standard dealership operating hours and regular weekly off schedule.
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                      {weeklyPattern.map((p) => (
-                        <div
-                          key={p.day}
-                          className={`rounded-xl border p-3.5 space-y-3 transition-all ${
-                            p.isWeekOff ? 'bg-rose-50/70 border-rose-200' : 'bg-white border-slate-200 shadow-2xs'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                            <span className="font-bold text-xs text-slate-900">{p.day}</span>
-                          </div>
-
-                          <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
-                            <input
-                              type="checkbox"
-                              checked={p.isWeekOff}
-                              onChange={() => handleToggleWeeklyOff(p.day)}
-                              className="rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
-                            />
-                            <span>Week Off</span>
-                          </label>
-
-                          <div className="space-y-2 pt-1 text-xs">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-slate-500 text-[11px]">Open</span>
-                              <input
-                                type="text"
-                                disabled={p.isWeekOff}
-                                value={p.open}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setWeeklyPattern(
-                                    weeklyPattern.map((d) => (d.day === p.day ? { ...d, open: val } : d))
-                                  );
-                                }}
-                                className={`w-20 px-2 py-1 text-xs rounded border text-center font-mono ${
-                                  p.isWeekOff ? 'bg-rose-100/40 border-rose-200 text-rose-700 opacity-60' : 'bg-slate-50 border-slate-200'
-                                }`}
-                              />
-                            </div>
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-slate-500 text-[11px]">Close</span>
-                              <input
-                                type="text"
-                                disabled={p.isWeekOff}
-                                value={p.close}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setWeeklyPattern(
-                                    weeklyPattern.map((d) => (d.day === p.day ? { ...d, close: val } : d))
-                                  );
-                                }}
-                                className={`w-20 px-2 py-1 text-xs rounded border text-center font-mono ${
-                                  p.isWeekOff ? 'bg-rose-100/40 border-rose-200 text-rose-700 opacity-60' : 'bg-slate-50 border-slate-200'
-                                }`}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                      <div>
-                        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                          DATE-SPECIFIC HOLIDAYS &amp; OVERRIDES
-                        </h3>
-                        <p className="text-xs text-slate-500">
-                          Festival closures, local state holidays, and workshop plant audit days.
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => setHolidayDraft({ date: '', name: '', isClosed: true, hours: '09:00 - 13:00' })}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs shadow-xs cursor-pointer"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        <span>Add Date Override</span>
-                      </button>
-                    </div>
-
-                    {holidayDraft && (
-                      <div className="flex flex-wrap items-end gap-3 p-3 rounded-xl border border-blue-200 bg-blue-50/50 text-xs">
-                        <div>
-                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">Date</label>
-                          <input
-                            type="date"
-                            value={holidayDraft.date}
-                            onChange={(e) => setHolidayDraft({ ...holidayDraft, date: e.target.value })}
-                            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-[180px]">
-                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">Occasion / Holiday Name</label>
-                          <input
-                            type="text"
-                            value={holidayDraft.name}
-                            placeholder="e.g. Diwali"
-                            onChange={(e) => setHolidayDraft({ ...holidayDraft, name: e.target.value })}
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white"
-                          />
-                        </div>
-                        <label className="flex items-center gap-1.5 font-semibold text-slate-700 pb-1.5">
-                          <input
-                            type="checkbox"
-                            checked={holidayDraft.isClosed}
-                            onChange={(e) => setHolidayDraft({ ...holidayDraft, isClosed: e.target.checked })}
-                          />
-                          Full day closed
-                        </label>
-                        {!holidayDraft.isClosed && (
-                          <div>
-                            <label className="block text-[11px] font-semibold text-slate-600 mb-1">Operating Hours</label>
-                            <input
-                              type="text"
-                              value={holidayDraft.hours}
-                              onChange={(e) => setHolidayDraft({ ...holidayDraft, hours: e.target.value })}
-                              className="w-32 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-mono"
-                            />
-                          </div>
-                        )}
-                        <button
-                          onClick={handleAddHoliday}
-                          className="px-3 py-1.5 rounded-lg bg-blue-900 text-white font-bold hover:bg-blue-800 cursor-pointer"
-                        >
-                          Add
-                        </button>
-                        <button
-                          onClick={() => setHolidayDraft(null)}
-                          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="rounded-xl border border-slate-200 overflow-hidden">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
-                          <tr>
-                            <th className="px-4 py-3">Date</th>
-                            <th className="px-4 py-3">Occasion / Holiday Name</th>
-                            <th className="px-4 py-3">Classification</th>
-                            <th className="px-4 py-3">Operating Hours</th>
-                            <th className="px-4 py-3">Workshop Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {dateHolidays.map((h) => (
-                            <tr key={h.id} className="hover:bg-slate-50/70">
-                              <td className="px-4 py-3 font-mono font-bold text-slate-900">{h.date}</td>
-                              <td className="px-4 py-3 font-bold text-slate-800">{h.name}</td>
-                              <td className="px-4 py-3 text-slate-600">{h.type}</td>
-                              <td className="px-4 py-3 font-mono text-slate-700">{h.hours}</td>
-                              <td className="px-4 py-3">
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                    h.isClosed ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
-                                  }`}
-                                >
-                                  {h.isClosed ? 'CLOSED (Full Day)' : 'HALF DAY OVERRIDE'}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
+                <HolidayCalendarConsole
+                  key={adminRole}
+                  scopes={scopes}
+                  calendars={calendars}
+                  onChange={(key, cal) => setCalendars((prev) => ({ ...prev, [key]: cal }))}
+                  today={toIsoDate(new Date())}
+                />
               );
             }
 

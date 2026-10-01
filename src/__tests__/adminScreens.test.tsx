@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppProvider, useApp } from '../context/AppContext';
@@ -205,7 +205,7 @@ describe('MastersMaintenancePage – bay management', () => {
     await user.type(within(form).getByLabelText(/Bay Name/), 'Mechanical Bay 03');
     expect(within(form).getByTestId('allocation-check')).toHaveTextContent('2 of 4 used');
     await user.click(within(form).getByRole('button', { name: 'Add Bay' }));
-    const row = screen.getByText('Mechanical Bay 03').closest('tr')!;
+    const row = [...document.querySelectorAll<HTMLElement>('[data-bay-id]')].find((r) => r.textContent?.includes('Mechanical Bay 03'))!;
     expect(row).toHaveTextContent('Active');
     expect(row).toHaveTextContent('Approved');
   });
@@ -233,18 +233,20 @@ describe('MastersMaintenancePage – bay management', () => {
     await openBays(user);
     await user.click(screen.getByRole('button', { name: 'Dealer Admin' }));
     const bayRow = (id: string) => document.querySelector(`[data-bay-id="${id}"]`) as HTMLElement;
+    const details = () => screen.getByTestId('bay-details');
     let row = bayRow('BAY-01');
-    await user.click(within(row).getByRole('button', { name: /Inactivate/ }));
+    await user.click(row);
+    await user.click(within(details()).getByRole('button', { name: /Inactivate/ }));
     await user.selectOptions(screen.getByLabelText(/Reason/), 'Equipment breakdown');
-    await user.click(screen.getByRole('button', { name: 'Send for Approval' }));
+    await user.click(within(screen.getByRole('form', { name: 'Change bay status' })).getByRole('button', { name: 'Send for Approval' }));
     expect(await screen.findByTestId('email-preview')).toHaveTextContent('tml.admin.support@tatamotors.com');
     await user.click(screen.getByRole('button', { name: /Done/ }));
     row = bayRow('BAY-01');
     expect(row).toHaveTextContent('Status change pending');
 
     await user.click(screen.getByRole('button', { name: 'TML Admin' }));
-    row = bayRow('BAY-02');
-    await user.click(within(row).getByRole('button', { name: /Inactivate/ }));
+    await user.click(bayRow('BAY-02'));
+    await user.click(within(details()).getByRole('button', { name: /Inactivate/ }));
     await user.selectOptions(screen.getByLabelText(/Reason/), 'Preventive maintenance');
     await user.click(screen.getByRole('button', { name: 'Make Inactive' }));
     expect(bayRow('BAY-02')).toHaveTextContent('Inactive');
@@ -254,6 +256,119 @@ describe('MastersMaintenancePage – bay management', () => {
     const user = userEvent.setup();
     await openBays(user);
     await user.selectOptions(screen.getByLabelText('Dealer'), 'DLR1002');
-    expect(screen.getByText(/Workshop Bays \(0\)/)).toBeInTheDocument();
+    expect(screen.getByTestId('bay-record-count')).toHaveTextContent('0 records');
+  });
+
+  it('filters apply on Search and reset with Clear', async () => {
+    const user = userEvent.setup();
+    await openBays(user);
+    await user.selectOptions(screen.getByLabelText('Approval Status'), 'Draft');
+    expect(screen.getByTestId('bay-record-count')).toHaveTextContent('10 records'); // not applied yet
+    await user.click(screen.getByRole('button', { name: /Search/ }));
+    expect(screen.getByTestId('bay-record-count')).toHaveTextContent('1 records');
+    await user.click(screen.getByRole('button', { name: /Clear/ }));
+    expect(screen.getByTestId('bay-record-count')).toHaveTextContent('10 records');
+  });
+
+  it('only Draft and Rejected bays can be selected; Send for Approval auto-approves within the allocation', async () => {
+    const user = userEvent.setup();
+    await openBays(user);
+    await user.click(screen.getByRole('button', { name: 'Dealer Admin' }));
+    expect(screen.getByLabelText('Select Mechanical Bay 01')).toBeDisabled(); // Approved
+    expect(screen.getByLabelText('Select Electrical Bay 01')).toBeDisabled(); // Pending
+    const send = screen.getByRole('button', { name: /Send for Approval/ });
+    expect(send).toBeDisabled();
+
+    await user.click(screen.getByLabelText('Select Quick Service Bay 01')); // Draft, Mechanical 2 of 4 used
+    await user.click(screen.getByLabelText('Select BodyShop Paint Prep 01')); // Rejected, BodyShop 1 of 2 used
+    await user.click(screen.getByRole('button', { name: 'Send for Approval (2)' }));
+    const form = screen.getByRole('form', { name: 'Send for approval' });
+    expect(within(form).getAllByText('Auto-approved (within allocation)')).toHaveLength(2);
+    await user.click(within(form).getByRole('button', { name: /Send/ }));
+
+    const row = document.querySelector('[data-bay-id="BAY-10"]') as HTMLElement;
+    expect(row).toHaveTextContent('Approved');
+    expect(row).toHaveTextContent('Active');
+    expect(document.querySelector('[data-bay-id="BAY-08"]')).toHaveTextContent('Approved');
+  });
+
+  it('a bay saved as Draft beyond the allocation needs a justification when sent', async () => {
+    const user = userEvent.setup();
+    await openBays(user);
+    await user.click(screen.getByRole('button', { name: 'Dealer Admin' }));
+    await user.click(screen.getByRole('button', { name: /New Bay/ }));
+    const form = screen.getByRole('form', { name: 'Add bay' });
+    await user.type(within(form).getByLabelText(/Bay Name/), 'Electrical Bay 02');
+    await user.selectOptions(within(form).getByLabelText('Bay Type'), 'Electrical');
+    await user.click(within(form).getByRole('button', { name: 'Save as Draft' }));
+    const row = [...document.querySelectorAll<HTMLElement>('[data-bay-id]')].find((r) => r.textContent?.includes('Electrical Bay 02'))!;
+    expect(row).toHaveTextContent('Draft');
+    expect(row).toHaveTextContent('Inactive');
+
+    await user.click(within(screen.getByTestId('bay-details')).getByRole('button', { name: 'Send for Approval' }));
+    const send = screen.getByRole('form', { name: 'Send for approval' });
+    expect(send).toHaveTextContent('To TML Network Manager');
+    await user.type(within(send).getByLabelText(/Justification/), 'New EV fleet contract');
+    await user.click(within(send).getByRole('button', { name: /Send/ }));
+    expect(await screen.findByTestId('email-preview')).toHaveTextContent('network.manager@tatamotors.com');
+  });
+});
+
+describe('MastersMaintenancePage – holiday calendar', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 10, 10, 0)); // 10 Oct 2026
+    localStorage.removeItem('tml_holiday_calendar_v1');
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const openCalendar = async (user: ReturnType<typeof userEvent.setup>) => {
+    render(
+      <AppProvider>
+        <BayProvider>
+          <MastersMaintenancePage />
+        </BayProvider>
+      </AppProvider>
+    );
+    const dealerTab = screen.getAllByRole('button').find((b) => /Dealer Network/.test(b.textContent || ''))!;
+    await user.click(dealerTab);
+    const tab = screen.getAllByRole('button').find((b) => /^Non-Operational Hours/.test(b.textContent || ''))!;
+    await user.click(tab);
+  };
+
+  it('computes effective hours, locks past dates and counts holidays for the loaded month', async () => {
+    const user = userEvent.setup();
+    await openCalendar(user);
+    expect(screen.getByText(/OCTOBER 2026/)).toBeInTheDocument();
+    expect(screen.getByTestId('holiday-count')).toHaveTextContent('2 holiday(s)'); // Gandhi Jayanti, Dussehra
+    const row = (d: string) => document.querySelector(`[data-date="${d}"]`) as HTMLElement;
+    expect(row('2026-10-02')).toHaveTextContent('Closed — Gandhi Jayanti');
+    expect(within(row('2026-10-02')).getByLabelText('2026-10-02 holiday')).toBeDisabled();
+    expect(row('2026-10-11')).toHaveTextContent('Closed — Week Off');
+    expect(row('2026-10-12')).toHaveTextContent('09:00–19:00');
+
+    await user.click(within(row('2026-10-26')).getByLabelText('2026-10-26 holiday'));
+    await user.type(within(row('2026-10-26')).getByLabelText('2026-10-26 holiday name'), 'Local festival');
+    expect(row('2026-10-26')).toHaveTextContent('Closed — Local festival');
+    expect(screen.getByTestId('holiday-count')).toHaveTextContent('3 holiday(s)');
+
+    await user.selectOptions(screen.getByLabelText('Bulk weekday'), 'Saturday');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(screen.getByTestId('holiday-count')).toHaveTextContent('7 holiday(s)'); // + 10, 17, 24, 31 Oct
+    expect(within(row('2026-10-03')).getByLabelText('2026-10-03 holiday')).not.toBeChecked(); // past
+  });
+
+  it('a week-off day in the weekly pattern closes every such date and disables its hours', async () => {
+    const user = userEvent.setup();
+    await openCalendar(user);
+    await user.click(screen.getByLabelText('Monday week off'));
+    expect(screen.getByLabelText('Monday open')).toBeDisabled();
+    expect(document.querySelector('[data-date="2026-10-12"]')).toHaveTextContent('Closed — Week Off');
+
+    await user.clear(screen.getByLabelText('Month *'));
+    await user.type(screen.getByLabelText('Month *'), '2026-11');
+    await user.click(screen.getByRole('button', { name: 'Load Calendar' }));
+    expect(screen.getByText(/NOVEMBER 2026/)).toBeInTheDocument();
+    expect(document.querySelector('[data-date="2026-11-09"]')).toHaveTextContent('09:00–14:00 (override)');
   });
 });

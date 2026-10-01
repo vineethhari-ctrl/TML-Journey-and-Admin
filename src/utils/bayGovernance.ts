@@ -8,12 +8,15 @@
  *     A dealer's change needs TML Admin approval; a TML Admin's change applies immediately.
  *     Both rules are policy switches because the BU hasn't finalised them.
  *  4. There are no "inactive from / to" dates: a bay is Active or Inactive until changed.
+ *  5. A bay can be saved as a Draft and sent later ("Send for Approval"); only Draft and
+ *     Rejected bays can be sent. Sending applies rule 2 (auto-approve within the allocation).
  */
 
 export type BU = 'PV' | 'EV' | 'CV';
 export type BayType = 'Mechanical' | 'Electrical' | 'EV' | 'Fleet' | 'Speedo' | 'AC' | 'BodyShop';
 export type BayStatus = 'Active' | 'Inactive';
-export type BayApprovalStatus = 'Approved' | 'Pending Approval' | 'Rejected';
+export type BayApprovalStatus = 'Draft' | 'Approved' | 'Pending Approval' | 'Rejected';
+export const APPROVAL_STATUSES: BayApprovalStatus[] = ['Draft', 'Approved', 'Pending Approval', 'Rejected'];
 export type Region = 'South' | 'North' | 'West' | 'East';
 
 export const BUS: BU[] = ['PV', 'EV', 'CV'];
@@ -253,6 +256,8 @@ export interface NewBayInput {
   specialEquipments?: string[];
   /** Mandatory when a dealer adds beyond the allocation. */
   justification?: string;
+  /** Save without submitting; the bay stays Inactive and doesn't use the allocation. */
+  asDraft?: boolean;
 }
 
 export const nextBayNo = (bays: Bay[]) => bays.reduce((max, b) => Math.max(max, b.no), 0) + 1;
@@ -269,7 +274,8 @@ export function addBay(state: BayState, input: NewBayInput, actor: Actor, appBas
   const key: AllocationKey = { dealerCode: input.dealerCode, division: input.division.trim(), bu: input.bu, bayType: input.bayType };
   const usage = allocationUsage(state, key);
   const withinAllocation = usage.used < usage.allocated;
-  const needsApproval = actor.role === 'DEALER_ADMIN' && !withinAllocation;
+  const asDraft = !!input.asDraft;
+  const needsApproval = !asDraft && actor.role === 'DEALER_ADMIN' && !withinAllocation;
   if (needsApproval && !input.justification?.trim()) {
     return fail(state, 'This bay is beyond the TML allocation — please give a justification for the TML Network Manager.');
   }
@@ -286,8 +292,8 @@ export function addBay(state: BayState, input: NewBayInput, actor: Actor, appBas
     bayName: name,
     bayType: input.bayType,
     // A bay awaiting approval can't be used for bookings yet
-    bayStatus: needsApproval ? 'Inactive' : 'Active',
-    approvalStatus: needsApproval ? 'Pending Approval' : 'Approved',
+    bayStatus: needsApproval || asDraft ? 'Inactive' : 'Active',
+    approvalStatus: asDraft ? 'Draft' : needsApproval ? 'Pending Approval' : 'Approved',
     floor: input.floor,
     liftAvailability: input.liftAvailability,
     specialEquipments: input.specialEquipments ?? [],
@@ -322,11 +328,53 @@ export function addBay(state: BayState, input: NewBayInput, actor: Actor, appBas
   return { ok: true, ...opened, value: { ...bay, pendingRequestId: req.id } };
 }
 
-/** Re-sends a rejected bay to the TML Network Manager with a new justification. */
-export function resubmitBay(state: BayState, bayId: string, justification: string, actor: Actor, appBaseUrl: string, now: string): Result {
+/**
+ * "Send for Approval" for a Draft or Rejected bay. Within the TML allocation (or when TML Admin
+ * sends it) the bay is approved and goes live; beyond it, it goes to the TML Network Manager.
+ */
+export function submitBay(
+  state: BayState,
+  bayId: string,
+  justification: string,
+  actor: Actor,
+  appBaseUrl: string,
+  now: string
+): Result<'APPROVED' | 'PENDING_APPROVAL'> {
   const bay = state.bays.find((b) => b.id === bayId);
   if (!bay) return fail(state, 'Bay not found.');
-  if (bay.approvalStatus !== 'Rejected') return fail(state, 'Only rejected bays can be resubmitted.');
+  if (bay.approvalStatus !== 'Draft' && bay.approvalStatus !== 'Rejected') {
+    return fail(state, `${bay.bayName}: only Draft and Rejected bays can be sent for approval.`);
+  }
+  if (bay.pendingRequestId) return fail(state, `${bay.bayName} already has a request awaiting approval.`);
+  const usage = allocationUsage(state, bay);
+  if (actor.role === 'TML_ADMIN' || usage.used < usage.allocated) {
+    const bays = state.bays.map((b) =>
+      b.id === bayId ? { ...b, approvalStatus: 'Approved' as const, bayStatus: 'Active' as const, pendingRequestId: undefined } : b
+    );
+    return { ok: true, state: { ...state, bays }, value: 'APPROVED' };
+  }
+  if (!justification.trim()) {
+    return fail(state, `${bay.bayName} is beyond the TML allocation — please give a justification for the TML Network Manager.`);
+  }
+  const res = resubmitBay(state, bayId, justification, actor, appBaseUrl, now, true);
+  return res.ok ? { ...res, value: 'PENDING_APPROVAL' } : (res as Result<any>);
+}
+
+/** Re-sends a rejected bay to the TML Network Manager with a new justification. */
+export function resubmitBay(
+  state: BayState,
+  bayId: string,
+  justification: string,
+  actor: Actor,
+  appBaseUrl: string,
+  now: string,
+  allowDraft = false
+): Result {
+  const bay = state.bays.find((b) => b.id === bayId);
+  if (!bay) return fail(state, 'Bay not found.');
+  if (bay.approvalStatus !== 'Rejected' && !(allowDraft && bay.approvalStatus === 'Draft')) {
+    return fail(state, 'Only rejected bays can be resubmitted.');
+  }
   if (!justification.trim()) return fail(state, 'A justification is required.');
   const usage = allocationUsage(state, bay);
   const req: BayRequest = {
