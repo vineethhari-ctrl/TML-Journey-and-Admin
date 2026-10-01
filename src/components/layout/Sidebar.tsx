@@ -147,7 +147,7 @@ export const Sidebar: React.FC = () => {
                 className={`w-full cursor-pointer ${navItemClass(bodyshopOpen)}`}
               >
                 <Flame className="h-4 w-4" />
-                <span className="flex-1 text-left">Bodyshop Master</span>
+                <span className="flex-1 text-left">Bodyshop Masters</span>
                 <span className="text-[9px] font-bold px-1.5 py-0.2 bg-amber-100 text-amber-900 rounded">BS</span>
               </button>
             )}

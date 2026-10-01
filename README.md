@@ -39,6 +39,15 @@ an in-screen **EQC Rule Tester** and health check — see [`docs/EQC_MASTERS.md`
 Rules: `src/utils/eqcRules.ts` (pure, unit-tested); masters: `src/data/masterCatalogue.ts`; UI: `EqcRuleTester.tsx`.
 Cross-field rules for any master go in `EQC_RECORD_RULES` and run on save and on workbook import.
 
+## Bodyshop masters
+
+Inventory Capture (Sections + Checkpoints) and Insurance Document Collection, transcribed from the BA workbook
+`Bodyshop_Master_1.xlsx`, with an **Inventory Capture Preview** and a checklist of gaps — see
+[`docs/BODYSHOP_MASTERS.md`](docs/BODYSHOP_MASTERS.md). Rules: `src/utils/bodyshopRules.ts`; cross-field rules for all
+masters are registered in `src/utils/recordRules.ts`.
+
+**Note for AI Studio / other tools:** never delete `package-lock.json` — CI (`npm ci`) and the Pages deploy fail without it.
+
 ## Conventions (please keep these)
 
 - **Routing** lives in the URL hash (`#/journey/JC…`, `#/admin/users?search=…`). Use `navigate()` from `useApp()`; pages read `?search=` via `useRouteSearchParam`.

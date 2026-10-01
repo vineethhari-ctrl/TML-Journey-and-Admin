@@ -17,7 +17,7 @@ export const NAV_PAGES: NavPage[] = [
   { route: '/admin/bay-approvals', label: 'Bay Approvals', group: 'Administration', keywords: 'bay approve reject network manager allocation inactive request' },
   { route: '/admin/masters-guide', label: 'BA Guide: Adding Masters', group: 'Administration', keywords: 'help guide template workbook import excel ba how to' },
   { route: '/admin/masters?open=eqc', label: 'EQC Masters (Electronic Quality Check)', group: 'Administration', keywords: 'eqc quality check guided gc road test ptd risk did threshold checklist schedule' },
-  { route: '/admin/masters?open=bodyshop', label: 'Bodyshop Master', group: 'Administration', keywords: 'bodyshop facility capacity tools technician paint denting jigs crash frame booth' },
+  { route: '/admin/masters?open=bodyshop', label: 'Bodyshop Masters', group: 'Administration', keywords: 'bodyshop inventory capture checkpoint section insurance document facility tools technician paint denting' },
   { route: '/admin/users', label: 'Employee / Users', group: 'Administration', keywords: 'user employee staff create' },
   { route: '/admin/roles', label: 'Roles & Access', group: 'Administration', keywords: 'permission rbac matrix' },
   { route: '/admin/devices', label: 'Devices', group: 'Administration', keywords: 'device block trust' },

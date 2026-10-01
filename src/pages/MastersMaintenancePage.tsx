@@ -16,6 +16,7 @@ import { CreateMasterModal } from '../components/administration/CreateMasterModa
 import { MasterWorkbookImportModal } from '../components/administration/MasterWorkbookImportModal';
 import { BayManagementConsole } from '../components/administration/BayManagementConsole';
 import { EqcRuleTester } from '../components/administration/EqcRuleTester';
+import { BodyshopCapturePreview } from '../components/administration/BodyshopCapturePreview';
 import { HolidayCalendarConsole } from '../components/administration/HolidayCalendarConsole';
 import { BodyshopMaster } from '../components/administration/BodyshopMaster';
 import { calendarKey, createSeedCalendars } from '../data/holidayData';
@@ -54,6 +55,7 @@ import {
   ShieldCheck,
   Package,
   ClipboardCheck,
+  Flame,
   HelpCircle,
   CheckSquare,
   Award,
@@ -85,6 +87,8 @@ const getGroupIcon = (iconName: string, className = 'h-4 w-4') => {
       return <Wrench className={className} />;
     case 'ClipboardCheck':
       return <ClipboardCheck className={className} />;
+    case 'Flame':
+      return <Flame className={className} />;
     case 'Package':
     default:
       return <Package className={className} />;
@@ -141,8 +145,8 @@ export const MastersMaintenancePage: React.FC = () => {
 
   const openBodyshop = () => {
     setActiveMainTab('catalogues');
-    setActiveLogicalGroup('Dealer Network');
-    setSelectedMasterId('bodyshop_facility_master');
+    setActiveLogicalGroup('Bodyshop');
+    setSelectedMasterId('bs_inventory_sections');
     setActiveLayout('workspace');
     setSearchQuery('');
     setOwnerFilter('ALL');
@@ -1702,6 +1706,7 @@ export const MastersMaintenancePage: React.FC = () => {
             return (
               <div className="space-y-4">
                 {currentMaster.logicalGroup === 'Electronic Quality Check' && <EqcRuleTester />}
+                {currentMaster.logicalGroup === 'Bodyshop' && <BodyshopCapturePreview />}
                 <MasterTableEditor
                   master={currentMaster}
                   isAdminTml={adminRole === 'TML Admin'}
