@@ -86,7 +86,7 @@ export interface MasterConfig {
   fields: MasterFieldDef[];
   records: Array<Record<string, any>>;
   isInteractiveSpecial?: boolean;
-  interactiveTabTarget?: 'bays' | 'calendar' | 'dealers' | 'timeslots';
+  interactiveTabTarget?: 'bays' | 'calendar' | 'dealers' | 'timeslots' | 'bodyshop';
 }
 
 export const LOGICAL_MODULES: LogicalModuleDef[] = [
@@ -600,6 +600,38 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     records: [
       { id: 'BD-01', divisionName: 'D1 - South Main', dealerName: 'Sample Motors Hyderabad', bu: 'PV + EV', bayCount: 10, mechanical: 3, bodyshop: 2, wheelAlignment: 1, electrical: 2, ac: 1, speedo: 1, fleet: 0 },
       { id: 'BD-02', divisionName: 'D2 - Express Hub', dealerName: 'Sample Motors Hyderabad', bu: 'PV + EV', bayCount: 15, mechanical: 3, bodyshop: 3, wheelAlignment: 2, electrical: 2, ac: 2, speedo: 1, fleet: 2 },
+    ],
+  },
+  {
+    id: 'bodyshop_facility_master',
+    name: 'Bodyshop Master & Facility Operations',
+    owner: 'DEALER_ADMIN',
+    category: 'BodyShop Facilities',
+    logicalGroup: 'Dealer Network',
+    moduleCode: 'bodyshop',
+    moduleName: 'BodyShop & Paint Operations',
+    isInteractiveSpecial: true,
+    interactiveTabTarget: 'bodyshop',
+    description: 'Comprehensive Body Shop facility data, capacity, specialized tools calibration, and lead technician assignments.',
+    fields: [
+      { key: 'facilityCode', label: 'Facility Code', type: 'text', mandatory: true },
+      { key: 'dealerName', label: 'Dealership Name', type: 'text', mandatory: true },
+      { key: 'divisionName', label: 'Division / Complex', type: 'text', mandatory: true },
+      { key: 'bu', label: 'BU Classification', type: 'select', options: ['PV', 'EV', 'PV + EV', 'CV'], mandatory: true },
+      { key: 'totalBays', label: 'Total Bodyshop Bays', type: 'number', mandatory: true },
+      { key: 'dentingStalls', label: 'Denting Stalls', type: 'number', mandatory: true },
+      { key: 'paintBooths', label: 'Heated Paint Booths', type: 'number', mandatory: true },
+      { key: 'prepBays', label: 'Paint Prep Bays', type: 'number', mandatory: true },
+      { key: 'chassisJigs', label: 'Chassis Alignment Jigs', type: 'number', mandatory: true },
+      { key: 'maxSimultaneousRepairs', label: 'Max Active WIP Jobs', type: 'number', mandatory: true },
+      { key: 'monthlyTargetThroughput', label: 'Monthly Throughput Target', type: 'number', mandatory: true },
+      { key: 'supervisorName', label: 'Floor Supervisor', type: 'text', mandatory: true },
+      { key: 'status', label: 'Operating Status', type: 'select', options: ['Active', 'Maintenance', 'Capacity Constrained'], mandatory: true },
+    ],
+    records: [
+      { id: 'BF-01', facilityCode: 'BS-HYD-01', dealerName: 'Sample Motors Hyderabad', divisionName: 'D1 - South Main Workshop (Basement Bodyshop Complex)', bu: 'PV + EV', totalBays: 8, dentingStalls: 4, paintBooths: 2, prepBays: 2, chassisJigs: 1, maxSimultaneousRepairs: 14, monthlyTargetThroughput: 110, supervisorName: 'Ramachandran M', status: 'Active' },
+      { id: 'BF-02', facilityCode: 'BS-HYD-02', dealerName: 'Sample Motors Hyderabad', divisionName: 'D2 - Express Hub Bodyshop Annex', bu: 'PV', totalBays: 6, dentingStalls: 3, paintBooths: 1, prepBays: 1, chassisJigs: 1, maxSimultaneousRepairs: 10, monthlyTargetThroughput: 80, supervisorName: 'K. S. Narayanan', status: 'Active' },
+      { id: 'BF-03', facilityCode: 'BS-MUM-01', dealerName: 'Fortune Cars Worli', divisionName: 'Central Mumbai Crash Repair Center', bu: 'PV + EV', totalBays: 12, dentingStalls: 6, paintBooths: 3, prepBays: 2, chassisJigs: 2, maxSimultaneousRepairs: 22, monthlyTargetThroughput: 160, supervisorName: 'Vinod Shinde', status: 'Active' },
     ],
   },
   {

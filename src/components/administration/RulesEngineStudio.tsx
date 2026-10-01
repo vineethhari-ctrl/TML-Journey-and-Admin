@@ -35,18 +35,24 @@ import {
   Layers,
   Search,
   ExternalLink,
+  Split,
 } from 'lucide-react';
+import { ABTestingConsole } from './ABTestingConsole';
+import { ApiVersionRegistryConsole } from './ApiVersionRegistryConsole';
 
 interface RulesEngineStudioProps {
   onRuleSelected?: (ruleId: string) => void;
+  onNavigateToPreview?: (module: DealerTargetModule) => void;
 }
 
-export const RulesEngineStudio: React.FC<RulesEngineStudioProps> = () => {
+export const RulesEngineStudio: React.FC<RulesEngineStudioProps> = ({ onNavigateToPreview }) => {
   const [rules, setRules] = useState<CustomFieldRuleDefinition[]>(() =>
     rulesEngineService.getAllRules()
   );
   const [selectedRuleId, setSelectedRuleId] = useState<string>(rules[0]?.id || '');
-  const [activeTab, setActiveTab] = useState<'editor' | 'sandbox' | 'raw_json'>('editor');
+  const [activeTab, setActiveTab] = useState<
+    'editor' | 'sandbox' | 'raw_json' | 'ab_testing' | 'version_releases'
+  >('editor');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterModule, setFilterModule] = useState<string>('ALL');
 
@@ -261,6 +267,30 @@ export const RulesEngineStudio: React.FC<RulesEngineStudioProps> = () => {
             >
               <Sliders className="h-3.5 w-3.5" />
               <span>Rule Builder</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('ab_testing')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                activeTab === 'ab_testing'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-indigo-200 hover:text-white'
+              }`}
+            >
+              <Split className="h-3.5 w-3.5" />
+              <span>A/B Pilots &amp; Canary</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('version_releases')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                activeTab === 'version_releases'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-indigo-200 hover:text-white'
+              }`}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              <span>API Versions</span>
             </button>
 
             <button
@@ -1131,6 +1161,20 @@ export const RulesEngineStudio: React.FC<RulesEngineStudioProps> = () => {
             />
           </div>
         </div>
+      )}
+
+      {/* ======================================================================= */}
+      {/* TAB 4: A/B TESTING EXPERIMENTS & DEPLOYMENT COHORTS                     */}
+      {/* ======================================================================= */}
+      {activeTab === 'ab_testing' && (
+        <ABTestingConsole onNavigateToPreview={onNavigateToPreview} />
+      )}
+
+      {/* ======================================================================= */}
+      {/* TAB 5: API RELEASES & SEMANTIC VERSION REGISTRY                         */}
+      {/* ======================================================================= */}
+      {activeTab === 'version_releases' && (
+        <ApiVersionRegistryConsole />
       )}
     </div>
   );

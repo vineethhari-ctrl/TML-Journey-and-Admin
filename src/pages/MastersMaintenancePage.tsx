@@ -17,6 +17,7 @@ import { MasterWorkbookImportModal } from '../components/administration/MasterWo
 import { BayManagementConsole } from '../components/administration/BayManagementConsole';
 import { EqcRuleTester } from '../components/administration/EqcRuleTester';
 import { HolidayCalendarConsole } from '../components/administration/HolidayCalendarConsole';
+import { BodyshopMaster } from '../components/administration/BodyshopMaster';
 import { calendarKey, createSeedCalendars } from '../data/holidayData';
 import { DEALER_DIVISIONS } from '../data/bayData';
 import { DivisionCalendar, effectiveHours, toIsoDate } from '../utils/holidayCalendar';
@@ -137,14 +138,28 @@ export const MastersMaintenancePage: React.FC = () => {
     setSearchQuery('');
     setOwnerFilter('ALL');
   };
-  // Sidebar "EQC Masters" while the URL is already ?open=eqc
+
+  const openBodyshop = () => {
+    setActiveMainTab('catalogues');
+    setActiveLogicalGroup('Dealer Network');
+    setSelectedMasterId('bodyshop_facility_master');
+    setActiveLayout('workspace');
+    setSearchQuery('');
+    setOwnerFilter('ALL');
+  };
+
+  // Sidebar "EQC Masters" / "Bodyshop Master" while the URL is already ?open=...
   useEffect(() => {
-    const onOpen = (e: Event) => (e as CustomEvent).detail === 'eqc' && openEqc();
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail === 'eqc') openEqc();
+      if (detail === 'bodyshop') openBodyshop();
+    };
     window.addEventListener('tml:open-masters', onOpen);
     return () => window.removeEventListener('tml:open-masters', onOpen);
   }, []);
 
-  // Deep links from the BA guide: #/admin/masters?open=create | ?open=import | ?open=bays | ?open=eqc
+  // Deep links from the BA guide: #/admin/masters?open=create | ?open=import | ?open=bays | ?open=eqc | ?open=bodyshop
   useEffect(() => {
     const open = new URLSearchParams(currentRoute.split('?')[1] || '').get('open');
     if (open === 'create') setIsCreateMasterOpen(true);
@@ -154,6 +169,7 @@ export const MastersMaintenancePage: React.FC = () => {
       setSelectedMasterId('bay_management_interactive');
       setActiveLayout('workspace');
     }
+    if (open === 'bodyshop') openBodyshop();
     if (open === 'eqc') openEqc();
     if (open === 'import') {
       if (activeRoleId === 'dealerAdmin') {
@@ -383,7 +399,7 @@ export const MastersMaintenancePage: React.FC = () => {
 
   // Masters rendered by a dedicated console keep their rows in local state, so a
   // generic upload into the catalogue copy would never show up on screen.
-  const CONSOLE_ONLY_MASTERS = ['holiday_calendar_master', 'time_slot_quotas_master', 'dealer_details_registry'];
+  const CONSOLE_ONLY_MASTERS = ['holiday_calendar_master', 'time_slot_quotas_master', 'dealer_details_registry', 'bodyshop_facility_master'];
   const openBulkUpload = (m: MasterConfig) => {
     // Same ownership rule the table editor applies to its own upload button
     if (m.owner === 'TML_ADMIN' && adminRole !== 'TML Admin') {
@@ -518,6 +534,14 @@ export const MastersMaintenancePage: React.FC = () => {
           { key: 'tech2', label: 'Tech 2' },
         ],
         data: bays,
+      });
+    } else if (currentMaster.id === 'bodyshop_facility_master') {
+      masterExportUtil.exportToCSV({
+        masterName: 'Bodyshop Facility Master',
+        category: 'Dealer Network',
+        currentUser: { userId: currentUser.userId, name: currentUser.name },
+        columns: currentMaster.fields.map((f) => ({ key: f.key, label: f.label })),
+        data: currentMaster.records,
       });
     } else if (currentMaster.id === 'holiday_calendar_master') {
       masterExportUtil.exportToCSV({
@@ -1055,7 +1079,9 @@ export const MastersMaintenancePage: React.FC = () => {
           onOpenMastersMaintenance={() => setActiveMainTab('catalogues')}
         />
       ) : activeMainTab === 'rules_engine' ? (
-        <RulesEngineStudio />
+        <RulesEngineStudio
+          onNavigateToPreview={() => setActiveMainTab('dealer_preview')}
+        />
       ) : activeMainTab === 'changelog' ? (
         <div className="space-y-4">
           <MasterChangeLogView
@@ -1487,6 +1513,15 @@ export const MastersMaintenancePage: React.FC = () => {
 
           {/* MASTER CONTENT RENDERING */}
           {(() => {
+            // Case 0: Bodyshop Master (facilities, specialized tools, lead technicians, inventory capture, insurance docs)
+            if (currentMaster.id === 'bodyshop_facility_master') {
+              return (
+                <BodyshopMaster
+                  onOpenCatalogues={() => setActiveLayout('grouped_cards')}
+                />
+              );
+            }
+
             // Case 1: Bay Management (allocation, approvals, status governance)
             if (currentMaster.id === 'bay_management_interactive') {
               return (

@@ -4,6 +4,7 @@ import {
   rulesEngineService,
   CustomFieldRuleDefinition,
   DealerTargetModule,
+  ExperimentVariant,
 } from '../../services/rulesEngineService';
 import { MasterConfig, MasterFieldDef } from '../../data/masterCatalogue';
 import {
@@ -37,6 +38,7 @@ import {
   Building,
   User,
   ArrowRight,
+  Split,
 } from 'lucide-react';
 
 interface DealerAppPreviewSimulatorProps {
@@ -211,19 +213,44 @@ export const DealerAppPreviewSimulator: React.FC<DealerAppPreviewSimulatorProps>
     setDynamicValues(activePreset.initialDynamicValues);
   }, [selectedPresetId]);
 
+  // Simulated Dealer Identification for A/B Testing Cohort Assignment
+  const [simulatedDealerId, setSimulatedDealerId] = useState('DLR-MUMBAI-01');
+  const [forcedVariant, setForcedVariant] = useState<'AUTO' | 'A' | 'B'>('AUTO');
+
+  // Dynamic A/B Testing Rule Resolution
+  const abResolution = useMemo(() => {
+    return rulesEngineService.resolveRulesWithABTesting({
+      subjectKey: simulatedDealerId,
+      dealerId: simulatedDealerId,
+      region: 'West',
+      fuelType: simulatedContext.fuel_type,
+      targetModule,
+      forceVariant: forcedVariant === 'AUTO' ? undefined : (forcedVariant as ExperimentVariant),
+    });
+  }, [simulatedDealerId, simulatedContext.fuel_type, targetModule, forcedVariant]);
+
   // Subscribe to Rules Engine rules
-  const [rules, setRules] = useState<CustomFieldRuleDefinition[]>(() =>
-    rulesEngineService.getRulesForModule(targetModule)
-  );
+  const [rules, setRules] = useState<CustomFieldRuleDefinition[]>(() => abResolution.rules);
 
   useEffect(() => {
-    // Load immediately for the newly selected screen, then keep in sync with rule edits
-    setRules(rulesEngineService.getRulesForModule(targetModule));
+    setRules(abResolution.rules);
+  }, [abResolution]);
+
+  useEffect(() => {
+    // Keep in sync with rule updates and A/B state changes
     const unsub = rulesEngineService.subscribe(() => {
-      setRules(rulesEngineService.getRulesForModule(targetModule));
+      const refreshed = rulesEngineService.resolveRulesWithABTesting({
+        subjectKey: simulatedDealerId,
+        dealerId: simulatedDealerId,
+        region: 'West',
+        fuelType: simulatedContext.fuel_type,
+        targetModule,
+        forceVariant: forcedVariant === 'AUTO' ? undefined : (forcedVariant as ExperimentVariant),
+      });
+      setRules(refreshed.rules);
     });
     return unsub;
-  }, [targetModule]);
+  }, [simulatedDealerId, simulatedContext.fuel_type, targetModule, forcedVariant]);
 
   // Aggregate custom fields from masterConfigs with displayInDealerApp: true
   const masterCustomFields = useMemo(() => {
@@ -322,6 +349,39 @@ export const DealerAppPreviewSimulator: React.FC<DealerAppPreviewSimulatorProps>
     setTimeout(() => setPublishSuccess(false), 4000);
   };
 
+  // Action: Submit Form in Simulator and Record A/B Telemetry
+  const handleSimulateFormSubmit = () => {
+    if (!isValidOverall) {
+      if (abResolution.activeExperiment) {
+        rulesEngineService.recordExperimentMetric(
+          abResolution.activeExperiment.id,
+          abResolution.activeExperiment.variant,
+          'error'
+        );
+      }
+      showToast(`Cannot submit: ${invalidRules.length} validation error(s) in form`, 'error');
+      return;
+    }
+
+    if (abResolution.activeExperiment) {
+      rulesEngineService.recordExperimentMetric(
+        abResolution.activeExperiment.id,
+        abResolution.activeExperiment.variant,
+        'submission',
+        Math.floor(25 + Math.random() * 30)
+      );
+    }
+
+    showToast(
+      `Job Card submitted successfully under ${
+        abResolution.activeExperiment
+          ? `A/B Variant ${abResolution.activeExperiment.variant} (${abResolution.resolvedVersion})`
+          : `Version ${abResolution.resolvedVersion}`
+      }! Live telemetry metric recorded.`,
+      'success'
+    );
+  };
+
   // Compute container width based on device emulation
   const getDeviceFrameStyles = () => {
     switch (deviceMode) {
@@ -412,6 +472,25 @@ export const DealerAppPreviewSimulator: React.FC<DealerAppPreviewSimulatorProps>
             <option value="workshop_floor">Target: Workshop Floor &amp; Bays</option>
             <option value="general">Target: All Dealer Views (General)</option>
           </select>
+
+          {/* Dealer Cohort Selector for A/B Testing */}
+          <div className="flex items-center gap-1.5 bg-blue-950/80 px-2.5 py-1 rounded-xl border border-blue-400/30 text-xs">
+            <span className="text-[10px] text-blue-300 font-semibold flex items-center gap-1">
+              <Building className="h-3 w-3" />
+              <span>Simulated Dealer:</span>
+            </span>
+            <select
+              value={simulatedDealerId}
+              onChange={(e) => setSimulatedDealerId(e.target.value)}
+              className="bg-transparent text-white font-mono text-[11px] font-bold focus:outline-hidden cursor-pointer"
+            >
+              <option value="DLR-MUMBAI-01" className="bg-slate-900 text-white">DLR-MUMBAI-01 (West)</option>
+              <option value="DLR-PUNE-02" className="bg-slate-900 text-white">DLR-PUNE-02 (West)</option>
+              <option value="DLR-DELHI-03" className="bg-slate-900 text-white">DLR-DELHI-03 (North)</option>
+              <option value="DLR-BLR-04" className="bg-slate-900 text-white">DLR-BLR-04 (South)</option>
+              <option value="DLR-KOL-05" className="bg-slate-900 text-white">DLR-KOL-05 (East)</option>
+            </select>
+          </div>
 
           {/* Publish Action */}
           <button
@@ -734,6 +813,75 @@ export const DealerAppPreviewSimulator: React.FC<DealerAppPreviewSimulatorProps>
                 </div>
               </div>
 
+              {/* Active A/B Testing Pilot Banner in Dealer App Canvas */}
+              {abResolution.activeExperiment && (
+                <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 text-white rounded-xl p-3.5 border border-indigo-500/50 shadow-xs space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">
+                        <Split className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-extrabold text-xs text-white tracking-tight">
+                            A/B PILOT ACTIVE: {abResolution.activeExperiment.name}
+                          </span>
+                          <span className="px-1.5 py-0.2 rounded font-mono font-bold text-[9px] bg-indigo-500/30 text-indigo-200 border border-indigo-400/40">
+                            {abResolution.activeExperiment.id}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-indigo-200/80 flex items-center gap-2 mt-0.5">
+                          <span>
+                            Serving: <strong className="text-white">Variant {abResolution.activeExperiment.variant}</strong> ({abResolution.resolvedVersion})
+                          </span>
+                          <span>&bull;</span>
+                          <span>Traffic Allocation: {100 - abResolution.activeExperiment.trafficSplitPercentB}% A / {abResolution.activeExperiment.trafficSplitPercentB}% B</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Variant Switcher Toggle */}
+                    <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-indigo-400/30 text-[10px]">
+                      <span className="text-indigo-300 px-1 font-semibold">Cohort:</span>
+                      <button
+                        type="button"
+                        onClick={() => setForcedVariant('AUTO')}
+                        className={`px-2 py-0.5 rounded font-bold cursor-pointer transition-all ${
+                          forcedVariant === 'AUTO'
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-indigo-200 hover:text-white'
+                        }`}
+                        title="Automatic deterministic assignment based on simulated dealer code"
+                      >
+                        Auto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForcedVariant('A')}
+                        className={`px-2 py-0.5 rounded font-bold cursor-pointer transition-all ${
+                          forcedVariant === 'A'
+                            ? 'bg-slate-700 text-white'
+                            : 'text-indigo-200 hover:text-white'
+                        }`}
+                      >
+                        Force A ({abResolution.activeExperiment.controlVersion})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForcedVariant('B')}
+                        className={`px-2 py-0.5 rounded font-bold cursor-pointer transition-all ${
+                          forcedVariant === 'B'
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-indigo-200 hover:text-white'
+                        }`}
+                      >
+                        Force B ({abResolution.activeExperiment.variantVersion})
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* DYNAMIC PARAMETERS ENGINE SECTION (Live Tested Component) */}
               <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
                 <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-4 py-2.5 flex items-center justify-between">
@@ -865,6 +1013,34 @@ export const DealerAppPreviewSimulator: React.FC<DealerAppPreviewSimulatorProps>
                       </p>
                     </div>
                   )}
+
+                  {/* Simulator Form Actions & Telemetry Submission */}
+                  <div className="pt-2 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                      <Shield className="h-3.5 w-3.5 text-blue-700" />
+                      <span>
+                        Runtime Version: <strong className="font-mono text-slate-800">{abResolution.resolvedVersion}</strong>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleResetValues}
+                        className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
+                      >
+                        Reset Form
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSimulateFormSubmit}
+                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold shadow-xs cursor-pointer transition-all"
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        <span>Submit Job Card &amp; Log Telemetry</span>
+                      </button>
+                    </div>
+                  </div>
 
                   {/* Simulator Testing Footnote */}
                   <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 text-[11px] text-slate-500 flex items-center justify-between">

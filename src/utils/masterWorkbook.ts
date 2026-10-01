@@ -41,6 +41,7 @@ export const PROTECTED_MASTER_IDS = [
   'holiday_calendar_master',
   'time_slot_quotas_master',
   'dealer_details_registry',
+  'bodyshop_facility_master',
 ];
 
 const MASTER_ID_RE = /^[a-z][a-z0-9_]{2,30}$/;

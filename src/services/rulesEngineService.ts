@@ -182,7 +182,88 @@ export interface VersionComparisonResult {
   diffs: VersionDiffItem[];
 }
 
+// =========================================================================
+// A/B TESTING DATA STRUCTURES & PILOT DEPLOYMENT
+// =========================================================================
+
+export type ExperimentStatus = 'DRAFT' | 'RUNNING' | 'PAUSED' | 'CONCLUDED';
+export type ExperimentVariant = 'A' | 'B';
+
+export interface ExperimentTargetingCriteria {
+  dealers?: string[];
+  regions?: string[];
+  fuelTypes?: string[];
+  userRoles?: string[];
+}
+
+export interface ExperimentMetrics {
+  impressionsA: number;
+  impressionsB: number;
+  submissionsA: number;
+  submissionsB: number;
+  validationErrorsA: number;
+  validationErrorsB: number;
+  totalDurationSecA: number;
+  totalDurationSecB: number;
+}
+
+export interface ABExperiment {
+  id: string;
+  name: string;
+  description: string;
+  targetModule: DealerTargetModule | 'all';
+  status: ExperimentStatus;
+  startDate: string;
+  endDate?: string;
+  controlVersion: string; // e.g. "v1.1.0" (Variant A)
+  variantVersion: string; // e.g. "v2.0.0-rc1" (Variant B)
+  trafficSplitPercentB: number; // e.g. 50 (50% traffic goes to B)
+  targeting?: ExperimentTargetingCriteria;
+  metrics: ExperimentMetrics;
+  winningVariant?: ExperimentVariant;
+  concludedDate?: string;
+  concludedBy?: string;
+  rolloutDecisionNotes?: string;
+  createdBy: string;
+  lastUpdated: string;
+}
+
+export interface ExperimentVariantAnalysis {
+  experimentId: string;
+  variantA: {
+    version: string;
+    ruleCount: number;
+    impressions: number;
+    submissions: number;
+    validationErrors: number;
+    submissionRatePercent: number;
+    errorRatePercent: number;
+    avgDurationSeconds: number;
+  };
+  variantB: {
+    version: string;
+    ruleCount: number;
+    impressions: number;
+    submissions: number;
+    validationErrors: number;
+    submissionRatePercent: number;
+    errorRatePercent: number;
+    avgDurationSeconds: number;
+  };
+  diffSummary: {
+    totalDifferences: number;
+    breakingChangesCount: number;
+    fieldsAdded: string[];
+    fieldsRemoved: string[];
+    fieldsModified: string[];
+  };
+  recommendedWinner: 'A' | 'B' | 'INCONCLUSIVE';
+  confidenceScore: number;
+  recommendationReason: string;
+}
+
 const STORAGE_KEY = 'tata_motors_rules_engine_definitions_v2';
+const AB_EXPERIMENTS_KEY = 'tata_motors_rules_ab_experiments_v2';
 
 const isBlank = (v: any) => v === undefined || v === null || String(v).trim() === '';
 const ACTIVE_VERSION_KEY = 'tata_motors_rules_engine_active_version_v2';
@@ -577,8 +658,70 @@ export const DEFAULT_API_VERSION_RELEASES: ApiVersionRelease[] = [
 
 export const DEFAULT_AUTOMOTIVE_RULES = BASE_RULES_V1_1;
 
+export const DEFAULT_AB_EXPERIMENTS: ABExperiment[] = [
+  {
+    id: 'EXP-EV-INSPECTION-V2',
+    name: 'Next-Gen EV Safety & High-Voltage Telemetry Pilot',
+    description:
+      'A/B comparison of mandatory High-Voltage Insulation Resistance checks (v2.0.0-rc1) versus standard battery health baseline (v1.1.0) before nationwide dealer rollout.',
+    targetModule: 'all',
+    status: 'RUNNING',
+    startDate: '2026-09-20',
+    controlVersion: 'v1.1.0',
+    variantVersion: 'v2.0.0-rc1',
+    trafficSplitPercentB: 50,
+    targeting: {
+      fuelTypes: ['EV'],
+      regions: ['West', 'North'],
+    },
+    metrics: {
+      impressionsA: 184,
+      impressionsB: 180,
+      submissionsA: 172,
+      submissionsB: 171,
+      validationErrorsA: 9,
+      validationErrorsB: 12,
+      totalDurationSecA: 7740,
+      totalDurationSecB: 8160,
+    },
+    createdBy: 'TML-SAFETY-COMM',
+    lastUpdated: '2026-09-30 14:00:00',
+  },
+  {
+    id: 'EXP-FASTAG-RECEPTION-V1',
+    name: 'Workshop Reception FASTag Windshield RFID Validation',
+    description:
+      'Evaluated 16-digit RFID windshield transponder parameter against legacy free-form entry at workshop arrival gates.',
+    targetModule: 'reception',
+    status: 'CONCLUDED',
+    startDate: '2026-09-01',
+    endDate: '2026-09-14',
+    controlVersion: 'v1.0.0',
+    variantVersion: 'v1.1.0',
+    trafficSplitPercentB: 50,
+    metrics: {
+      impressionsA: 420,
+      impressionsB: 435,
+      submissionsA: 388,
+      submissionsB: 426,
+      validationErrorsA: 41,
+      validationErrorsB: 8,
+      totalDurationSecA: 15520,
+      totalDurationSecB: 12780,
+    },
+    winningVariant: 'B',
+    concludedDate: '2026-09-15',
+    concludedBy: 'TML-CENTRAL-SERVICES',
+    rolloutDecisionNotes:
+      'Variant B increased automated gate check-in accuracy by 32% and lowered data errors from 9.7% to 1.8%. Fully promoted to active production release.',
+    createdBy: 'TML-CENTRAL-SERVICES',
+    lastUpdated: '2026-09-15 10:00:00',
+  },
+];
+
 class RulesEngineService {
   private releases: ApiVersionRelease[] = [];
+  private experiments: ABExperiment[] = [];
   private activeVersionStr: string = 'v1.1.0';
   private listeners: Array<() => void> = [];
 
@@ -587,12 +730,13 @@ class RulesEngineService {
   }
 
   /**
-   * Load releases and active version from storage or initialize defaults
+   * Load releases, experiments, and active version from storage or initialize defaults
    */
   private loadState(): void {
     try {
       const storedReleases = localStorage.getItem(VERSION_HISTORY_KEY);
       const storedActiveVersion = localStorage.getItem(ACTIVE_VERSION_KEY);
+      const storedExperiments = localStorage.getItem(AB_EXPERIMENTS_KEY);
 
       if (storedReleases) {
         const parsed = JSON.parse(storedReleases);
@@ -605,6 +749,17 @@ class RulesEngineService {
         this.releases = JSON.parse(JSON.stringify(DEFAULT_API_VERSION_RELEASES));
       }
 
+      if (storedExperiments) {
+        const parsedExp = JSON.parse(storedExperiments);
+        if (Array.isArray(parsedExp) && parsedExp.length > 0) {
+          this.experiments = parsedExp;
+        }
+      }
+
+      if (this.experiments.length === 0) {
+        this.experiments = JSON.parse(JSON.stringify(DEFAULT_AB_EXPERIMENTS));
+      }
+
       if (storedActiveVersion && this.releases.some((r) => r.version === storedActiveVersion)) {
         this.activeVersionStr = storedActiveVersion;
       } else {
@@ -612,8 +767,9 @@ class RulesEngineService {
         this.activeVersionStr = activeRelease.version;
       }
     } catch (err) {
-      console.warn('Failed to load version history, initializing defaults:', err);
+      console.warn('Failed to load version history or experiments, initializing defaults:', err);
       this.releases = JSON.parse(JSON.stringify(DEFAULT_API_VERSION_RELEASES));
+      this.experiments = JSON.parse(JSON.stringify(DEFAULT_AB_EXPERIMENTS));
       this.activeVersionStr = 'v1.1.0';
     }
 
@@ -624,6 +780,7 @@ class RulesEngineService {
     try {
       localStorage.setItem(VERSION_HISTORY_KEY, JSON.stringify(this.releases));
       localStorage.setItem(ACTIVE_VERSION_KEY, this.activeVersionStr);
+      localStorage.setItem(AB_EXPERIMENTS_KEY, JSON.stringify(this.experiments));
       // Backwards-compatible legacy key storage for the active rules list
       const activeRelease = this.getActiveApiVersion();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(activeRelease.rules));
@@ -1130,8 +1287,403 @@ class RulesEngineService {
 
   public resetToDefaults(): void {
     this.releases = JSON.parse(JSON.stringify(DEFAULT_API_VERSION_RELEASES));
+    this.experiments = JSON.parse(JSON.stringify(DEFAULT_AB_EXPERIMENTS));
     this.activeVersionStr = 'v1.1.0';
     this.saveState();
+  }
+
+  // =========================================================================
+  // A/B TESTING EXPERIMENTS MANAGEMENT & RESOLUTION
+  // =========================================================================
+
+  public getAllExperiments(): ABExperiment[] {
+    return JSON.parse(JSON.stringify(this.experiments));
+  }
+
+  public getExperimentById(id: string): ABExperiment | undefined {
+    return this.experiments.find((e) => e.id === id);
+  }
+
+  public createExperiment(data: Partial<ABExperiment>): {
+    success: boolean;
+    experiment?: ABExperiment;
+    error?: string;
+  } {
+    if (!data.name || !data.controlVersion || !data.variantVersion) {
+      return { success: false, error: 'Name, control version, and variant version are required.' };
+    }
+    if (!this.releases.some((r) => r.version === data.controlVersion)) {
+      return { success: false, error: `Control version "${data.controlVersion}" does not exist in release registry.` };
+    }
+    if (!this.releases.some((r) => r.version === data.variantVersion)) {
+      return { success: false, error: `Variant version "${data.variantVersion}" does not exist in release registry.` };
+    }
+    if (data.controlVersion === data.variantVersion) {
+      return { success: false, error: 'Control version (A) and variant version (B) must be different.' };
+    }
+
+    const id = data.id || `EXP-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 1000)}`;
+    const newExp: ABExperiment = {
+      id,
+      name: data.name.trim(),
+      description: data.description?.trim() || '',
+      targetModule: data.targetModule || 'all',
+      status: data.status || 'DRAFT',
+      startDate: data.startDate || new Date().toISOString().substring(0, 10),
+      endDate: data.endDate,
+      controlVersion: data.controlVersion,
+      variantVersion: data.variantVersion,
+      trafficSplitPercentB:
+        typeof data.trafficSplitPercentB === 'number'
+          ? Math.max(0, Math.min(100, data.trafficSplitPercentB))
+          : 50,
+      targeting: data.targeting || {},
+      metrics: {
+        impressionsA: 0,
+        impressionsB: 0,
+        submissionsA: 0,
+        submissionsB: 0,
+        validationErrorsA: 0,
+        validationErrorsB: 0,
+        totalDurationSecA: 0,
+        totalDurationSecB: 0,
+      },
+      createdBy: data.createdBy || 'TML-ADMIN',
+      lastUpdated: new Date().toISOString().replace('T', ' ').substring(0, 19),
+    };
+
+    this.experiments.unshift(newExp);
+    this.saveState();
+    return { success: true, experiment: newExp };
+  }
+
+  public updateExperiment(experiment: ABExperiment): boolean {
+    const idx = this.experiments.findIndex((e) => e.id === experiment.id);
+    if (idx >= 0) {
+      this.experiments[idx] = {
+        ...experiment,
+        lastUpdated: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      };
+      this.saveState();
+      return true;
+    }
+    return false;
+  }
+
+  public startExperiment(id: string): boolean {
+    const exp = this.experiments.find((e) => e.id === id);
+    if (exp) {
+      exp.status = 'RUNNING';
+      exp.lastUpdated = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      this.saveState();
+      return true;
+    }
+    return false;
+  }
+
+  public pauseExperiment(id: string): boolean {
+    const exp = this.experiments.find((e) => e.id === id);
+    if (exp) {
+      exp.status = 'PAUSED';
+      exp.lastUpdated = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      this.saveState();
+      return true;
+    }
+    return false;
+  }
+
+  public deleteExperiment(id: string): boolean {
+    const prev = this.experiments.length;
+    this.experiments = this.experiments.filter((e) => e.id !== id);
+    if (this.experiments.length !== prev) {
+      this.saveState();
+      return true;
+    }
+    return false;
+  }
+
+  public concludeExperiment(
+    id: string,
+    winningVariant: ExperimentVariant,
+    deployWinnerToActive: boolean = false,
+    decisionNotes?: string,
+    user: string = 'TML-ADMIN'
+  ): { success: boolean; message: string } {
+    const exp = this.experiments.find((e) => e.id === id);
+    if (!exp) {
+      return { success: false, message: 'Experiment not found.' };
+    }
+
+    exp.status = 'CONCLUDED';
+    exp.winningVariant = winningVariant;
+    exp.concludedDate = new Date().toISOString().substring(0, 10);
+    exp.concludedBy = user;
+    exp.rolloutDecisionNotes =
+      decisionNotes || `Concluded with winning variant ${winningVariant}.`;
+    exp.lastUpdated = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+    let deployMessage = '';
+    if (deployWinnerToActive) {
+      const winnerVersion = winningVariant === 'A' ? exp.controlVersion : exp.variantVersion;
+      this.setActiveApiVersion(winnerVersion, user);
+      deployMessage = ` Winning version ${winnerVersion} has been promoted to ACTIVE Production release pan-India!`;
+    }
+
+    this.saveState();
+    return {
+      success: true,
+      message: `Experiment "${exp.name}" successfully concluded.${deployMessage}`,
+    };
+  }
+
+  /**
+   * Deterministically assigns Variant A or Variant B for a given subject key (dealer ID, VIN, user ID).
+   * Uses a stable hashing function so the same entity consistently experiences the same variant.
+   */
+  public assignVariant(experiment: ABExperiment, subjectKey: string): ExperimentVariant {
+    let hash = 0;
+    const str = `${experiment.id}:${subjectKey || 'default'}`;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+    }
+    const bucket = Math.abs(hash) % 100;
+    return bucket < experiment.trafficSplitPercentB ? 'B' : 'A';
+  }
+
+  /**
+   * Finds the active running experiment matching the current context and resolves the assigned variant
+   */
+  public getActiveExperimentForContext(context: {
+    subjectKey?: string;
+    dealerId?: string;
+    region?: string;
+    fuelType?: string;
+    userRole?: string;
+    targetModule?: DealerTargetModule;
+  }): {
+    experiment: ABExperiment;
+    assignedVariant: ExperimentVariant;
+    assignedVersion: string;
+    rules: CustomFieldRuleDefinition[];
+  } | null {
+    const running = this.experiments.filter((e) => e.status === 'RUNNING');
+    if (running.length === 0) return null;
+
+    for (const exp of running) {
+      // Check target module
+      if (exp.targetModule !== 'all' && context.targetModule && exp.targetModule !== context.targetModule) {
+        continue;
+      }
+
+      // Check targeting criteria
+      const t = exp.targeting;
+      if (t) {
+        if (t.dealers && t.dealers.length > 0 && context.dealerId && !t.dealers.includes(context.dealerId)) {
+          continue;
+        }
+        if (t.regions && t.regions.length > 0 && context.region && !t.regions.includes(context.region)) {
+          continue;
+        }
+        if (t.fuelTypes && t.fuelTypes.length > 0 && context.fuelType) {
+          const matchFuel = t.fuelTypes.some((f) => f.toLowerCase() === context.fuelType!.toLowerCase());
+          if (!matchFuel) continue;
+        }
+        if (t.userRoles && t.userRoles.length > 0 && context.userRole && !t.userRoles.includes(context.userRole)) {
+          continue;
+        }
+      }
+
+      // Match found! Assign variant
+      const subject = context.subjectKey || context.dealerId || 'session-default';
+      const variant = this.assignVariant(exp, subject);
+      const assignedVersion = variant === 'A' ? exp.controlVersion : exp.variantVersion;
+      const rules = this.getRulesForVersion(assignedVersion, context.targetModule);
+
+      return {
+        experiment: exp,
+        assignedVariant: variant,
+        assignedVersion,
+        rules,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Resolves field rules taking active A/B experiments into account with fallback to active release
+   */
+  public resolveRulesWithABTesting(context: {
+    subjectKey?: string;
+    dealerId?: string;
+    region?: string;
+    fuelType?: string;
+    userRole?: string;
+    targetModule?: DealerTargetModule;
+    forceVariant?: ExperimentVariant;
+  }): {
+    rules: CustomFieldRuleDefinition[];
+    resolvedVersion: string;
+    activeExperiment?: {
+      id: string;
+      name: string;
+      variant: ExperimentVariant;
+      controlVersion: string;
+      variantVersion: string;
+      trafficSplitPercentB: number;
+    };
+  } {
+    const abResult = this.getActiveExperimentForContext(context);
+    if (abResult) {
+      const variant = context.forceVariant || abResult.assignedVariant;
+      const resolvedVersion =
+        variant === 'A' ? abResult.experiment.controlVersion : abResult.experiment.variantVersion;
+      const rules = this.getRulesForVersion(resolvedVersion, context.targetModule);
+
+      return {
+        rules,
+        resolvedVersion,
+        activeExperiment: {
+          id: abResult.experiment.id,
+          name: abResult.experiment.name,
+          variant,
+          controlVersion: abResult.experiment.controlVersion,
+          variantVersion: abResult.experiment.variantVersion,
+          trafficSplitPercentB: abResult.experiment.trafficSplitPercentB,
+        },
+      };
+    }
+
+    // No active experiment matching context, use standard active version rules
+    const active = this.getActiveApiVersion();
+    const rules = this.getRulesForVersion(active.version, context.targetModule);
+    return {
+      rules,
+      resolvedVersion: active.version,
+    };
+  }
+
+  /**
+   * Records live telemetry metrics for A/B testing evaluation
+   */
+  public recordExperimentMetric(
+    experimentId: string,
+    variant: ExperimentVariant,
+    metricType: 'impression' | 'submission' | 'error',
+    durationSeconds: number = 0
+  ): boolean {
+    const exp = this.experiments.find((e) => e.id === experimentId);
+    if (!exp) return false;
+
+    if (!exp.metrics) {
+      exp.metrics = {
+        impressionsA: 0,
+        impressionsB: 0,
+        submissionsA: 0,
+        submissionsB: 0,
+        validationErrorsA: 0,
+        validationErrorsB: 0,
+        totalDurationSecA: 0,
+        totalDurationSecB: 0,
+      };
+    }
+
+    if (variant === 'A') {
+      if (metricType === 'impression') exp.metrics.impressionsA += 1;
+      if (metricType === 'submission') exp.metrics.submissionsA += 1;
+      if (metricType === 'error') exp.metrics.validationErrorsA += 1;
+      if (durationSeconds > 0) exp.metrics.totalDurationSecA += durationSeconds;
+    } else {
+      if (metricType === 'impression') exp.metrics.impressionsB += 1;
+      if (metricType === 'submission') exp.metrics.submissionsB += 1;
+      if (metricType === 'error') exp.metrics.validationErrorsB += 1;
+      if (durationSeconds > 0) exp.metrics.totalDurationSecB += durationSeconds;
+    }
+
+    exp.lastUpdated = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    this.saveState();
+    return true;
+  }
+
+  /**
+   * Analyzes experiment metrics and performs semantic diff to provide data-backed rollout recommendations
+   */
+  public compareExperimentVariants(experimentId: string): ExperimentVariantAnalysis | null {
+    const exp = this.experiments.find((e) => e.id === experimentId);
+    if (!exp) return null;
+
+    const controlRules = this.getRulesForVersion(exp.controlVersion);
+    const variantRules = this.getRulesForVersion(exp.variantVersion);
+    const diff = this.compareVersions(exp.controlVersion, exp.variantVersion);
+
+    const m = exp.metrics;
+    const subRateA = m.impressionsA > 0 ? (m.submissionsA / m.impressionsA) * 100 : 0;
+    const subRateB = m.impressionsB > 0 ? (m.submissionsB / m.impressionsB) * 100 : 0;
+
+    const errRateA = m.impressionsA > 0 ? (m.validationErrorsA / m.impressionsA) * 100 : 0;
+    const errRateB = m.impressionsB > 0 ? (m.validationErrorsB / m.impressionsB) * 100 : 0;
+
+    const avgDurA = m.submissionsA > 0 ? Math.round(m.totalDurationSecA / m.submissionsA) : 0;
+    const avgDurB = m.submissionsB > 0 ? Math.round(m.totalDurationSecB / m.submissionsB) : 0;
+
+    // Recommendation logic based on submission rate, errors and sample volume
+    const totalImpressions = m.impressionsA + m.impressionsB;
+    let recommendedWinner: 'A' | 'B' | 'INCONCLUSIVE' = 'INCONCLUSIVE';
+    let confidenceScore = 50;
+    let recommendationReason = 'Insufficient data sample collected (< 50 impressions per variant).';
+
+    if (totalImpressions >= 60) {
+      const submissionLift = subRateB - subRateA;
+      const errorDelta = errRateB - errRateA;
+
+      if (submissionLift >= 0 && errorDelta <= 5) {
+        recommendedWinner = 'B';
+        confidenceScore = Math.min(98, 70 + Math.round(submissionLift * 4) + Math.round(totalImpressions / 20));
+        recommendationReason = `Challenger Variant B (${exp.variantVersion}) demonstrates strong operational performance with ${subRateB.toFixed(1)}% submission rate and controlled error rate (${errRateB.toFixed(1)}%). Recommended for PAN-India promotion.`;
+      } else if (submissionLift < -5 || errorDelta > 15) {
+        recommendedWinner = 'A';
+        confidenceScore = 88;
+        recommendationReason = `Control Variant A (${exp.controlVersion}) outperformed Variant B due to lower error rates (${errRateA.toFixed(1)}% vs ${errRateB.toFixed(1)}%). Review validation rules in Variant B before attempting further rollout.`;
+      } else {
+        recommendedWinner = 'B';
+        confidenceScore = 74;
+        recommendationReason = `Variant B shows acceptable compliance across dealer test cohort with comparable completion metrics to baseline.`;
+      }
+    }
+
+    return {
+      experimentId: exp.id,
+      variantA: {
+        version: exp.controlVersion,
+        ruleCount: controlRules.length,
+        impressions: m.impressionsA,
+        submissions: m.submissionsA,
+        validationErrors: m.validationErrorsA,
+        submissionRatePercent: Math.round(subRateA * 10) / 10,
+        errorRatePercent: Math.round(errRateA * 10) / 10,
+        avgDurationSeconds: avgDurA,
+      },
+      variantB: {
+        version: exp.variantVersion,
+        ruleCount: variantRules.length,
+        impressions: m.impressionsB,
+        submissions: m.submissionsB,
+        validationErrors: m.validationErrorsB,
+        submissionRatePercent: Math.round(subRateB * 10) / 10,
+        errorRatePercent: Math.round(errRateB * 10) / 10,
+        avgDurationSeconds: avgDurB,
+      },
+      diffSummary: {
+        totalDifferences: diff.totalChangesCount,
+        breakingChangesCount: diff.breakingChangesCount,
+        fieldsAdded: diff.diffs.filter((d) => d.changeType === 'ADDED').map((d) => d.label),
+        fieldsRemoved: diff.diffs.filter((d) => d.changeType === 'REMOVED').map((d) => d.label),
+        fieldsModified: diff.diffs.filter((d) => d.changeType === 'MODIFIED').map((d) => d.label),
+      },
+      recommendedWinner,
+      confidenceScore,
+      recommendationReason,
+    };
   }
 
   public exportRulesJSON(): string {

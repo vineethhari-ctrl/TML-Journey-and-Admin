@@ -15,6 +15,7 @@ import {
   BookOpen,
   ClipboardCheck,
   ListChecks,
+  Flame,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useBays } from '../../context/BayContext';
@@ -24,8 +25,9 @@ export const Sidebar: React.FC = () => {
   const pendingBayRequests = useBays().requests.filter((r) => r.status === 'PENDING').length;
 
   const eqcOpen = currentRoute.startsWith('/admin/masters?') && currentRoute.includes('open=eqc');
+  const bodyshopOpen = currentRoute.startsWith('/admin/masters?') && currentRoute.includes('open=bodyshop');
   const isCurrent = (route: string) => {
-    if (route === '/admin/masters' && eqcOpen) return false;
+    if (route === '/admin/masters' && (eqcOpen || bodyshopOpen)) return false;
     if (route === '/journey' && (currentRoute === '/journey' || currentRoute.startsWith('/journey?'))) return true;
     if (route === '/journey/JC20260930001234' && currentRoute.startsWith('/journey/')) return true;
     return currentRoute.split('?')[0] === route;
@@ -133,6 +135,20 @@ export const Sidebar: React.FC = () => {
                 <ListChecks className="h-4 w-4" />
                 <span className="flex-1 text-left">EQC Masters</span>
                 <span className="text-[9px] font-bold px-1.5 py-0.2 bg-teal-100 text-teal-900 rounded">EQC</span>
+              </button>
+            )}
+
+            {canAccessRoute('/admin/masters') && (
+              <button
+                onClick={() => {
+                  navigate('/admin/masters?open=bodyshop');
+                  window.dispatchEvent(new CustomEvent('tml:open-masters', { detail: 'bodyshop' }));
+                }}
+                className={`w-full cursor-pointer ${navItemClass(bodyshopOpen)}`}
+              >
+                <Flame className="h-4 w-4" />
+                <span className="flex-1 text-left">Bodyshop Master</span>
+                <span className="text-[9px] font-bold px-1.5 py-0.2 bg-amber-100 text-amber-900 rounded">BS</span>
               </button>
             )}
 
