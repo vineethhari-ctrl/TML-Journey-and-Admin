@@ -2,6 +2,9 @@
 
 React 19 + TypeScript + Vite + Tailwind. All data is generated in-memory (`src/data`); there is no backend.
 
+**Live prototype:** https://vineethhari-ctrl.github.io/TML-Journey-and-Admin/ — redeployed automatically on every push to `main`
+(`.github/workflows/deploy-pages.yml`). Sample data only; anything entered is stored in the visitor's own browser.
+
 ## Scripts
 
 | Command | What it does |
