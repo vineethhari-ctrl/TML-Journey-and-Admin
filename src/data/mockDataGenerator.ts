@@ -191,6 +191,157 @@ const LAST_NAMES = [
   'Shah', 'Trivedi', 'Menon', 'Naidu', 'Srivastava', 'Mukherjee', 'Thakur', 'Gokhale',
 ];
 
+// Journey stage template used to derive a realistic, case-specific timeline for every JC.
+const JOURNEY_STAGE_TEMPLATE: Array<{ module: ModuleType; name: string; role: string; refPrefix: string; minutes: number }> = [
+  { module: 'Appointment', name: 'Appointment Scheduling', role: 'Service Advisor', refPrefix: 'APT', minutes: 20 },
+  { module: 'P&D / Reception', name: 'P&D / Reception', role: 'Service Advisor', refPrefix: 'REC', minutes: 35 },
+  { module: 'Security', name: 'Security Gate In', role: 'Security Officer', refPrefix: 'GIN', minutes: 10 },
+  { module: 'JC Creation', name: 'Job Card Creation', role: 'Service Advisor', refPrefix: 'JCC', minutes: 25 },
+  { module: 'JC Tracking', name: 'JC Tracking & Floor Allocation', role: 'Workshop Floor Manager', refPrefix: 'BAY', minutes: 30 },
+  { module: 'SPD', name: 'Spare Parts Dispatch (SPD)', role: 'SPD Store Officer', refPrefix: 'SPD', minutes: 45 },
+  { module: 'THD', name: 'Technical Diagnostic (THD)', role: 'Master Technician', refPrefix: 'THD', minutes: 90 },
+  { module: 'EQC', name: 'Electronic Quality Check (EQC)', role: 'Quality Inspector', refPrefix: 'EQC', minutes: 40 },
+  { module: 'Claim', name: 'Warranty / AMC Claim', role: 'Claims Officer', refPrefix: 'CLM', minutes: 60 },
+  { module: 'BodyShop', name: 'BodyShop / Detailing', role: 'Paint Specialist', refPrefix: 'BSP', minutes: 120 },
+  { module: 'IRA', name: 'IRA Connected Telematics Sync', role: 'IoT System', refPrefix: 'IRA', minutes: 15 },
+  { module: 'Closure', name: 'Job Card Closure & Gate Out', role: 'Service Advisor', refPrefix: 'CLS', minutes: 30 },
+];
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+function addMinutes(base: string, minutes: number): string {
+  // base format: 'YYYY-MM-DD HH:MM[:SS]' (local wall-clock time)
+  const [datePart, timePart = '00:00'] = base.split(' ');
+  const [y, mo, d] = datePart.split('-').map(Number);
+  const [h, mi] = timePart.split(':').map(Number);
+  const dt = new Date(y, mo - 1, d, h, mi + minutes);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())} ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+}
+
+/**
+ * Derives a consistent stage tracker + event timeline for any service case,
+ * based on its current stage, overall status and service type.
+ */
+export function buildJourneyForCase(sc: ServiceCase): { stages: JourneyStage[]; events: JourneyEvent[] } {
+  const currentIdx = Math.max(0, JOURNEY_STAGE_TEMPLATE.findIndex((t) => t.module === sc.currentStage));
+  const isComplete = sc.overallStatus === 'COMPLETED';
+  const needsClaim = sc.serviceType === 'Warranty Claim' || sc.serviceType === 'Accident / BodyShop';
+  const needsBodyShop = sc.serviceType === 'Accident / BodyShop';
+  const seed = Number(sc.jcNumber.slice(-4)) || 1;
+  const staff = (offset: number) =>
+    `${FIRST_NAMES[(seed + offset) % FIRST_NAMES.length]} ${LAST_NAMES[(seed * 3 + offset) % LAST_NAMES.length]}`;
+
+  let cursor = sc.createdAt.slice(0, 16);
+  const stages: JourneyStage[] = [];
+  const events: JourneyEvent[] = [];
+
+  JOURNEY_STAGE_TEMPLATE.forEach((t, idx) => {
+    const skipped =
+      (t.module === 'Claim' && !needsClaim) || (t.module === 'BodyShop' && !needsBodyShop);
+    let status: JourneyStage['status'];
+    if (skipped) status = 'SKIPPED';
+    else if (isComplete || idx < currentIdx) status = 'COMPLETED';
+    else if (idx === currentIdx) status = sc.overallStatus === 'BLOCKED' ? 'BLOCKED' : 'IN PROGRESS';
+    else status = 'PENDING';
+
+    const responsibleUser =
+      t.module === 'IRA' ? 'Automated Telematics Gateway' : t.role === 'Service Advisor' ? sc.serviceAdvisor : staff(idx);
+    const ref = `${t.refPrefix}-2026-${String(seed * 7 + idx * 13).padStart(4, '0')}`;
+    const delayFactor = sc.overallStatus === 'DELAYED' && idx === currentIdx ? 3 : 1;
+
+    let startedAt: string | undefined;
+    let completedAt: string | undefined;
+    let duration = '--';
+    if (status === 'COMPLETED' || status === 'IN PROGRESS' || status === 'BLOCKED') {
+      startedAt = cursor;
+      if (status === 'COMPLETED') {
+        completedAt = addMinutes(cursor, t.minutes);
+        duration = `${t.minutes} min`;
+        cursor = completedAt;
+      } else {
+        duration = `${t.minutes * delayFactor}+ min (running)`;
+      }
+    }
+
+    stages.push({
+      stageId: `STG-${sc.jcNumber.slice(-4)}-${pad2(idx + 1)}`,
+      jcNumber: sc.jcNumber,
+      module: t.module,
+      name: t.name,
+      sequence: idx + 1,
+      status,
+      startedAt,
+      completedAt,
+      duration: status === 'SKIPPED' ? 'Not Required' : duration,
+      responsibleUser: status === 'SKIPPED' ? 'Not Required' : responsibleUser,
+      responsibleRole: t.role,
+      referenceNumber: status === 'PENDING' || status === 'SKIPPED' ? undefined : ref,
+      remarks:
+        status === 'SKIPPED'
+          ? `Not applicable for ${sc.serviceType}.`
+          : status === 'BLOCKED'
+          ? 'Stage blocked — awaiting approval / parts before work can continue.'
+          : status === 'IN PROGRESS'
+          ? `${t.name} currently in progress.`
+          : status === 'COMPLETED'
+          ? `${t.name} completed.`
+          : 'Awaiting upstream stages.',
+    });
+
+    if (startedAt) {
+      const base = {
+        vehicleNumber: sc.vehicleRegistration,
+        vin: sc.vin,
+        jcNumber: sc.jcNumber,
+        module: t.module,
+        stage: t.name,
+        userId: `TML-${t.refPrefix}-${1000 + ((seed + idx) % 900)}`,
+        userName: responsibleUser,
+        employeeId: `TML${10000 + ((seed * 11 + idx) % 89999)}`,
+        dealer: sc.dealerName,
+        referenceNumber: ref,
+      };
+      events.push({
+        ...base,
+        eventId: `EVT-${sc.jcNumber.slice(-4)}-${pad2(idx + 1)}A`,
+        eventType: `${t.name} Started`,
+        status: 'Completed',
+        timestamp: `${startedAt}:00`,
+        previousStatus: 'Pending',
+        newStatus: 'In Progress',
+        remarks: `${t.name} initiated at ${sc.workshopName}.`,
+      });
+      if (completedAt) {
+        events.push({
+          ...base,
+          eventId: `EVT-${sc.jcNumber.slice(-4)}-${pad2(idx + 1)}B`,
+          eventType: `${t.name} Completed`,
+          status: 'Completed',
+          timestamp: `${completedAt}:00`,
+          previousStatus: 'In Progress',
+          newStatus: 'Completed',
+          remarks: `${t.name} signed off by ${responsibleUser}.`,
+        });
+      } else if (status === 'BLOCKED') {
+        events.push({
+          ...base,
+          eventId: `EVT-${sc.jcNumber.slice(-4)}-${pad2(idx + 1)}X`,
+          eventType: 'Stage Blocked',
+          status: 'Blocked',
+          timestamp: `${addMinutes(startedAt, 5)}:00`,
+          previousStatus: 'In Progress',
+          newStatus: 'Blocked',
+          remarks: 'Work halted pending approval / parts availability.',
+        });
+      }
+    }
+  });
+
+  // Newest first, matching the demo timeline ordering
+  events.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  return { stages, events };
+}
+
 export function generateInitialData() {
   // 1. Generate 55 Users
   const users: AppUser[] = [
@@ -421,7 +572,7 @@ export function generateInitialData() {
       deviceType: `${dev.deviceType} (${dev.operatingSystem.split(' ')[0]})`,
       ipAddress: dev.ipAddress,
       location: dev.location,
-      loginTime: `Today, 0${(i % 5) + 7}:${10 + (i % 45)} AM`,
+      loginTime: `Today, ${pad2((i % 5) + 7)}:${10 + (i % 45)} AM`,
       lastActivity: sessStat === 'TERMINATED' ? 'Terminated at 10:45 AM' : sessStat === 'IDLE' ? '32 mins ago' : `${(i % 15) + 1} mins ago`,
       status: sessStat,
     });
@@ -511,7 +662,7 @@ export function generateInitialData() {
       workshopName: `${loc.city} Workshop Terminal ${(i % 3) + 1}`,
       zone: loc.zone,
       region: loc.region,
-      createdAt: `2026-09-30 0${(i % 4) + 8}:${10 + (i % 40)}:00`,
+      createdAt: `2026-09-30 ${pad2((i % 4) + 8)}:${pad2(10 + (i % 40))}:00`,
       currentStage: currentStg,
       overallStatus: overall,
       serviceType: i % 4 === 0 ? 'Running Repair' : i % 5 === 0 ? 'Accident / BodyShop' : i % 3 === 0 ? 'Warranty Claim' : 'Periodic Maintenance',
@@ -1144,6 +1295,13 @@ export function generateInitialData() {
     },
   ];
 
+  // Keep exception vehicle numbers consistent with the JC they belong to
+  const regByJc = new Map(serviceCases.map((sc) => [sc.jcNumber, sc.vehicleRegistration]));
+  allExceptions.forEach((exc) => {
+    const reg = regByJc.get(exc.jcNumber);
+    if (reg) exc.vehicleRegistration = reg;
+  });
+
   // 8. Generate 35 Audit Logs
   const auditLogs: AuditLogEntry[] = [
     {
@@ -1268,7 +1426,7 @@ export function generateInitialData() {
     {
       id: 'NOTIF-01',
       title: '5 Journey Exceptions Require Attention',
-      message: 'Critical delays detected in MH01AB1234 (JC Tracking approval) and MH02CR9910 (Backordered ECU).',
+      message: `Critical delays detected in MH01AB1234 (JC Tracking approval) and ${regByJc.get('JC20260930001204') ?? 'JC20260930001204'} (Backordered ECU).`,
       type: 'EXCEPTION',
       timestamp: '10 mins ago',
       read: false,

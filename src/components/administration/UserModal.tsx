@@ -12,7 +12,7 @@ interface UserModalProps {
 }
 
 export const UserModal: React.FC<UserModalProps> = ({ userToEdit, isOpen, onClose }) => {
-  const { createUser, updateUser, roles } = useApp();
+  const { createUser, updateUser, roles, users } = useApp();
 
   const [employeeId, setEmployeeId] = useState('');
   const [name, setName] = useState('');
@@ -52,7 +52,7 @@ export const UserModal: React.FC<UserModalProps> = ({ userToEdit, isOpen, onClos
       setEmail('');
       setMobile('+91 98200 ');
       setUserType('NON-CRM');
-      setGeneratedUserId(userService.generateUserId('NON-CRM', 'MH'));
+      setGeneratedUserId(userService.generateUniqueUserId('NON-CRM', 'MH', users.map((u) => u.userId)));
       setDepartment('Service Operations');
       setZone('West');
       setRegion('Maharashtra');
@@ -68,12 +68,12 @@ export const UserModal: React.FC<UserModalProps> = ({ userToEdit, isOpen, onClos
   const handleUserTypeChange = (newType: UserType) => {
     setUserType(newType);
     if (!userToEdit) {
-      setGeneratedUserId(userService.generateUserId(newType, region.slice(0, 2)));
+      setGeneratedUserId(userService.generateUniqueUserId(newType, region.slice(0, 2), users.map((u) => u.userId)));
     }
   };
 
   const handleRegenerateId = () => {
-    setGeneratedUserId(userService.generateUserId(userType, region.slice(0, 2)));
+    setGeneratedUserId(userService.generateUniqueUserId(userType, region.slice(0, 2), users.map((u) => u.userId)));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -88,6 +88,22 @@ export const UserModal: React.FC<UserModalProps> = ({ userToEdit, isOpen, onClos
       newErrors.email = 'Please provide a valid email format';
     }
     if (!role) newErrors.role = 'Role selection is mandatory';
+    if (mobile.replace(/[^0-9]/g, '').length > 2 && !userService.validateIndianMobile(mobile)) {
+      newErrors.mobile = 'Enter a valid 10-digit Indian mobile number (e.g. +91 98200 12345)';
+    }
+
+    // Identity fields must stay unique (the record being edited is excluded)
+    const others = users.filter((u) => u.userId !== userToEdit?.userId);
+    const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+    if (!userToEdit && others.some((u) => same(u.employeeId, employeeId))) {
+      newErrors.employeeId = `Employee ID ${employeeId.trim()} already exists`;
+    }
+    if (others.some((u) => same(u.email, email))) {
+      newErrors.email = 'This email is already assigned to another user';
+    }
+    if (!userToEdit && others.some((u) => same(u.userId, generatedUserId))) {
+      newErrors.userId = 'This User ID is already taken — regenerate it';
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -96,9 +112,9 @@ export const UserModal: React.FC<UserModalProps> = ({ userToEdit, isOpen, onClos
 
     if (userToEdit) {
       updateUser(userToEdit.userId, {
-        name,
-        email,
-        mobile,
+        name: name.trim(),
+        email: email.trim(),
+        mobile: mobile.trim(),
         department,
         zone,
         region,
@@ -185,6 +201,7 @@ export const UserModal: React.FC<UserModalProps> = ({ userToEdit, isOpen, onClos
                 </button>
               )}
             </div>
+            {errors.userId && <p className="text-rose-600 text-[11px] mt-0.5">{errors.userId}</p>}
           </div>
 
           <div className="flex items-center gap-1.5 text-[11px] text-slate-500 bg-white/80 p-2 rounded border border-slate-200">
@@ -263,6 +280,7 @@ export const UserModal: React.FC<UserModalProps> = ({ userToEdit, isOpen, onClos
               placeholder="+91 98200 00000"
               className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white focus:border-blue-500 focus:outline-hidden"
             />
+            {errors.mobile && <p className="text-rose-600 text-[11px] mt-0.5">{errors.mobile}</p>}
           </div>
         </div>
 

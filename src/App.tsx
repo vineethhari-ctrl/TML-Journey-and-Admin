@@ -21,36 +21,37 @@ const AppRouter: React.FC = () => {
   const { currentRoute } = useApp();
 
   const renderContent = () => {
-    if (currentRoute === '/dashboard') {
+    // Query strings (e.g. ?search=...) are handled by the pages themselves
+    const path = currentRoute.split('?')[0];
+    if (path === '/dashboard') {
       return <DashboardPage />;
     }
-    if (currentRoute === '/journey' || currentRoute.startsWith('/journey?')) {
+    if (path === '/journey') {
       return <JourneySearchPage />;
     }
-    if (currentRoute.startsWith('/journey/')) {
-      const parts = currentRoute.split('/');
-      const jcNumber = parts[2] || 'JC20260930001234';
+    if (path.startsWith('/journey/')) {
+      const jcNumber = decodeURIComponent(path.split('/')[2] || '') || 'JC20260930001234';
       return <JourneyDetailPage jcNumber={jcNumber} />;
     }
-    if (currentRoute === '/admin/masters') {
+    if (path === '/admin/masters') {
       return <MastersMaintenancePage />;
     }
-    if (currentRoute === '/admin/users') {
+    if (path === '/admin/users') {
       return <UserManagementPage />;
     }
-    if (currentRoute === '/admin/roles') {
+    if (path === '/admin/roles') {
       return <RoleManagementPage />;
     }
-    if (currentRoute === '/admin/devices') {
+    if (path === '/admin/devices') {
       return <DeviceManagementPage />;
     }
-    if (currentRoute === '/admin/sessions') {
+    if (path === '/admin/sessions') {
       return <SessionManagementPage />;
     }
-    if (currentRoute === '/admin/config') {
+    if (path === '/admin/config') {
       return <ConfigurationPage />;
     }
-    if (currentRoute === '/admin/audit') {
+    if (path === '/admin/audit') {
       return <AuditLogPage />;
     }
     return <DashboardPage />;

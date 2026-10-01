@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { masterExportUtil } from '../utils/masterExportUtil';
 import {
   Shield,
   Search,
@@ -60,7 +61,7 @@ interface PermissionRow {
 }
 
 export const RoleManagementPage: React.FC = () => {
-  const { showToast } = useApp();
+  const { showToast, navigate, logAudit } = useApp();
 
   // Left Sub-navigation state
   const [activeSubNav, setActiveSubNav] = useState<'permissions' | 'matrix' | 'catalogue' | 'roles' | 'approval_rules' | 'attendance' | 'approvals' | 'elevated' | 'history'>('permissions');
@@ -467,9 +468,19 @@ export const RoleManagementPage: React.FC = () => {
     },
   ]);
 
+  // The ratified baseline is the matrix as first loaded; edits are compared against it
+  const [baselinePermissions] = useState<PermissionRow[]>(() => permissions);
+  const baselineTierOf = (code: string, role: keyof PermissionRow['roles']) =>
+    baselinePermissions.find((b) => b.code === code)?.roles[role];
+  const differsFromBaseline = (p: PermissionRow) => {
+    const base = baselinePermissions.find((b) => b.code === p.code);
+    return !!base && (Object.keys(p.roles) as Array<keyof PermissionRow['roles']>).some((r) => base.roles[r] !== p.roles[r]);
+  };
+
   // Filter Logic
   const filteredPermissions = useMemo(() => {
     return permissions.filter((p) => {
+      if (onlyDiffersFromBaseline && !differsFromBaseline(p)) return false;
       if (selectedDomain !== 'All' && p.domain !== selectedDomain) return false;
       if (selectedService !== 'All' && p.service !== selectedService) return false;
       if (searchCode.trim()) {
@@ -480,7 +491,8 @@ export const RoleManagementPage: React.FC = () => {
       }
       return true;
     });
-  }, [permissions, selectedDomain, selectedService, searchCode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permissions, selectedDomain, selectedService, searchCode, onlyDiffersFromBaseline]);
 
   // Grouped Permissions
   const groupedPermissions = useMemo(() => {
@@ -749,7 +761,20 @@ export const RoleManagementPage: React.FC = () => {
                   <button
                     onClick={() => {
                       setIsMoreMenuOpen(false);
-                      showToast('Exporting Role Permissions CSV (Ratified Baseline)...', 'success');
+                      masterExportUtil.exportToCSV({
+                        masterName: 'Role Permission Matrix',
+                        category: 'Roles & Access',
+                        columns: [
+                          { key: 'code', label: 'Permission Code' },
+                          { key: 'description', label: 'Description' },
+                          { key: 'group', label: 'Group' },
+                          { key: 'domain', label: 'Domain' },
+                          { key: 'service', label: 'Service' },
+                          ...roles.map((r) => ({ key: r.id, label: r.name })),
+                        ],
+                        data: filteredPermissions.map((p) => ({ ...p, ...p.roles })),
+                      });
+                      showToast(`Exported ${filteredPermissions.length} role permissions to CSV`, 'success');
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-slate-50 text-left cursor-pointer"
                   >
@@ -759,7 +784,8 @@ export const RoleManagementPage: React.FC = () => {
                   <button
                     onClick={() => {
                       setIsMoreMenuOpen(false);
-                      showToast('Opening comparison with Ratified Baseline v1.0.0', 'info');
+                      setOnlyDiffersFromBaseline(true);
+                      showToast('Showing only permissions that differ from the ratified baseline', 'info');
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-slate-50 text-left cursor-pointer"
                   >
@@ -769,7 +795,7 @@ export const RoleManagementPage: React.FC = () => {
                   <button
                     onClick={() => {
                       setIsMoreMenuOpen(false);
-                      showToast('Opening audit log change history...', 'info');
+                      navigate('/admin/audit');
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 hover:bg-slate-50 text-left cursor-pointer"
                   >
@@ -780,7 +806,20 @@ export const RoleManagementPage: React.FC = () => {
                   <button
                     onClick={() => {
                       setIsMoreMenuOpen(false);
-                      showToast('Reset all modified cells to baseline defaults', 'info');
+                      const changed = permissions.filter(differsFromBaseline).length;
+                      if (changed === 0) {
+                        showToast('All permissions already match the ratified baseline', 'info');
+                        return;
+                      }
+                      if (!window.confirm(`Reset ${changed} modified permission(s) to the ratified baseline?`)) return;
+                      setPermissions((prev) =>
+                        prev.map((p) => {
+                          const base = baselinePermissions.find((b) => b.code === p.code);
+                          return base ? { ...p, roles: { ...base.roles } } : p;
+                        })
+                      );
+                      logAudit('Role Permissions Reset', 'Administration', 'Role Permission Matrix', `${changed} modified`, 'Ratified baseline');
+                      showToast(`Reset ${changed} permission(s) to baseline defaults`, 'success');
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-rose-600 hover:bg-rose-50 text-left cursor-pointer"
                   >
@@ -795,7 +834,6 @@ export const RoleManagementPage: React.FC = () => {
             <button
               onClick={() => {
                 setDrawerRole(roles[0]);
-                showToast(`Opening Edit Role drawer for ${roles[0].name}`, 'info');
               }}
               className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-colors cursor-pointer"
             >
@@ -963,7 +1001,7 @@ export const RoleManagementPage: React.FC = () => {
                                   permCode: row.code,
                                   roleId: r.id,
                                   tier,
-                                  baselineTier: tier,
+                                  baselineTier: baselineTierOf(row.code, r.id as keyof PermissionRow['roles']) ?? tier,
                                 })
                               }
                               onMouseLeave={() => setHoveredCell(null)}
@@ -985,7 +1023,7 @@ export const RoleManagementPage: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500">
             <div>
               <span>
-                Showing {filteredPermissions.length} of 23 permissions
+                Showing {filteredPermissions.length} of {permissions.length} permissions
               </span>
               <span className="mx-2">•</span>
               <span className="text-slate-400">

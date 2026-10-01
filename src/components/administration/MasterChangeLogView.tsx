@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
+import { parseDateTime } from '../../utils/dateUtil';
 import { MasterConfig } from '../../data/masterCatalogue';
 import {
   History,
@@ -304,7 +305,7 @@ export const MasterChangeLogView: React.FC<MasterChangeLogViewProps> = ({
 
       // 4. Time Range Filter
       if (timeRange !== 'ALL') {
-        const logDate = new Date(log.timestamp);
+        const logDate = parseDateTime(log.timestamp);
         const now = new Date();
         if (timeRange === 'TODAY') {
           if (logDate.toDateString() !== now.toDateString()) return false;

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { MasterConfig, MasterFieldDef } from '../../data/masterCatalogue';
 import {
@@ -78,8 +78,6 @@ export const MasterDataImportModal: React.FC<MasterDataImportModalProps> = ({
   const [tableSearchQuery, setTableSearchQuery] = useState('');
   const [confirmReplace, setConfirmReplace] = useState(false);
 
-  if (!isOpen) return null;
-
   // Reset modal state
   const handleReset = () => {
     setCurrentStep(1);
@@ -106,17 +104,23 @@ export const MasterDataImportModal: React.FC<MasterDataImportModalProps> = ({
       const normKey = normalize(field.key);
       const normLabel = normalize(field.label);
 
-      const matchedHeader = headers.find((h) => {
-        const normH = normalize(h);
-        return (
-          normH === normKey ||
-          normH === normLabel ||
-          normH.includes(normKey) ||
-          normKey.includes(normH) ||
-          normH.includes(normLabel) ||
-          normLabel.includes(normH)
-        );
-      });
+      // Prefer exact key/label matches; fall back to partial matches only for
+      // non-trivial headers (an empty or 1-2 char header would match everything).
+      const matchedHeader =
+        headers.find((h) => {
+          const normH = normalize(h);
+          return normH === normKey || normH === normLabel;
+        }) ||
+        headers.find((h) => {
+          const normH = normalize(h);
+          if (normH.length < 3) return false;
+          return (
+            normH.includes(normKey) ||
+            normKey.includes(normH) ||
+            normH.includes(normLabel) ||
+            normLabel.includes(normH)
+          );
+        });
 
       if (matchedHeader) {
         initialMapping[field.key] = matchedHeader;
@@ -126,10 +130,11 @@ export const MasterDataImportModal: React.FC<MasterDataImportModalProps> = ({
     });
 
     // Also check if there's an ID column
-    const matchedIdHeader = headers.find((h) => {
-      const normH = normalize(h);
-      return normH === 'id' || normH === 'code' || normH.includes('id');
-    });
+    // Exact "id"/"code" first; otherwise a header ending in "id" (e.g. "Record ID"),
+    // not any header merely containing the letters "id" (e.g. "Paid Amount", "Validity").
+    const matchedIdHeader =
+      headers.find((h) => ['id', 'code'].includes(normalize(h))) ||
+      headers.find((h) => /(^|[^a-z])id$/i.test(h.trim()) || /Id$/.test(h.trim()));
     if (matchedIdHeader) {
       initialMapping['id'] = matchedIdHeader;
     }
@@ -685,7 +690,7 @@ export const MasterDataImportModal: React.FC<MasterDataImportModalProps> = ({
       'Masters Maintenance',
       `${master.name} (Bulk Upload)`,
       `${fileType.toUpperCase()} Ingestion Pipeline`,
-      `Committed ${rowsToImport.length} parameter records. File: "${file?.name || 'Dataset'}". Mode: ${importMode.toUpperCase()}. Skipped invalid rows: ${errorCount}. Health Score: ${healthScore}%.`,
+      `Committed ${rowsToImport.length} parameter records. File: "${file?.name || 'Dataset'}". Mode: ${importMode.toUpperCase()}. Skipped invalid rows: ${skipInvalidRows ? errorCount : 0}. Health Score: ${healthScore}%.`,
       'SUCCESS'
     );
 
@@ -696,6 +701,23 @@ export const MasterDataImportModal: React.FC<MasterDataImportModalProps> = ({
     handleReset();
     onClose();
   };
+
+  // Esc closes the modal, like the app's other dialogs
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleReset();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, onClose]);
+
+  // All hooks above must run on every render; bail out only after them.
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-2xs p-3">

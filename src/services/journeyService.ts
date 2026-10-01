@@ -1,8 +1,10 @@
 import { ServiceCase, JourneyStage, ModuleType } from '../types';
 
+export type JourneySearchBy = 'auto' | 'registration' | 'vin' | 'jc' | 'phone' | 'name';
+
 export interface JourneySearchFilters {
   query?: string;
-  searchBy?: 'registration' | 'vin' | 'jc' | 'phone' | 'name';
+  searchBy?: JourneySearchBy;
   zone?: string;
   region?: string;
   dealer?: string;
@@ -15,26 +17,39 @@ export interface JourneySearchFilters {
   hasPendingActionsOnly?: boolean;
 }
 
+/**
+ * Guess what kind of identifier the user typed so they don't have to pick a
+ * "Search By" option first. Returns 'auto' when nothing specific matches,
+ * which searches across every identifier.
+ */
+export function detectSearchType(raw: string): JourneySearchBy {
+  const q = raw.trim().toUpperCase().replace(/\s+/g, '');
+  if (!q) return 'auto';
+  if (/^JC\d{4,}$/.test(q)) return 'jc';
+  if (/^[A-HJ-NPR-Z0-9]{17}$/.test(q) && /\d/.test(q) && /[A-Z]/.test(q)) return 'vin';
+  if (/^\+?[\d-]{7,}$/.test(q)) return 'phone';
+  if (/^[A-Z]{2}\d{1,2}[A-Z]{0,3}\d{0,4}$/.test(q)) return 'registration';
+  if (/^[A-Z .'-]+$/i.test(raw.trim()) && /[a-z]/i.test(raw)) return 'name';
+  return 'auto';
+}
+
+const normalize = (v: string) => v.toLowerCase().replace(/[\s-]/g, '');
+
 export const journeyService = {
   filterServiceCases(cases: ServiceCase[], filters: JourneySearchFilters): ServiceCase[] {
     return cases.filter((c) => {
       if (filters.query && filters.query.trim()) {
-        const q = filters.query.trim().toLowerCase();
-        const searchBy = filters.searchBy || 'registration';
-        if (searchBy === 'registration' && !c.vehicleRegistration.toLowerCase().includes(q)) return false;
-        if (searchBy === 'vin' && !c.vin.toLowerCase().includes(q)) return false;
-        if (searchBy === 'jc' && !c.jcNumber.toLowerCase().includes(q)) return false;
-        if (searchBy === 'phone' && !c.customerMobile.toLowerCase().includes(q)) return false;
-        if (searchBy === 'name' && !c.customerName.toLowerCase().includes(q)) return false;
-        if (!['registration', 'vin', 'jc', 'phone', 'name'].includes(searchBy)) {
-          const matchAny =
-            c.vehicleRegistration.toLowerCase().includes(q) ||
-            c.vin.toLowerCase().includes(q) ||
-            c.jcNumber.toLowerCase().includes(q) ||
-            c.customerMobile.toLowerCase().includes(q) ||
-            c.customerName.toLowerCase().includes(q);
-          if (!matchAny) return false;
-        }
+        const q = normalize(filters.query.trim());
+        const searchBy = filters.searchBy || 'auto';
+        const matches: Record<Exclude<JourneySearchBy, 'auto'>, boolean> = {
+          registration: normalize(c.vehicleRegistration).includes(q),
+          vin: normalize(c.vin).includes(q),
+          jc: normalize(c.jcNumber).includes(q),
+          phone: normalize(c.customerMobile).includes(q),
+          name: normalize(c.customerName).includes(q),
+        };
+        const ok = searchBy === 'auto' ? Object.values(matches).some(Boolean) : matches[searchBy];
+        if (!ok) return false;
       }
 
       if (filters.zone && filters.zone !== 'ALL' && c.zone !== filters.zone) return false;

@@ -31,11 +31,14 @@ interface DynamicFieldRendererProps {
   className?: string;
 }
 
+// Stable default: a fresh `{}` per render would re-run validation (which sets state) every render
+const EMPTY_CONTEXT: Record<string, any> = {};
+
 export const DynamicFieldRenderer: React.FC<DynamicFieldRendererProps> = ({
   targetModule,
   values,
   onChange,
-  contextData = {},
+  contextData = EMPTY_CONTEXT,
   readOnly = false,
   showInspector = false,
   title = 'Dynamic Custom Parameters (Rules Engine Driven)',
@@ -52,6 +55,7 @@ export const DynamicFieldRenderer: React.FC<DynamicFieldRendererProps> = ({
   const [showRuleTrace, setShowRuleTrace] = useState(false);
 
   useEffect(() => {
+    setRules(rulesEngineService.getRulesForModule(targetModule));
     const unsubscribe = rulesEngineService.subscribe(() => {
       setRules(rulesEngineService.getRulesForModule(targetModule));
     });
@@ -244,7 +248,7 @@ export const DynamicFieldRenderer: React.FC<DynamicFieldRendererProps> = ({
                 <div>
                   {rule.widgetType === 'select' ? (
                     <select
-                      value={String(currentValue)}
+                      value={String(currentValue ?? '')}
                       disabled={isDisabled}
                       onChange={(e) => handleFieldChange(rule.key, e.target.value)}
                       className={`w-full px-3 py-2 text-xs rounded-xl border transition-all font-semibold ${
@@ -279,7 +283,7 @@ export const DynamicFieldRenderer: React.FC<DynamicFieldRendererProps> = ({
                   ) : rule.widgetType === 'date' ? (
                     <input
                       type="date"
-                      value={String(currentValue)}
+                      value={String(currentValue ?? '')}
                       disabled={isDisabled}
                       onChange={(e) => handleFieldChange(rule.key, e.target.value)}
                       className={`w-full px-3 py-2 text-xs rounded-xl border transition-all ${
@@ -291,7 +295,7 @@ export const DynamicFieldRenderer: React.FC<DynamicFieldRendererProps> = ({
                   ) : rule.widgetType === 'textarea' ? (
                     <textarea
                       rows={2}
-                      value={String(currentValue)}
+                      value={String(currentValue ?? '')}
                       placeholder={rule.uiLogic?.placeholder || 'Enter notes...'}
                       disabled={isDisabled}
                       onChange={(e) => handleFieldChange(rule.key, e.target.value)}
@@ -307,7 +311,7 @@ export const DynamicFieldRenderer: React.FC<DynamicFieldRendererProps> = ({
                       step={rule.validation?.range?.step}
                       min={rule.validation?.range?.min}
                       max={rule.validation?.range?.max}
-                      value={String(currentValue)}
+                      value={String(currentValue ?? '')}
                       placeholder={rule.uiLogic?.placeholder || `Enter ${rule.dealerDisplayLabel || rule.label}...`}
                       disabled={isDisabled}
                       onChange={(e) =>

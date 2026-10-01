@@ -27,7 +27,23 @@ export const userService = {
     }
   },
 
+  /** Generates an id that is not already in `taken` (ids are random, so collisions are possible). */
+  generateUniqueUserId(userType: UserType, regionCode: string, taken: Iterable<string>): string {
+    const used = new Set(Array.from(taken, (t) => t.toUpperCase()));
+    let id = this.generateUserId(userType, regionCode);
+    for (let i = 0; i < 50 && used.has(id.toUpperCase()); i++) {
+      id = this.generateUserId(userType, regionCode);
+    }
+    return id;
+  },
+
   validateEmail(email: string): boolean {
-    return /\S+@\S+\.\S+/.test(email);
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  },
+
+  /** Accepts an Indian mobile with optional +91/0 prefix, spaces or dashes (e.g. "+91 98200 12345"). */
+  validateIndianMobile(mobile: string): boolean {
+    const digits = mobile.replace(/[\s-]/g, '').replace(/^(\+91|0)/, '');
+    return /^[6-9]\d{9}$/.test(digits);
   },
 };

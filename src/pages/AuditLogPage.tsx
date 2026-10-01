@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { useRouteSearchParam } from '../hooks/useRouteSearchParam';
 import { AuditLogEntry } from '../types';
 import { Pagination } from '../components/common/Pagination';
 import {
@@ -17,6 +18,7 @@ export const AuditLogPage: React.FC = () => {
   const { auditLogs, exportAuditLogs } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
+  useRouteSearchParam(setSearchQuery);
   const [actionFilter, setActionFilter] = useState('ALL');
   const [moduleFilter, setModuleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'SUCCESS' | 'FAILED' | 'WARNING'>('ALL');

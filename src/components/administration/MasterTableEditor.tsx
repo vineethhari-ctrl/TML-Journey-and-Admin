@@ -49,6 +49,7 @@ import { masterValidationSchema } from '../../utils/masterValidationSchema';
 import { MasterDataImportModal } from './MasterDataImportModal';
 import { BatchUndoModal, MasterChangeSnapshot } from './BatchUndoModal';
 import { BulkEditModal } from './BulkEditModal';
+import { mergeImportedRecords } from '../../utils/recordMerge';
 
 interface MasterTableEditorProps {
   master: MasterConfig;
@@ -92,6 +93,17 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
 
   // Bulk Selection State (row IDs)
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+
+  // Selections and column-specific filters belong to one master; clear them when switching
+  // tabs so bulk actions can never target rows the user can no longer see.
+  useEffect(() => {
+    setSelectedRowIds([]);
+    setSearchColumnScope('ALL');
+    setSelectedColumnKey('');
+    setSelectedColumnValue('ALL');
+    setSortColumn('');
+    setRecentlyBulkImported(null);
+  }, [master.id]);
 
   // Session Undo / Redo Stacks (isolated per master.id to guarantee data safety across tabs)
   const [undoStackMap, setUndoStackMap] = useState<Record<string, MasterChangeSnapshot[]>>({});
@@ -369,9 +381,12 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
 
   // Open Add Record Modal
   const handleOpenAddRecord = () => {
-    const initial: Record<string, any> = {
-      id: `REC-${Date.now().toString().slice(-4)}`,
-    };
+    const existingIds = new Set(master.records.map((r) => String(r.id)));
+    let newId = '';
+    for (let n = master.records.length + 1; !newId || existingIds.has(newId); n++) {
+      newId = `${master.id.slice(0, 3).toUpperCase()}-${String(n).padStart(3, '0')}`;
+    }
+    const initial: Record<string, any> = { id: newId };
     master.fields.forEach((f) => {
       if (f.type === 'select' && f.options && f.options.length > 0) {
         initial[f.key] = f.options[0];
@@ -599,6 +614,15 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
 
     const sanitizedData = validationResult.sanitizedRecord;
 
+    // Ids must stay unique — duplicates make edit/delete/bulk actions hit the wrong rows
+    const idClash = master.records.some(
+      (r) => String(r.id) === String(sanitizedData.id) && r.id !== editingRecordId
+    );
+    if (!sanitizedData.id || idClash) {
+      showToast(`Record ID "${sanitizedData.id ?? ''}" is missing or already exists in ${master.name}.`, 'error');
+      return;
+    }
+
     let updatedRecords: Array<Record<string, any>>;
     if (editingRecordId) {
       const oldRecord = master.records.find((r) => r.id === editingRecordId) || {};
@@ -664,6 +688,10 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
       newFieldKey.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_') ||
       newFieldLabel.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
+    if (key === 'id' || !/[a-z0-9]/.test(key)) {
+      showToast(`"${key}" cannot be used as a parameter key.`, 'error');
+      return;
+    }
     if (master.fields.some((f) => f.key === key)) {
       showToast(`Parameter key "${key}" already exists in this schema.`, 'error');
       return;
@@ -735,6 +763,15 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
       }
     } else if (newFieldType === 'number') {
       defaultValue = Number(defaultValue);
+    } else if (newFieldType === 'boolean') {
+      defaultValue = ['true', 'y', 'yes', '1'].includes(String(defaultValue).toLowerCase());
+    }
+
+    // The default is back-filled into every existing row, so it must satisfy the new rule itself
+    const defaultCheck = masterValidationSchema.validateField({ ...newField, mandatory: false }, defaultValue);
+    if (!defaultCheck.isValid) {
+      showToast(`Default value is invalid: ${defaultCheck.error}`, 'error');
+      return;
     }
 
     const updatedRecords = master.records.map((r) => ({
@@ -859,21 +896,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     importedRows: Array<Record<string, any>>,
     mode: 'append' | 'upsert' | 'replace'
   ) => {
-    let updatedRecords: Array<Record<string, any>>;
-
-    if (mode === 'replace') {
-      updatedRecords = importedRows;
-    } else if (mode === 'upsert') {
-      const importedMap = new Map(importedRows.map((r) => [r.id, r]));
-      const existingUpdated = master.records.map((r) =>
-        importedMap.has(r.id) ? { ...r, ...importedMap.get(r.id) } : r
-      );
-      const existingIds = new Set(master.records.map((r) => r.id));
-      const brandNew = importedRows.filter((r) => !existingIds.has(r.id));
-      updatedRecords = [...brandNew, ...existingUpdated];
-    } else {
-      updatedRecords = [...importedRows, ...master.records];
-    }
+    const updatedRecords = mergeImportedRecords(master.records, importedRows, mode);
 
     const newMaster = { ...master, records: updatedRecords };
 
@@ -1581,7 +1604,18 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
               )}
               {canEdit && (
                 <button
-                  onClick={() => handleBulkDelete(selectedRowIds)}
+                  onClick={() => {
+                    const hidden = selectedRowIds.filter((id) => !filteredRecords.some((r) => r.id === id)).length;
+                    if (
+                      window.confirm(
+                        `Delete ${selectedRowIds.length} selected record(s) from ${master.name}?` +
+                          (hidden ? `\n${hidden} of them are hidden by the current filters.` : '') +
+                          '\nYou can undo this during the current session.'
+                      )
+                    ) {
+                      handleBulkDelete(selectedRowIds);
+                    }
+                  }}
                   className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs flex items-center gap-1 cursor-pointer transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -1867,7 +1901,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                     {/* Dropdown Input */}
                     {f.type === 'select' && f.options ? (
                       <select
-                        value={formData[f.key] !== undefined ? formData[f.key] : f.options[0]}
+                        value={formData[f.key] ?? ''}
                         onChange={(e) => handleFormFieldChange(f.key, e.target.value)}
                         onBlur={() => handleFormFieldBlur(f)}
                         className={`w-full px-3 py-1.5 border rounded-lg text-xs font-semibold focus:outline-hidden bg-white transition-colors cursor-pointer ${
@@ -1876,7 +1910,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                             : 'border-slate-200 focus:border-blue-400'
                         }`}
                       >
-                        {!f.mandatory && <option value="">-- Select {f.label} --</option>}
+                        <option value="" disabled={f.mandatory}>-- Select {f.label} --</option>
                         {f.options.map((opt) => (
                           <option key={opt} value={opt}>
                             {opt}
@@ -1888,7 +1922,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                       <input
                         type="text"
                         inputMode="decimal"
-                        value={formData[f.key] !== undefined ? formData[f.key] : ''}
+                        value={formData[f.key] ?? ''}
                         onChange={(e) => handleFormFieldChange(f.key, e.target.value)}
                         onBlur={() => handleFormFieldBlur(f)}
                         className={`w-full px-3 py-1.5 border rounded-lg text-xs focus:outline-hidden font-mono transition-colors ${
@@ -1934,7 +1968,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                       /* Text Input */
                       <input
                         type="text"
-                        value={formData[f.key] !== undefined ? formData[f.key] : ''}
+                        value={formData[f.key] ?? ''}
                         onChange={(e) => handleFormFieldChange(f.key, e.target.value)}
                         onBlur={() => handleFormFieldBlur(f)}
                         className={`w-full px-3 py-1.5 border rounded-lg text-xs focus:outline-hidden transition-colors ${

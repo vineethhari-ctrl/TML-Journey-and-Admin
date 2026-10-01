@@ -73,11 +73,24 @@ export const RulesEngineStudio: React.FC<RulesEngineStudioProps> = () => {
   // Editor Draft State for currently selected rule
   const [draftRule, setDraftRule] = useState<CustomFieldRuleDefinition | null>(null);
 
+  // Reload the draft when the selection changes or the stored rule changes (save/import/reset)
   useEffect(() => {
-    if (selectedRule) {
-      setDraftRule(JSON.parse(JSON.stringify(selectedRule)));
-    }
-  }, [selectedRuleId]);
+    setDraftRule(selectedRule ? JSON.parse(JSON.stringify(selectedRule)) : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRuleId, selectedRule]);
+
+  // Raw text for the comma-separated options box. Re-deriving it from the parsed array on
+  // every keystroke would strip a just-typed trailing comma, making a 2nd option impossible.
+  const [optionsText, setOptionsText] = useState('');
+  useEffect(() => {
+    setOptionsText(draftRule?.options?.join(', ') || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftRule?.id, selectedRule]);
+
+  const flash = (msg: string, ms = 3000) => {
+    setSaveSuccessMsg(msg);
+    setTimeout(() => setSaveSuccessMsg((cur) => (cur === msg ? null : cur)), ms);
+  };
 
   // Sandbox Live Testing Form State
   const [sandboxContext, setSandboxContext] = useState<Record<string, any>>({
@@ -117,7 +130,7 @@ export const RulesEngineStudio: React.FC<RulesEngineStudioProps> = () => {
     const newId = `RULE_CUSTOM_${Date.now()}`;
     const newRule: CustomFieldRuleDefinition = {
       id: newId,
-      key: `custom_field_${rules.length + 1}`,
+      key: rulesEngineService.suggestUniqueKey(),
       label: 'New Dynamic Custom Parameter',
       dealerDisplayLabel: 'New Dynamic Parameter',
       widgetType: 'text',
@@ -138,18 +151,24 @@ export const RulesEngineStudio: React.FC<RulesEngineStudioProps> = () => {
       },
     };
 
-    rulesEngineService.saveRule(newRule);
+    const res = rulesEngineService.saveRule(newRule);
+    if (!res.success) {
+      window.alert(res.error);
+      return;
+    }
     setSelectedRuleId(newId);
-    setSaveSuccessMsg('Created new rule definition template');
-    setTimeout(() => setSaveSuccessMsg(null), 3000);
+    flash('Created new rule definition template');
   };
 
   // Action: Save Draft Rule
   const handleSaveDraft = () => {
     if (!draftRule) return;
-    rulesEngineService.saveRule(draftRule);
-    setSaveSuccessMsg(`Rule "${draftRule.label}" saved and published to Dealer App!`);
-    setTimeout(() => setSaveSuccessMsg(null), 3500);
+    const res = rulesEngineService.saveRule(draftRule);
+    if (!res.success) {
+      window.alert(`Rule not saved: ${res.error}`);
+      return;
+    }
+    flash(`Rule "${draftRule.label}" saved and published to Dealer App!`, 3500);
   };
 
   // Action: Delete Rule
@@ -534,16 +553,17 @@ export const RulesEngineStudio: React.FC<RulesEngineStudioProps> = () => {
                       </label>
                       <input
                         type="text"
-                        value={draftRule.options?.join(', ') || ''}
-                        onChange={(e) =>
+                        value={optionsText}
+                        onChange={(e) => {
+                          setOptionsText(e.target.value);
                           setDraftRule({
                             ...draftRule,
                             options: e.target.value
                               .split(',')
                               .map((s) => s.trim())
                               .filter(Boolean),
-                          })
-                        }
+                          });
+                        }}
                         placeholder="e.g. PLATINUM, GOLD, SILVER, STANDARD"
                         className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono focus:outline-hidden"
                       />

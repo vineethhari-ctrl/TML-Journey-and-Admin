@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { useRouteSearchParam } from '../hooks/useRouteSearchParam';
 import { Device, DeviceStatus, DeviceType } from '../types';
 import { DeviceDetailModal } from '../components/administration/DeviceDetailModal';
 import { Pagination } from '../components/common/Pagination';
@@ -21,6 +22,7 @@ export const DeviceManagementPage: React.FC = () => {
   const { devices, blockDevice, unblockDevice, forceLogoutDevice } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
+  useRouteSearchParam(setSearchQuery);
   const [statusFilter, setStatusFilter] = useState<DeviceStatus | 'ALL'>('ALL');
   const [typeFilter, setTypeFilter] = useState<DeviceType | 'ALL'>('ALL');
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);

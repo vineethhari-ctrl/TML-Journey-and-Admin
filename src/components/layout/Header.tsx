@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Bell, ShieldCheck, ChevronDown, Sparkles, UserCheck } from 'lucide-react';
 import { useApp, PlatformRoleId } from '../../context/AppContext';
 import { NotificationCenter } from './NotificationCenter';
@@ -14,6 +14,27 @@ export const Header: React.FC<HeaderProps> = () => {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+
+  // Global shortcuts: Ctrl/⌘+K anywhere, or "/" when not typing in a field, opens the command palette
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen((open) => !open);
+        return;
+      }
+      const target = e.target as HTMLElement | null;
+      const isTyping =
+        !!target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+      if (e.key === '/' && !isTyping && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   return (
     <>
@@ -51,10 +72,10 @@ export const Header: React.FC<HeaderProps> = () => {
           >
             <div className="flex items-center gap-2">
               <Search className="h-4 w-4 text-slate-400" />
-              <span>Search vehicle, JC, VIN...</span>
+              <span>Search or jump to…</span>
             </div>
             <kbd className="hidden xl:inline-block px-1.5 py-0.5 text-[10px] font-mono text-slate-400 bg-white border border-slate-200 rounded">
-              ⌘K
+              {isMac ? '⌘K' : 'Ctrl K'}
             </kbd>
           </button>
         </div>

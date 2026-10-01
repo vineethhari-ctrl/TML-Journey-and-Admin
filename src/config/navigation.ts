@@ -1,0 +1,23 @@
+/** Single source of truth for navigable pages (used by the command palette and access fallbacks). */
+export interface NavPage {
+  route: string;
+  label: string;
+  group: 'Overview' | 'TML Journey' | 'Administration';
+  keywords: string;
+}
+
+export const NAV_PAGES: NavPage[] = [
+  { route: '/dashboard', label: 'Dashboard', group: 'Overview', keywords: 'home kpi overview metrics' },
+  { route: '/journey', label: 'Journey Search', group: 'TML Journey', keywords: 'vehicle jc vin search track' },
+  { route: '/journey/JC20260930001234', label: 'Vehicle Journey (Demo EV)', group: 'TML Journey', keywords: 'timeline demo mh01ab1234' },
+  { route: '/journey?filter=delayed', label: 'Delayed Journeys', group: 'TML Journey', keywords: 'sla breach late' },
+  { route: '/journey?filter=pending', label: 'Pending Actions', group: 'TML Journey', keywords: 'approval blocked waiting' },
+  { route: '/journey?filter=in_workshop', label: 'Vehicles In Workshop', group: 'TML Journey', keywords: 'bay floor' },
+  { route: '/admin/masters', label: 'Masters Maintenance', group: 'Administration', keywords: 'master data fields schema bay' },
+  { route: '/admin/users', label: 'Employee / Users', group: 'Administration', keywords: 'user employee staff create' },
+  { route: '/admin/roles', label: 'Roles & Access', group: 'Administration', keywords: 'permission rbac matrix' },
+  { route: '/admin/devices', label: 'Devices', group: 'Administration', keywords: 'device block trust' },
+  { route: '/admin/sessions', label: 'Sessions', group: 'Administration', keywords: 'session logout terminate' },
+  { route: '/admin/config', label: 'Configuration', group: 'Administration', keywords: 'settings timeout security' },
+  { route: '/admin/audit', label: 'Audit Log', group: 'Administration', keywords: 'history trail export' },
+];

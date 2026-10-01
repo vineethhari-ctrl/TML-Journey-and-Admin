@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { useRouteSearchParam } from '../hooks/useRouteSearchParam';
 import { Session, SessionStatus } from '../types';
 import { TerminateSessionModal } from '../components/administration/TerminateSessionModal';
 import { Pagination } from '../components/common/Pagination';
@@ -17,6 +18,7 @@ export const SessionManagementPage: React.FC = () => {
   const { sessions, terminateSession, terminateAllSessions } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
+  useRouteSearchParam(setSearchQuery);
   const [statusFilter, setStatusFilter] = useState<SessionStatus | 'ALL'>('ALL');
   const [sessionToTerminate, setSessionToTerminate] = useState<Session | null>(null);
   const [isTerminateAllConfirmOpen, setIsTerminateAllConfirmOpen] = useState(false);

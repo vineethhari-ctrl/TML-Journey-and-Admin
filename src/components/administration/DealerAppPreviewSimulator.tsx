@@ -217,6 +217,8 @@ export const DealerAppPreviewSimulator: React.FC<DealerAppPreviewSimulatorProps>
   );
 
   useEffect(() => {
+    // Load immediately for the newly selected screen, then keep in sync with rule edits
+    setRules(rulesEngineService.getRulesForModule(targetModule));
     const unsub = rulesEngineService.subscribe(() => {
       setRules(rulesEngineService.getRulesForModule(targetModule));
     });
@@ -298,6 +300,11 @@ export const DealerAppPreviewSimulator: React.FC<DealerAppPreviewSimulatorProps>
 
   // Action: Publish Verified Schema to Production
   const handlePublishToProduction = () => {
+    // The audit entry claims "zero validation errors", so don't publish while errors are showing
+    if (!isValidOverall) {
+      showToast(`Fix ${invalidRules.length} validation error(s) in the preview before publishing`, 'error');
+      return;
+    }
     logAudit(
       'Dynamic Schema & Rules Verified & Deployed',
       'Masters Maintenance',
