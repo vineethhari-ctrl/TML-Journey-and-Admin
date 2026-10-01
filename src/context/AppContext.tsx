@@ -163,7 +163,9 @@ const mergeWithCatalogue = (saved: MasterConfig[]): MasterConfig[] => {
     if (!existing) return builtIn;
     const knownKeys = new Set(existing.fields.map((f) => f.key));
     const missingFields = builtIn.fields.filter((f) => !knownKeys.has(f.key));
-    return missingFields.length ? { ...existing, fields: [...existing.fields, ...missingFields] } : existing;
+    // Where a master sits in the catalogue (group / module) is owned by the product, not by saved edits
+    const placed = { ...existing, logicalGroup: builtIn.logicalGroup, moduleCode: builtIn.moduleCode, moduleName: builtIn.moduleName };
+    return missingFields.length ? { ...placed, fields: [...existing.fields, ...missingFields] } : placed;
   });
   const builtInIds = new Set(MASTER_COLLECTIONS.map((m) => m.id));
   return [...merged, ...saved.filter((m) => !builtInIds.has(m.id))];

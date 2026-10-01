@@ -28,6 +28,10 @@ export interface MasterFieldDef {
   valueMapping?: Record<string, string>; // Maps raw internal code to customer/dealer display label
   description?: string;
   validation?: MasterFieldValidation;
+  /** Value pre-filled for a new record ('' = start blank, e.g. a PPL that means "all PPLs"). */
+  defaultValue?: string | number;
+  /** Text for the empty option of a non-mandatory select, e.g. "(All PPLs)". */
+  blankLabel?: string;
 }
 
 export type ModuleCode =
@@ -48,7 +52,8 @@ export type LogicalModuleGroup =
   | 'Vehicle Data'
   | 'Dealer Network'
   | 'Service Operations'
-  | 'Parts, Claims & Support';
+  | 'Parts, Claims & Support'
+  | 'Electronic Quality Check';
 
 export interface LogicalModuleDef {
   id: LogicalModuleGroup;
@@ -117,6 +122,27 @@ export const LOGICAL_MODULES: LogicalModuleDef[] = [
     colorTheme: 'purple',
     badge: 'SUPPORT',
   },
+  {
+    id: 'Electronic Quality Check',
+    title: 'Electronic Quality Check (EQC)',
+    shortDesc: 'Guided Check & road test mandates, GC steps, PTD risk colours, DID thresholds, general & schedule checklists',
+    iconName: 'ClipboardCheck',
+    colorTheme: 'teal',
+    badge: 'EQC',
+  },
+];
+
+/** PPLs offered in EQC masters. Blank = all PPLs. */
+export const EQC_PPLS = ['Nexon', 'Nexon EV', 'Altroz', 'Harrier', 'Safari', 'Punch', 'Punch EV', 'Tiago', 'Tiago EV', 'Tigor', 'Curvv', 'Curvv EV'];
+export const EQC_CHECKLIST_TYPES = ['Pre-Delivery Inspection', 'Road Test', 'Underbody', 'Interior & Cleanliness', 'EV Safety'];
+const COMPLAINT_CODE_PATTERN = '^[A-Z0-9]+(-[A-Z0-9]+)*$';
+/** "11.8-14.5", ">=20", "<=4.2", ">0", "<5" or a single number. */
+export const DID_RANGE_PATTERN = '^\\s*((-?\\d+(\\.\\d+)?)\\s*-\\s*(-?\\d+(\\.\\d+)?)|(>=|<=|>|<)\\s*-?\\d+(\\.\\d+)?|-?\\d+(\\.\\d+)?)\\s*$';
+const NOT_OK_FIELDS: MasterFieldDef[] = [
+  { key: 'notOkPhoto', label: 'Not OK: Photo', type: 'select', options: ['Y', 'N'], mandatory: true, defaultValue: 'N', description: 'Photo is mandatory when the item is marked Not OK.' },
+  { key: 'notOkAudio', label: 'Not OK: Audio', type: 'select', options: ['Y', 'N'], mandatory: true, defaultValue: 'N' },
+  { key: 'notOkVideo', label: 'Not OK: Video', type: 'select', options: ['Y', 'N'], mandatory: true, defaultValue: 'N' },
+  { key: 'notOkText', label: 'Not OK: Text', type: 'select', options: ['Y', 'N'], mandatory: true, defaultValue: 'Y' },
 ];
 
 export const WORKSHOP_MODULES: MasterModuleMeta[] = [
@@ -739,7 +765,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     name: 'Final Quality Inspection & Road Test Checklist',
     owner: 'TML_ADMIN',
     category: 'Quality Sign-off',
-    logicalGroup: 'Service Operations',
+    logicalGroup: 'Electronic Quality Check',
     moduleCode: 'eqc',
     moduleName: 'EQC (Electronic Quality Check)',
     description: 'Pre-delivery quality assurance checklists, OBD-II DTC error sweeps, and road test verifications.',
@@ -762,7 +788,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     name: 'Critical Fastener Torque Verification Master',
     owner: 'TML_ADMIN',
     category: 'Torque Engineering',
-    logicalGroup: 'Service Operations',
+    logicalGroup: 'Electronic Quality Check',
     moduleCode: 'eqc',
     moduleName: 'EQC (Electronic Quality Check)',
     description: 'Factory-specified torque values (Nm) for wheel hubs, calipers, subframes, and steering links.',
@@ -778,6 +804,176 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
       { id: 'TRQ-01', fastenerCode: 'FAST-WHL-120', assemblyName: 'Wheel Lug Nuts (All 4 wheels)', nominalTorque: 120, tolerance: 5, toolRequired: 'TW-DIGI-200', active: 'Y' },
       { id: 'TRQ-02', fastenerCode: 'FAST-CALIP-85', assemblyName: 'Front Brake Caliper Guide Pins', nominalTorque: 85, tolerance: 3, toolRequired: 'TW-DIGI-100', active: 'Y' },
       { id: 'TRQ-03', fastenerCode: 'FAST-SUBFRM-140', assemblyName: 'Front Subframe to Monocoque Mounts', nominalTorque: 140, tolerance: 8, toolRequired: 'TW-DIGI-250', active: 'Y' },
+    ],
+  },
+  // =========================================================================
+  // ELECTRONIC QUALITY CHECK (EQC) — rule masters
+  // Blank PPL (or blank Km range) = applies to every vehicle. Rules: src/utils/eqcRules.ts
+  // =========================================================================
+  {
+    id: 'eqc_gc_mandate',
+    name: 'Guided Check & Road Test Mandate Master',
+    owner: 'TML_ADMIN',
+    category: 'EQC Rules',
+    logicalGroup: 'Electronic Quality Check',
+    moduleCode: 'eqc',
+    moduleName: 'EQC (Electronic Quality Check)',
+    description:
+      'Decides per PPL + Complaint Code whether a Guided Check (GC) applies / is mandatory and whether a road test is mandatory. Blank PPL = all PPLs; a PPL-specific row overrides it.',
+    fields: [
+      { key: 'ppl', label: 'PPL', type: 'select', options: EQC_PPLS, defaultValue: '', blankLabel: '(All PPLs)', description: 'Leave blank to apply to all PPLs for this Complaint Code.' },
+      { key: 'complaintCode', label: 'Complaint Code', type: 'text', mandatory: true, validation: { pattern: COMPLAINT_CODE_PATTERN, customErrorMessage: 'Use capitals, digits and hyphens, e.g. BRK-VIB-02.' } },
+      { key: 'gcApplicable', label: 'GC Applicable', type: 'select', options: ['Y', 'N'], mandatory: true },
+      { key: 'gcMandatory', label: 'GC Mandatory', type: 'select', options: ['Y', 'N'], mandatory: true, defaultValue: 'N' },
+      { key: 'gcMandatoryTill', label: 'GC Mandatory Till', type: 'date', defaultValue: '', description: 'Optional end date. After it, GC stays applicable but is no longer mandatory.' },
+      { key: 'roadTestMandatory', label: 'Road Test Mandatory', type: 'select', options: ['Y', 'N'], mandatory: true, defaultValue: 'N' },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'], mandatory: true },
+    ],
+    records: [
+      { id: 'GCM-01', ppl: '', complaintCode: 'BRK-VIB-02', gcApplicable: 'Y', gcMandatory: 'Y', gcMandatoryTill: '', roadTestMandatory: 'Y', active: 'Y' },
+      { id: 'GCM-02', ppl: 'Nexon EV', complaintCode: 'BAT-SOC-03', gcApplicable: 'Y', gcMandatory: 'Y', gcMandatoryTill: '2027-03-31', roadTestMandatory: 'N', active: 'Y' },
+      { id: 'GCM-03', ppl: '', complaintCode: 'BAT-SOC-03', gcApplicable: 'Y', gcMandatory: 'N', gcMandatoryTill: '', roadTestMandatory: 'N', active: 'Y' },
+      { id: 'GCM-04', ppl: 'Altroz', complaintCode: 'ENG-NOIS-01', gcApplicable: 'Y', gcMandatory: 'Y', gcMandatoryTill: '2026-12-31', roadTestMandatory: 'Y', active: 'Y' },
+      { id: 'GCM-05', ppl: '', complaintCode: 'AC-COOL-04', gcApplicable: 'Y', gcMandatory: 'N', gcMandatoryTill: '', roadTestMandatory: 'N', active: 'Y' },
+      { id: 'GCM-06', ppl: '', complaintCode: 'INFO-SCR-05', gcApplicable: 'N', gcMandatory: 'N', gcMandatoryTill: '', roadTestMandatory: 'N', active: 'Y' },
+    ],
+  },
+  {
+    id: 'eqc_gc_steps',
+    name: 'Guided Check Steps Master',
+    owner: 'TML_ADMIN',
+    category: 'EQC Rules',
+    logicalGroup: 'Electronic Quality Check',
+    moduleCode: 'eqc',
+    moduleName: 'EQC (Electronic Quality Check)',
+    description:
+      'Step-by-step Guided Check shown to the technician in the dealer app, per PPL + Complaint Code. PPL-specific steps replace the all-PPL steps for that PPL.',
+    fields: [
+      { key: 'ppl', label: 'PPL', type: 'select', options: EQC_PPLS, defaultValue: '', blankLabel: '(All PPLs)', description: 'Leave blank to apply to all PPLs.' },
+      { key: 'complaintCode', label: 'Complaint Code', type: 'text', mandatory: true, validation: { pattern: COMPLAINT_CODE_PATTERN, customErrorMessage: 'Use capitals, digits and hyphens, e.g. BRK-VIB-02.' } },
+      { key: 'stepNo', label: 'Step No.', type: 'number', mandatory: true, validation: { min: 1, max: 99 } },
+      { key: 'gcStep', label: 'GC Step', type: 'text', mandatory: true },
+      { key: 'gcImage1', label: 'GC Image 1', type: 'text', defaultValue: '', description: 'Image file name or URL shown with the step.' },
+      { key: 'gcImage2', label: 'GC Image 2', type: 'text', defaultValue: '' },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'], mandatory: true },
+    ],
+    records: [
+      { id: 'GCS-01', ppl: '', complaintCode: 'BRK-VIB-02', stepNo: 1, gcStep: 'Measure front disc run-out with dial gauge (limit 0.05 mm)', gcImage1: 'gc/brk-disc-runout.jpg', gcImage2: '', active: 'Y' },
+      { id: 'GCS-02', ppl: '', complaintCode: 'BRK-VIB-02', stepNo: 2, gcStep: 'Check caliper guide pins for free movement and grease', gcImage1: 'gc/brk-guide-pins.jpg', gcImage2: '', active: 'Y' },
+      { id: 'GCS-03', ppl: '', complaintCode: 'BRK-VIB-02', stepNo: 3, gcStep: 'Inspect wheel balancing and tyre wear pattern', gcImage1: '', gcImage2: '', active: 'Y' },
+      { id: 'GCS-04', ppl: 'Nexon EV', complaintCode: 'BAT-SOC-03', stepNo: 1, gcStep: 'Read HV battery SOC and cell voltage spread via VCI', gcImage1: 'gc/ev-vci-soc.jpg', gcImage2: 'gc/ev-cell-spread.jpg', active: 'Y' },
+      { id: 'GCS-05', ppl: 'Nexon EV', complaintCode: 'BAT-SOC-03', stepNo: 2, gcStep: 'Check BMS DTC history and last OTA version', gcImage1: '', gcImage2: '', active: 'Y' },
+      { id: 'GCS-06', ppl: '', complaintCode: 'BAT-SOC-03', stepNo: 1, gcStep: 'Check 12V auxiliary battery voltage and terminals', gcImage1: 'gc/12v-terminals.jpg', gcImage2: '', active: 'Y' },
+      { id: 'GCS-07', ppl: 'Altroz', complaintCode: 'ENG-NOIS-01', stepNo: 1, gcStep: 'Cold start: listen at timing belt tensioner with stethoscope', gcImage1: 'gc/eng-tensioner.jpg', gcImage2: '', active: 'Y' },
+      { id: 'GCS-08', ppl: 'Altroz', complaintCode: 'ENG-NOIS-01', stepNo: 2, gcStep: 'Check engine mount bushes for cracks', gcImage1: '', gcImage2: '', active: 'Y' },
+      { id: 'GCS-09', ppl: '', complaintCode: 'AC-COOL-04', stepNo: 1, gcStep: 'Measure vent outlet temperature at idle (target ≤ 8 °C)', gcImage1: 'gc/ac-vent-temp.jpg', gcImage2: '', active: 'Y' },
+    ],
+  },
+  {
+    id: 'eqc_ptd_risk',
+    name: 'PTD Risk Configuration Master',
+    owner: 'TML_ADMIN',
+    category: 'EQC Rules',
+    logicalGroup: 'Electronic Quality Check',
+    moduleCode: 'eqc',
+    moduleName: 'EQC (Electronic Quality Check)',
+    description:
+      'Highlights a job at risk of missing its Promised Time of Delivery (PTD). Time left ≤ Red threshold → Red; ≤ Orange threshold → Orange. Red must be lower than Orange.',
+    fields: [
+      { key: 'colorCode', label: 'Color Code', type: 'select', options: ['Orange', 'Red'], mandatory: true },
+      { key: 'thresholdHrs', label: 'Threshold in Hrs', type: 'number', mandatory: true, validation: { min: 0, max: 72 } },
+      { key: 'thresholdMins', label: 'Threshold in Mins', type: 'number', mandatory: true, validation: { min: 0, max: 59 } },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'], mandatory: true },
+    ],
+    records: [
+      { id: 'PTD-01', colorCode: 'Orange', thresholdHrs: 2, thresholdMins: 0, active: 'Y' },
+      { id: 'PTD-02', colorCode: 'Red', thresholdHrs: 0, thresholdMins: 45, active: 'Y' },
+    ],
+  },
+  {
+    id: 'eqc_did_thresholds',
+    name: 'DID Parameter Threshold Mapping Master',
+    owner: 'TML_ADMIN',
+    category: 'EQC Rules',
+    logicalGroup: 'Electronic Quality Check',
+    moduleCode: 'eqc',
+    moduleName: 'EQC (Electronic Quality Check)',
+    description:
+      'Expected values for VCI / OBD DID auto-scan parameters. Formats: "11.8-14.5", ">=20", "<=4.2", ">0", or an exact value. Blank PPL = all PPLs; a PPL-specific row overrides it.',
+    fields: [
+      { key: 'parameterName', label: 'Parameter Name', type: 'text', mandatory: true },
+      { key: 'expectedValue', label: 'Expected Value / Range', type: 'text', mandatory: true, validation: { pattern: DID_RANGE_PATTERN, customErrorMessage: 'Use a range like 11.8-14.5, a limit like >=20 or <=4.2, or a single value.' } },
+      { key: 'unit', label: 'Unit', type: 'text', defaultValue: '' },
+      { key: 'ppl', label: 'PPL', type: 'select', options: EQC_PPLS, defaultValue: '', blankLabel: '(All PPLs)', description: 'Leave blank to apply to all PPLs.' },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'], mandatory: true },
+    ],
+    records: [
+      { id: 'DID-01', parameterName: 'Battery SOC', expectedValue: '>=60', unit: '%', ppl: '', active: 'Y' },
+      { id: 'DID-02', parameterName: '12V Battery Voltage', expectedValue: '12.2-14.8', unit: 'V', ppl: '', active: 'Y' },
+      { id: 'DID-03', parameterName: 'HV Battery SOC', expectedValue: '>=20', unit: '%', ppl: 'Nexon EV', active: 'Y' },
+      { id: 'DID-04', parameterName: 'HV Battery SOC', expectedValue: '>=25', unit: '%', ppl: 'Tiago EV', active: 'Y' },
+      { id: 'DID-05', parameterName: 'BMS Cell Voltage', expectedValue: '3.2-4.2', unit: 'V', ppl: '', active: 'Y' },
+      { id: 'DID-06', parameterName: 'Coolant Temperature', expectedValue: '80-105', unit: '°C', ppl: '', active: 'Y' },
+    ],
+  },
+  {
+    id: 'eqc_general_checklist',
+    name: 'General Checklist Master',
+    owner: 'TML_ADMIN',
+    category: 'EQC Checklists',
+    logicalGroup: 'Electronic Quality Check',
+    moduleCode: 'eqc',
+    moduleName: 'EQC (Electronic Quality Check)',
+    description:
+      'EQC checklist items by BU and type. Blank PPL or blank Km range = every vehicle. The Not-OK flags decide what the technician must capture when an item is marked Not OK.',
+    fields: [
+      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], mandatory: true },
+      { key: 'checklistType', label: 'Checklist Type', type: 'select', options: EQC_CHECKLIST_TYPES, mandatory: true },
+      { key: 'checklistItem', label: 'Checklist Item', type: 'text', mandatory: true },
+      { key: 'rangeStartKm', label: 'Range Start Km', type: 'number', defaultValue: '', validation: { min: 0, max: 999999 } },
+      { key: 'rangeEndKm', label: 'Range End Km', type: 'number', defaultValue: '', validation: { min: 0, max: 999999 } },
+      { key: 'ppl', label: 'PPL', type: 'select', options: EQC_PPLS, defaultValue: '', blankLabel: '(All PPLs)', description: 'Leave blank to apply to all PPLs.' },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'], mandatory: true },
+      ...NOT_OK_FIELDS,
+    ],
+    records: [
+      { id: 'GCL-01', bu: 'PV', checklistType: 'Pre-Delivery Inspection', checklistItem: 'All warning lamps OFF after engine start', rangeStartKm: null, rangeEndKm: null, ppl: '', active: 'Y', notOkPhoto: 'Y', notOkAudio: 'N', notOkVideo: 'N', notOkText: 'Y' },
+      { id: 'GCL-02', bu: 'PV', checklistType: 'Road Test', checklistItem: 'No pull to either side under braking', rangeStartKm: null, rangeEndKm: null, ppl: '', active: 'Y', notOkPhoto: 'N', notOkAudio: 'N', notOkVideo: 'Y', notOkText: 'Y' },
+      { id: 'GCL-03', bu: 'PV', checklistType: 'Underbody', checklistItem: 'Clutch plate wear within limit', rangeStartKm: 40000, rangeEndKm: 80000, ppl: '', active: 'Y', notOkPhoto: 'Y', notOkAudio: 'N', notOkVideo: 'N', notOkText: 'Y' },
+      { id: 'GCL-04', bu: 'PV', checklistType: 'Road Test', checklistItem: 'DCA gear shift smooth, no judder at 1st–2nd', rangeStartKm: null, rangeEndKm: null, ppl: 'Altroz', active: 'Y', notOkPhoto: 'N', notOkAudio: 'Y', notOkVideo: 'Y', notOkText: 'Y' },
+      { id: 'GCL-05', bu: 'EV', checklistType: 'EV Safety', checklistItem: 'HV connector seals and orange cable insulation intact', rangeStartKm: null, rangeEndKm: null, ppl: '', active: 'Y', notOkPhoto: 'Y', notOkAudio: 'N', notOkVideo: 'N', notOkText: 'Y' },
+      { id: 'GCL-06', bu: 'EV', checklistType: 'Pre-Delivery Inspection', checklistItem: 'Regen braking levels switch correctly', rangeStartKm: null, rangeEndKm: null, ppl: 'Nexon EV', active: 'Y', notOkPhoto: 'N', notOkAudio: 'N', notOkVideo: 'Y', notOkText: 'Y' },
+      { id: 'GCL-07', bu: 'PV', checklistType: 'Interior & Cleanliness', checklistItem: 'Paper floor mats and seat covers removed', rangeStartKm: null, rangeEndKm: null, ppl: '', active: 'N', notOkPhoto: 'N', notOkAudio: 'N', notOkVideo: 'N', notOkText: 'N' },
+    ],
+  },
+  {
+    id: 'eqc_schedule_checklist',
+    name: 'Schedule Checklist Master (Section & Sub-Section)',
+    owner: 'TML_ADMIN',
+    category: 'EQC Checklists',
+    logicalGroup: 'Electronic Quality Check',
+    moduleCode: 'eqc',
+    moduleName: 'EQC (Electronic Quality Check)',
+    description:
+      'Service-schedule checklist grouped by Section and Sub-Section, filtered by BU, PPL and odometer Km. Blank PPL or Km range = every vehicle.',
+    fields: [
+      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], mandatory: true },
+      { key: 'section', label: 'Section', type: 'text', mandatory: true },
+      { key: 'subSection', label: 'Sub-Section', type: 'text', mandatory: true },
+      { key: 'ppl', label: 'PPL', type: 'select', options: EQC_PPLS, defaultValue: '', blankLabel: '(All PPLs)', description: 'Leave blank to apply to all PPLs.' },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'], mandatory: true },
+      ...NOT_OK_FIELDS,
+      { key: 'rangeStartKm', label: 'Range Start Km', type: 'number', defaultValue: '', validation: { min: 0, max: 999999 } },
+      { key: 'rangeEndKm', label: 'Range End Km', type: 'number', defaultValue: '', validation: { min: 0, max: 999999 } },
+    ],
+    records: [
+      { id: 'SCL-01', bu: 'PV', section: 'Engine Compartment', subSection: 'Engine oil level and leakage', ppl: '', active: 'Y', notOkPhoto: 'Y', notOkAudio: 'N', notOkVideo: 'N', notOkText: 'Y', rangeStartKm: null, rangeEndKm: null },
+      { id: 'SCL-02', bu: 'PV', section: 'Engine Compartment', subSection: 'Drive belt condition', ppl: '', active: 'Y', notOkPhoto: 'Y', notOkAudio: 'N', notOkVideo: 'N', notOkText: 'Y', rangeStartKm: 20000, rangeEndKm: null },
+      { id: 'SCL-03', bu: 'PV', section: 'Brakes', subSection: 'Front pad thickness ≥ 3 mm', ppl: '', active: 'Y', notOkPhoto: 'Y', notOkAudio: 'N', notOkVideo: 'N', notOkText: 'Y', rangeStartKm: 10000, rangeEndKm: null },
+      { id: 'SCL-04', bu: 'PV', section: 'Underbody', subSection: 'Turbo intercooler hoses', ppl: 'Harrier', active: 'Y', notOkPhoto: 'Y', notOkAudio: 'N', notOkVideo: 'N', notOkText: 'Y', rangeStartKm: null, rangeEndKm: null },
+      { id: 'SCL-05', bu: 'EV', section: 'HV System', subSection: 'Battery pack mounting bolts torque', ppl: '', active: 'Y', notOkPhoto: 'Y', notOkAudio: 'N', notOkVideo: 'N', notOkText: 'Y', rangeStartKm: 15000, rangeEndKm: null },
+      { id: 'SCL-06', bu: 'EV', section: 'HV System', subSection: 'Coolant level in battery thermal loop', ppl: '', active: 'Y', notOkPhoto: 'Y', notOkAudio: 'N', notOkVideo: 'N', notOkText: 'Y', rangeStartKm: null, rangeEndKm: null },
+      { id: 'SCL-07', bu: 'PV', section: 'Electricals', subSection: 'Headlamp aim and fog lamps', ppl: '', active: 'Y', notOkPhoto: 'N', notOkAudio: 'N', notOkVideo: 'Y', notOkText: 'Y', rangeStartKm: null, rangeEndKm: 30000 },
     ],
   },
   {
