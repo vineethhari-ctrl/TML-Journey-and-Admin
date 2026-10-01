@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { BayProvider } from './context/BayContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { JourneySearchPage } from './pages/JourneySearchPage';
@@ -17,6 +18,7 @@ import { ConfigurationPage } from './pages/ConfigurationPage';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { MastersMaintenancePage } from './pages/MastersMaintenancePage';
 import { MasterGuidePage } from './pages/MasterGuidePage';
+import { BayApprovalsPage } from './pages/BayApprovalsPage';
 
 const AppRouter: React.FC = () => {
   const { currentRoute } = useApp();
@@ -33,6 +35,9 @@ const AppRouter: React.FC = () => {
     if (path.startsWith('/journey/')) {
       const jcNumber = decodeURIComponent(path.split('/')[2] || '') || 'JC20260930001234';
       return <JourneyDetailPage jcNumber={jcNumber} />;
+    }
+    if (path === '/admin/bay-approvals') {
+      return <BayApprovalsPage />;
     }
     if (path === '/admin/masters-guide') {
       return <MasterGuidePage />;
@@ -67,7 +72,9 @@ const AppRouter: React.FC = () => {
 export default function App() {
   return (
     <AppProvider>
-      <AppRouter />
+      <BayProvider>
+        <AppRouter />
+      </BayProvider>
     </AppProvider>
   );
 }

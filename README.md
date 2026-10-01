@@ -26,6 +26,12 @@ Masters Maintenance has **Create New Master** (form) and **Import BA Workbook** 
 both copies of the Excel files (a test fails if they are out of date).
 Logic lives in `src/utils/masterWorkbook.ts` (build / parse / validate) and is covered by unit + E2E tests.
 
+## Bay management
+
+Allocation-driven bay governance with approvals (TML Network Manager / TML Admin), simulated email deep links and
+policy switches — see [`docs/BAY_MANAGEMENT.md`](docs/BAY_MANAGEMENT.md). Rules: `src/utils/bayGovernance.ts` (pure, unit-tested);
+state: `src/context/BayContext.tsx`; UI: `BayManagementConsole.tsx`, `pages/BayApprovalsPage.tsx`.
+
 ## Conventions (please keep these)
 
 - **Routing** lives in the URL hash (`#/journey/JC…`, `#/admin/users?search=…`). Use `navigate()` from `useApp()`; pages read `?search=` via `useRouteSearchParam`.

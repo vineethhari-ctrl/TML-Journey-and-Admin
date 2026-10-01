@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppProvider, useApp } from '../context/AppContext';
+import { BayProvider } from '../context/BayContext';
 import { MasterDataImportModal } from '../components/administration/MasterDataImportModal';
 import { MasterTableEditor } from '../components/administration/MasterTableEditor';
 import { BulkEditModal } from '../components/administration/BulkEditModal';
@@ -182,29 +183,77 @@ describe('AppContext actions', () => {
 
 describe('MastersMaintenancePage – bay management', () => {
   const openBays = async (user: ReturnType<typeof userEvent.setup>) => {
-    wrap(<MastersMaintenancePage />);
+    render(
+      <AppProvider>
+        <BayProvider>
+          <MastersMaintenancePage />
+        </BayProvider>
+      </AppProvider>
+    );
     const dealerTab = screen.getAllByRole('button').find((b) => /Dealer Network/.test(b.textContent || ''))!;
     await user.click(dealerTab);
     const bayTab = screen.getAllByRole('button').find((b) => /^Bay Management/.test(b.textContent || ''))!;
     await user.click(bayTab);
   };
 
-  it('"+ New Bay" creates an editable draft that can be saved', async () => {
+  it('a dealer bay within the TML allocation goes live immediately', async () => {
     const user = userEvent.setup();
     await openBays(user);
-    await user.click(screen.getByRole('button', { name: /\+ New Bay/ }));
-    const nameInput = screen.getByDisplayValue(/^New Bay \d+$/);
-    await user.clear(nameInput);
-    await user.type(nameInput, 'EV Express Bay');
-    await user.click(screen.getByRole('button', { name: 'Save Bay Setup' }));
-    expect(screen.getAllByText('EV Express Bay').length).toBeGreaterThan(0);
+    await user.click(screen.getByRole('button', { name: 'Dealer Admin' }));
+    await user.click(screen.getByRole('button', { name: /New Bay/ }));
+    const form = screen.getByRole('form', { name: 'Add bay' });
+    await user.type(within(form).getByLabelText(/Bay Name/), 'Mechanical Bay 03');
+    expect(within(form).getByTestId('allocation-check')).toHaveTextContent('2 of 4 used');
+    await user.click(within(form).getByRole('button', { name: 'Add Bay' }));
+    const row = screen.getByText('Mechanical Bay 03').closest('tr')!;
+    expect(row).toHaveTextContent('Active');
+    expect(row).toHaveTextContent('Approved');
   });
 
-  it('the dealer filter actually filters the bay list', async () => {
+  it('a dealer bay beyond the allocation needs a justification and is sent for approval with an email', async () => {
     const user = userEvent.setup();
     await openBays(user);
-    const dealerSelect = screen.getAllByRole('combobox').find((s) => within(s).queryByRole('option', { name: /DLR1002/ }))!;
-    await user.selectOptions(dealerSelect, 'DLR1002');
+    await user.click(screen.getByRole('button', { name: 'Dealer Admin' }));
+    await user.click(screen.getByRole('button', { name: /New Bay/ }));
+    const form = screen.getByRole('form', { name: 'Add bay' });
+    await user.type(within(form).getByLabelText(/Bay Name/), 'Electrical Bay 02');
+    await user.selectOptions(within(form).getByLabelText('Bay Type'), 'Electrical');
+    expect(within(form).getByTestId('allocation-check')).toHaveTextContent(/TML Network Manager/);
+    await user.click(within(form).getByRole('button', { name: 'Send for Approval' }));
+    expect(screen.getAllByText(/justification/i).length).toBeGreaterThan(0); // blocked without one
+    await user.type(within(form).getByLabelText(/Justification/), 'New EV fleet contract');
+    await user.click(within(form).getByRole('button', { name: 'Send for Approval' }));
+    const email = await screen.findByTestId('email-preview');
+    expect(email).toHaveTextContent('network.manager@tatamotors.com');
+    expect(email).toHaveTextContent('#/admin/bay-approvals?request=');
+  });
+
+  it('dealer inactivation goes to TML Admin; TML Admin inactivation applies immediately', async () => {
+    const user = userEvent.setup();
+    await openBays(user);
+    await user.click(screen.getByRole('button', { name: 'Dealer Admin' }));
+    const bayRow = (id: string) => document.querySelector(`[data-bay-id="${id}"]`) as HTMLElement;
+    let row = bayRow('BAY-01');
+    await user.click(within(row).getByRole('button', { name: /Inactivate/ }));
+    await user.selectOptions(screen.getByLabelText(/Reason/), 'Equipment breakdown');
+    await user.click(screen.getByRole('button', { name: 'Send for Approval' }));
+    expect(await screen.findByTestId('email-preview')).toHaveTextContent('tml.admin.support@tatamotors.com');
+    await user.click(screen.getByRole('button', { name: /Done/ }));
+    row = bayRow('BAY-01');
+    expect(row).toHaveTextContent('Status change pending');
+
+    await user.click(screen.getByRole('button', { name: 'TML Admin' }));
+    row = bayRow('BAY-02');
+    await user.click(within(row).getByRole('button', { name: /Inactivate/ }));
+    await user.selectOptions(screen.getByLabelText(/Reason/), 'Preventive maintenance');
+    await user.click(screen.getByRole('button', { name: 'Make Inactive' }));
+    expect(bayRow('BAY-02')).toHaveTextContent('Inactive');
+  });
+
+  it('the dealer selector shows only that dealer\'s bays', async () => {
+    const user = userEvent.setup();
+    await openBays(user);
+    await user.selectOptions(screen.getByLabelText('Dealer'), 'DLR1002');
     expect(screen.getByText(/Workshop Bays \(0\)/)).toBeInTheDocument();
   });
 });

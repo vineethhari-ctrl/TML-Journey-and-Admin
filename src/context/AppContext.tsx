@@ -117,6 +117,7 @@ interface AppContextType {
   addJourneyEvent: (event: Omit<JourneyEvent, 'eventId'>) => void;
 
   markNotificationAsRead: (notificationId: string) => void;
+  addNotification: (n: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => void;
   markAllNotificationsAsRead: () => void;
 
   exportAuditLogs: () => void;
@@ -434,6 +435,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           'securityGuard',
         ].includes(activeRoleId);
       }
+      // Approving bays is a TML Network Manager / TML Admin task (super admin in this prototype)
+      if (route === '/admin/bay-approvals') {
+        return false;
+      }
       if (route === '/admin/masters' || route === '/admin/masters-guide') {
         return ['superAdmin', 'dealerAdmin'].includes(activeRoleId);
       }
@@ -654,6 +659,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications((prev) =>
       prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
     );
+  }, []);
+
+  const addNotification = useCallback((n: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => {
+    setNotifications((prev) => [{ ...n, id: uniqueId('NOTIF'), timestamp: 'Just now', read: false }, ...prev]);
   }, []);
 
   const markAllNotificationsAsRead = useCallback(() => {
@@ -891,6 +900,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateExceptionStatus,
         addJourneyEvent,
         markNotificationAsRead,
+        addNotification,
         markAllNotificationsAsRead,
         exportAuditLogs,
         searchGlobal,

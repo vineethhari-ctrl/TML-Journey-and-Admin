@@ -223,7 +223,7 @@ export interface AppNotification {
   id: string;
   title: string;
   message: string;
-  type: 'EXCEPTION' | 'SECURITY' | 'USER' | 'DEVICE' | 'CONFIG';
+  type: 'EXCEPTION' | 'SECURITY' | 'USER' | 'DEVICE' | 'CONFIG' | 'APPROVAL';
   timestamp: string;
   read: boolean;
   targetPath: string;
