@@ -630,7 +630,7 @@ function readRecords(
       // Blank cells on an existing record mean "leave as is", not "clear the value"
       Object.keys(raw).forEach((k) => k !== 'id' && raw[k] === '' && delete raw[k]);
     }
-    const res = masterValidationSchema.validateRecord(fields, base ? { ...base, ...raw } : raw);
+    const res = masterValidationSchema.validateRecord(fields, base ? { ...base, ...raw } : raw, masterId);
     Object.values(res.errors).forEach((e) => issues.push({ severity: 'error', sheet: sheetName, row, message: e }));
     const sanitizedImported: Record<string, any> = { id: raw.id };
     Object.keys(raw).forEach((k) => (sanitizedImported[k] = res.sanitizedRecord[k]));

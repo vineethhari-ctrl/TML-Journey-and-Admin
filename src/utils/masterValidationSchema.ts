@@ -1,4 +1,5 @@
 import { MasterFieldDef } from '../data/masterCatalogue';
+import { validateEqcRecord } from './eqcRules';
 
 export interface FieldValidationResult {
   isValid: boolean;
@@ -228,7 +229,9 @@ export const masterValidationSchema = {
    */
   validateRecord(
     fields: MasterFieldDef[],
-    recordData: Record<string, any>
+    recordData: Record<string, any>,
+    /** Adds the master's cross-field business rules (e.g. EQC: GC Mandatory needs GC Applicable). */
+    masterId?: string
   ): RecordValidationResult {
     const errors: Record<string, string> = {};
     const sanitizedRecord: Record<string, any> = { ...recordData };
@@ -241,6 +244,11 @@ export const masterValidationSchema = {
         sanitizedRecord[field.key] = result.sanitizedValue;
       }
     });
+
+    if (masterId) {
+      // Only when every field is individually valid — otherwise the field errors say it better
+      if (Object.keys(errors).length === 0) Object.assign(errors, validateEqcRecord(masterId, sanitizedRecord));
+    }
 
     return {
       isValid: Object.keys(errors).length === 0,

@@ -45,6 +45,7 @@ import {
 } from 'lucide-react';
 import { AuditTrailMiddleware } from '../../middleware/auditTrailMiddleware';
 import { masterExportUtil } from '../../utils/masterExportUtil';
+import { findEqcConflict } from '../../utils/eqcRules';
 import { masterValidationSchema } from '../../utils/masterValidationSchema';
 import { MasterDataImportModal } from './MasterDataImportModal';
 import { BatchUndoModal, MasterChangeSnapshot } from './BatchUndoModal';
@@ -388,7 +389,9 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     }
     const initial: Record<string, any> = { id: newId };
     master.fields.forEach((f) => {
-      if (f.type === 'select' && f.options && f.options.length > 0) {
+      if (f.defaultValue !== undefined) {
+        initial[f.key] = f.defaultValue;
+      } else if (f.type === 'select' && f.options && f.options.length > 0) {
         initial[f.key] = f.options[0];
       } else if (f.type === 'number') {
         initial[f.key] = 0;
@@ -604,7 +607,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     e.preventDefault();
 
     // Rigorous Schema Validation across all fields (Date, Number, Dropdown, Boolean, Text)
-    const validationResult = masterValidationSchema.validateRecord(master.fields, formData);
+    const validationResult = masterValidationSchema.validateRecord(master.fields, formData, master.id);
 
     if (!validationResult.isValid) {
       setFormErrors(validationResult.errors);
@@ -620,6 +623,12 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     );
     if (!sanitizedData.id || idClash) {
       showToast(`Record ID "${sanitizedData.id ?? ''}" is missing or already exists in ${master.name}.`, 'error');
+      return;
+    }
+
+    const conflict = findEqcConflict(master.id, sanitizedData, master.records.filter((r) => r.id !== editingRecordId));
+    if (conflict) {
+      showToast(conflict, 'error');
       return;
     }
 
@@ -1883,7 +1892,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                 const hasError = Boolean(formErrors[f.key]);
                 return (
                   <div key={f.key} className="space-y-1">
-                    <label className="font-bold text-slate-700 flex items-center justify-between text-xs">
+                    <label htmlFor={`rec-field-${f.key}`} className="font-bold text-slate-700 flex items-center justify-between text-xs">
                       <span className="flex items-center gap-1">
                         <span>{f.label}</span>
                         {f.mandatory && <span className="text-rose-500 font-bold">*</span>}
@@ -1901,6 +1910,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                     {/* Dropdown Input */}
                     {f.type === 'select' && f.options ? (
                       <select
+                        id={`rec-field-${f.key}`}
                         value={formData[f.key] ?? ''}
                         onChange={(e) => handleFormFieldChange(f.key, e.target.value)}
                         onBlur={() => handleFormFieldBlur(f)}
@@ -1910,7 +1920,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                             : 'border-slate-200 focus:border-blue-400'
                         }`}
                       >
-                        <option value="" disabled={f.mandatory}>-- Select {f.label} --</option>
+                        <option value="" disabled={f.mandatory}>{f.blankLabel ?? `-- Select ${f.label} --`}</option>
                         {f.options.map((opt) => (
                           <option key={opt} value={opt}>
                             {opt}
@@ -1922,6 +1932,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                       <input
                         type="text"
                         inputMode="decimal"
+                        id={`rec-field-${f.key}`}
                         value={formData[f.key] ?? ''}
                         onChange={(e) => handleFormFieldChange(f.key, e.target.value)}
                         onBlur={() => handleFormFieldBlur(f)}
@@ -1944,6 +1955,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                         type="date"
                         min={f.validation?.minDate}
                         max={f.validation?.maxDate}
+                        id={`rec-field-${f.key}`}
                         value={formData[f.key] || ''}
                         onChange={(e) => handleFormFieldChange(f.key, e.target.value)}
                         onBlur={() => handleFormFieldBlur(f)}
@@ -1958,6 +1970,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                       <label className="flex items-center gap-2 cursor-pointer pt-1">
                         <input
                           type="checkbox"
+                          id={`rec-field-${f.key}`}
                           checked={Boolean(formData[f.key])}
                           onChange={(e) => handleFormFieldChange(f.key, e.target.checked)}
                           className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
@@ -1968,6 +1981,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                       /* Text Input */
                       <input
                         type="text"
+                        id={`rec-field-${f.key}`}
                         value={formData[f.key] ?? ''}
                         onChange={(e) => handleFormFieldChange(f.key, e.target.value)}
                         onBlur={() => handleFormFieldBlur(f)}
@@ -1981,11 +1995,13 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                     )}
 
                     {/* Field Validation Error Badge */}
-                    {hasError && (
+                    {hasError ? (
                       <div className="flex items-center gap-1.5 text-[11px] text-rose-600 font-medium pt-0.5 animate-fade-in">
                         <AlertTriangle className="h-3 w-3 shrink-0" />
                         <span>{formErrors[f.key]}</span>
                       </div>
+                    ) : (
+                      f.description && <p className="text-[10px] text-slate-400">{f.description}</p>
                     )}
                   </div>
                 );

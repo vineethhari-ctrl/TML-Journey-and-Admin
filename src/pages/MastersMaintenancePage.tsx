@@ -15,6 +15,7 @@ import { DealerAppPreviewSimulator } from '../components/administration/DealerAp
 import { CreateMasterModal } from '../components/administration/CreateMasterModal';
 import { MasterWorkbookImportModal } from '../components/administration/MasterWorkbookImportModal';
 import { BayManagementConsole } from '../components/administration/BayManagementConsole';
+import { EqcRuleTester } from '../components/administration/EqcRuleTester';
 import { HolidayCalendarConsole } from '../components/administration/HolidayCalendarConsole';
 import { calendarKey, createSeedCalendars } from '../data/holidayData';
 import { DEALER_DIVISIONS } from '../data/bayData';
@@ -51,6 +52,7 @@ import {
   Download,
   ShieldCheck,
   Package,
+  ClipboardCheck,
   HelpCircle,
   CheckSquare,
   Award,
@@ -80,6 +82,8 @@ const getGroupIcon = (iconName: string, className = 'h-4 w-4') => {
       return <Building2 className={className} />;
     case 'Wrench':
       return <Wrench className={className} />;
+    case 'ClipboardCheck':
+      return <ClipboardCheck className={className} />;
     case 'Package':
     default:
       return <Package className={className} />;
@@ -133,6 +137,12 @@ export const MastersMaintenancePage: React.FC = () => {
       setActiveMainTab('catalogues');
       setActiveLogicalGroup('Dealer Network');
       setSelectedMasterId('bay_management_interactive');
+      setActiveLayout('workspace');
+    }
+    if (open === 'eqc') {
+      setActiveMainTab('catalogues');
+      setActiveLogicalGroup('Electronic Quality Check');
+      setSelectedMasterId('eqc_gc_mandate');
       setActiveLayout('workspace');
     }
     if (open === 'import') {
@@ -1642,17 +1652,20 @@ export const MastersMaintenancePage: React.FC = () => {
               );
             }
 
-            // Default Case: Enterprise Schema-Driven Table Editor
+            // Default Case: Enterprise Schema-Driven Table Editor (EQC masters get the rule tester on top)
             return (
-              <MasterTableEditor
-                master={currentMaster}
-                isAdminTml={adminRole === 'TML Admin'}
-                onUpdateMaster={(updated) => {
-                  updateMasterConfig(updated);
-                }}
-                onOpenChangeLog={() => setActiveMainTab('changelog')}
-                onOpenDealerPreview={() => setActiveMainTab('dealer_preview')}
-              />
+              <div className="space-y-4">
+                {currentMaster.logicalGroup === 'Electronic Quality Check' && <EqcRuleTester />}
+                <MasterTableEditor
+                  master={currentMaster}
+                  isAdminTml={adminRole === 'TML Admin'}
+                  onUpdateMaster={(updated) => {
+                    updateMasterConfig(updated);
+                  }}
+                  onOpenChangeLog={() => setActiveMainTab('changelog')}
+                  onOpenDealerPreview={() => setActiveMainTab('dealer_preview')}
+                />
+              </div>
             );
           })()}
         </div>

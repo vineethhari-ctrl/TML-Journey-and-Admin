@@ -32,6 +32,13 @@ Allocation-driven bay governance with approvals (TML Network Manager / TML Admin
 policy switches — see [`docs/BAY_MANAGEMENT.md`](docs/BAY_MANAGEMENT.md). Rules: `src/utils/bayGovernance.ts` (pure, unit-tested);
 state: `src/context/BayContext.tsx`; UI: `BayManagementConsole.tsx`, `pages/BayApprovalsPage.tsx`.
 
+## Electronic Quality Check (EQC) masters
+
+Six EQC rule masters (GC & road test mandate, GC steps, PTD risk, DID thresholds, general and schedule checklists) with
+an in-screen **EQC Rule Tester** and health check — see [`docs/EQC_MASTERS.md`](docs/EQC_MASTERS.md).
+Rules: `src/utils/eqcRules.ts` (pure, unit-tested); masters: `src/data/masterCatalogue.ts`; UI: `EqcRuleTester.tsx`.
+Cross-field rules for any master go in `EQC_RECORD_RULES` and run on save and on workbook import.
+
 ## Conventions (please keep these)
 
 - **Routing** lives in the URL hash (`#/journey/JC…`, `#/admin/users?search=…`). Use `navigate()` from `useApp()`; pages read `?search=` via `useRouteSearchParam`.

@@ -168,7 +168,7 @@ export const ConfigurableMasterView: React.FC<ConfigurableMasterViewProps> = ({
   const handleSaveRecord = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const validationResult = masterValidationSchema.validateRecord(master.fields, recordFormData);
+    const validationResult = masterValidationSchema.validateRecord(master.fields, recordFormData, master.id);
     if (!validationResult.isValid) {
       setRecordFormErrors(validationResult.errors);
       showToast('Validation failed: Please correct invalid field values.', 'error');
