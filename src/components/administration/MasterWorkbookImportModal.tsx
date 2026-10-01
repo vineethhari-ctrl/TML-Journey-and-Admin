@@ -9,7 +9,7 @@ import {
   buildTemplateWorkbook,
   parseMasterWorkbook,
   readWorkbook,
-  workbookToArrayBuffer,
+  downloadWorkbook,
   ExistingMasterMode,
   PROTECTED_MASTER_IDS,
 } from '../../utils/masterWorkbook';
@@ -20,23 +20,8 @@ interface MasterWorkbookImportModalProps {
   onImported: (masters: MasterConfig[]) => void;
 }
 
-const downloadWorkbook = (wb: WorkBook, fileName: string) => {
-  const url = URL.createObjectURL(
-    new Blob([workbookToArrayBuffer(wb)], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    })
-  );
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-};
-
 export const MasterWorkbookImportModal: React.FC<MasterWorkbookImportModalProps> = ({ isOpen, onClose, onImported }) => {
-  const { masterConfigs, importMasters, showToast } = useApp();
+  const { masterConfigs, importMasters, showToast, navigate } = useApp();
   const [workbook, setWorkbook] = useState<WorkBook | null>(null);
   const [fileName, setFileName] = useState('');
   const [mode, setMode] = useState<ExistingMasterMode>('skip');
@@ -90,7 +75,19 @@ export const MasterWorkbookImportModal: React.FC<MasterWorkbookImportModalProps>
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl border border-blue-200 bg-blue-50/60">
           <div>
             <div className="font-bold text-blue-950">1. Start from the template</div>
-            <p className="text-slate-600">The README sheet explains every column. Or export the current masters to edit them.</p>
+            <p className="text-slate-600">
+              The README sheet explains every column. Need help?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  navigate('/admin/masters-guide');
+                }}
+                className="font-bold text-blue-800 underline cursor-pointer"
+              >
+                Open the BA Guide
+              </button>
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <button

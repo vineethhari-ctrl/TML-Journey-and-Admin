@@ -110,6 +110,8 @@ const getGroupIcon = (iconName: string, className = 'h-4 w-4') => {
 
 export const MastersMaintenancePage: React.FC = () => {
   const {
+    currentRoute,
+    navigate,
     showToast,
     currentUser,
     logAudit,
@@ -139,6 +141,16 @@ export const MastersMaintenancePage: React.FC = () => {
   // On-the-fly master creation (form) and BA workbook import
   const [isCreateMasterOpen, setIsCreateMasterOpen] = useState(false);
   const [isWorkbookImportOpen, setIsWorkbookImportOpen] = useState(false);
+
+  // Deep links from the BA guide: #/admin/masters?open=create | ?open=import
+  useEffect(() => {
+    const open = new URLSearchParams(currentRoute.split('?')[1] || '').get('open');
+    if (open === 'create') setIsCreateMasterOpen(true);
+    if (open === 'import') {
+      setAdminRole('TML Admin');
+      setIsWorkbookImportOpen(true);
+    }
+  }, [currentRoute]);
 
   const openMasterInWorkspace = (m: MasterConfig) => {
     setActiveMainTab('catalogues');
@@ -1389,6 +1401,15 @@ export const MastersMaintenancePage: React.FC = () => {
               <span>Tabbed Workspace</span>
             </button>
           </div>
+
+          <button
+            onClick={() => navigate('/admin/masters-guide')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-100 text-xs font-bold border border-emerald-300/40 cursor-pointer transition-all"
+            title="Step-by-step guide, templates and practice files for BAs"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            <span>BA Guide</span>
+          </button>
 
           {/* On-the-fly master definition: no code change or deployment needed */}
           <button

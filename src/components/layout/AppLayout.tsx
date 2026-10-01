@@ -40,6 +40,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         { label: jc, path: currentRoute },
       ];
     }
+    if (path === '/admin/masters-guide') {
+      return [
+        { label: 'Administration', path: '/admin/masters' },
+        { label: 'Masters Maintenance', path: '/admin/masters' },
+        { label: 'BA Guide', path: '/admin/masters-guide' },
+      ];
+    }
     if (path === '/admin/masters') {
       return [
         { label: 'Administration', path: '/admin/masters' },

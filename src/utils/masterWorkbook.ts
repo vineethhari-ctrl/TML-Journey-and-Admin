@@ -355,8 +355,84 @@ export function buildTemplateWorkbook(): XLSX.WorkBook {
   return buildMasterWorkbook([example]);
 }
 
+/**
+ * Practice workbook for BA training: creates one new master AND adds a missed
+ * field (with values) to an existing master — exercising both import modes.
+ * Import it with "Update existing masters" selected.
+ */
+export function buildPracticeWorkbook(): XLSX.WorkBook {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.aoa_to_sheet([
+      ['PRACTICE WORKBOOK — import with "Update existing masters" selected'],
+      [''],
+      ['1. courtesy_car_master is a NEW master (3 fields, 3 records).'],
+      ['2. ppl_master already exists: this file adds the missed field "ADAS Level" and fills it for PPL-01 and PPL-02.'],
+      ['   Notice that the ppl_master sheet only has "id" and the new column — other values stay unchanged.'],
+      ['3. Try breaking it on purpose (e.g. Max Days = 30, or Fuel = Hydrogen) to see how errors are reported.'],
+    ]),
+    README_SHEET
+  );
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.aoa_to_sheet([
+      [...MASTER_COLUMNS],
+      ['courtesy_car_master', 'Courtesy Car Master', 'reception', 'Service Operations', 'DEALER_ADMIN', 'Customer Mobility', 'Loaner cars offered while the customer vehicle is in the workshop'],
+      ['ppl_master', 'PPL & PL (Product Line) Master', 'jc_creation', 'Vehicle Data', 'TML_ADMIN', '', ''],
+    ]),
+    MASTERS_SHEET
+  );
+  const row = (vals: Partial<Record<(typeof FIELD_COLUMNS)[number], string | number>>) => FIELD_COLUMNS.map((c) => vals[c] ?? '');
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.aoa_to_sheet([
+      [...FIELD_COLUMNS],
+      row({ 'Master ID': 'courtesy_car_master', 'Field Key': 'reg_no', 'Field Label': 'Registration No', Type: 'text', Mandatory: 'Y', Pattern: '^[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}$', 'Pattern Error Message': 'Use a registration like MH01AB1234' }),
+      row({ 'Master ID': 'courtesy_car_master', 'Field Key': 'fuel', 'Field Label': 'Fuel', Type: 'select', Mandatory: 'Y', Options: 'EV, Petrol, Diesel, CNG', 'Show in Dealer App': 'Y', 'Dealer Target Module': 'reception', 'Dealer Label': 'Courtesy Car Fuel' }),
+      row({ 'Master ID': 'courtesy_car_master', 'Field Key': 'max_days', 'Field Label': 'Max Days', Type: 'number', Mandatory: 'N', Min: 1, Max: 7 }),
+      row({ 'Master ID': 'ppl_master', 'Field Key': 'adas_level', 'Field Label': 'ADAS Level', Type: 'select', Mandatory: 'N', Options: 'L0, L1, L2', 'Show in Dealer App': 'Y', 'Dealer Target Module': 'vehicle_journey', 'Value Mapping': 'L0=No ADAS; L1=Level 1 ADAS; L2=Level 2 ADAS' }),
+    ]),
+    FIELDS_SHEET
+  );
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.aoa_to_sheet([
+      ['id', 'Registration No', 'Fuel', 'Max Days'],
+      ['CC-001', 'MH01ZZ0001', 'EV', 3],
+      ['CC-002', 'MH01ZZ0002', 'Petrol', 5],
+      ['CC-003', 'MH02ZZ0003', 'CNG', 2],
+    ]),
+    'courtesy_car_master'
+  );
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.aoa_to_sheet([
+      ['id', 'adas_level'],
+      ['PPL-01', 'L2'],
+      ['PPL-02', 'L1'],
+    ]),
+    'ppl_master'
+  );
+  return wb;
+}
+
 export function workbookToArrayBuffer(wb: XLSX.WorkBook): ArrayBuffer {
   return XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+}
+
+/** Browser-only: saves a workbook as an .xlsx download. */
+export function downloadWorkbook(wb: XLSX.WorkBook, fileName: string): void {
+  const url = URL.createObjectURL(
+    new Blob([workbookToArrayBuffer(wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  );
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export function readWorkbook(data: ArrayBuffer | Uint8Array): XLSX.WorkBook {

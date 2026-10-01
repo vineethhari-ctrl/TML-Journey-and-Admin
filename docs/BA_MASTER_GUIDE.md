@@ -1,5 +1,9 @@
 # BA Guide — Defining Masters Without a Deployment
 
+> **The full, illustrated version of this guide is inside the app:**
+> https://vineethhari-ctrl.github.io/TML-Journey-and-Admin/#/admin/masters-guide
+> (sidebar → **BA Guide: Masters**). It includes all downloads, a 10-minute practice exercise and an error-fixing table.
+
 Masters can be added or extended directly in the Admin portal (**Administration → Masters Maintenance**).
 No code change or release is needed. There are two ways:
 
@@ -25,9 +29,14 @@ fix any errors listed (sheet + row) → **Import** → open the master and check
 | File | Purpose |
 | --- | --- |
 | [`templates/TML_Master_Definition_Template.xlsx`](templates/TML_Master_Definition_Template.xlsx) | Blank template with instructions and one worked example (Tyre Brand Master). Start here. |
+| [`templates/TML_Master_Practice_Workbook.xlsx`](templates/TML_Master_Practice_Workbook.xlsx) | Ready-made practice file: creates a new master and adds a missed field to an existing one. Import with *Update existing masters*. |
 | [`templates/TML_Existing_Masters_Catalogue.xlsx`](templates/TML_Existing_Masters_Catalogue.xlsx) | Every master already in the system, in the same format — check it first to avoid duplicates. |
 
-The same files can be downloaded from the portal: **Import BA Workbook → Download Template / Export Current Masters**.
+The same files can be downloaded in the app (BA Guide → Downloads) or directly:
+- https://vineethhari-ctrl.github.io/TML-Journey-and-Admin/downloads/TML_Master_Definition_Template.xlsx
+- https://vineethhari-ctrl.github.io/TML-Journey-and-Admin/downloads/TML_Master_Practice_Workbook.xlsx
+- https://vineethhari-ctrl.github.io/TML-Journey-and-Admin/downloads/TML_Existing_Masters_Catalogue.xlsx
+
 Regenerate the repo copies with `npm run templates`.
 
 ## Workbook layout
