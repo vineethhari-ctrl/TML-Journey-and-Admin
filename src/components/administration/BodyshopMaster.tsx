@@ -5,8 +5,6 @@ import {
   Building2,
   Users,
   ShieldAlert,
-  ClipboardList,
-  FileText,
   Plus,
   Search,
   Filter,
@@ -105,44 +103,6 @@ export interface LeadTechnician {
   activeJobsCount: number;
   phone: string;
   status: 'On Duty' | 'In Bay' | 'On Leave';
-}
-
-export interface InventoryCaptureItem {
-  id: string;
-  section:
-    | 'Documents'
-    | 'Accident Details'
-    | 'External'
-    | 'Internal'
-    | 'Inventory'
-    | 'Accessories'
-    | 'Tyre & Battery';
-  subSectionLevel1: string;
-  subSectionSequence: number;
-  subSectionLevel2?: string;
-  checkpoint?: string;
-  checkpointSequence?: number;
-  role: 'DSvAdv' | 'Driver' | 'DSvAdv, Driver';
-  acceptableValues: string;
-  sequencePriority: number;
-  mandatory: 'Y' | 'N';
-  active: 'Y' | 'N';
-  evidenceType: 'Image' | 'Video' | 'Video/Image' | 'None';
-  maxImages: number;
-  applicableOn: 'Not OK' | 'All' | 'N/A';
-  serviceType: 'All' | 'Accident';
-  bu: 'PV' | 'EV' | 'All';
-}
-
-export interface InsuranceDocItem {
-  id: string;
-  documentCategory: string;
-  mandatoryFlag: 'Y' | 'N';
-  documentType: 'PDF/Image' | 'Image' | 'PDF';
-  maxImages: number;
-  sequence: number;
-  active: 'Y' | 'N';
-  stageNotice?: string;
 }
 
 // =========================================================================
@@ -366,276 +326,14 @@ const SEED_TECHNICIANS: LeadTechnician[] = [
 ];
 
 // Direct transcript from User's Excel Images 2, 3, 4!
-const SEED_INVENTORY_CHECKPOINTS: InventoryCaptureItem[] = [
-  {
-    id: 'IDC-01',
-    section: 'Documents',
-    subSectionLevel1: 'Insurance Copy',
-    subSectionSequence: 1,
-    role: 'DSvAdv',
-    acceptableValues: 'OK, NOT OK',
-    sequencePriority: 1,
-    mandatory: 'Y',
-    active: 'Y',
-    evidenceType: 'Image',
-    maxImages: 1,
-    applicableOn: 'All',
-    serviceType: 'Accident',
-    bu: 'PV',
-  },
-  {
-    id: 'IDC-02',
-    section: 'Documents',
-    subSectionLevel1: 'Police Complaint Report',
-    subSectionSequence: 2,
-    role: 'DSvAdv',
-    acceptableValues: 'OK, NOT OK',
-    sequencePriority: 1,
-    mandatory: 'Y',
-    active: 'Y',
-    evidenceType: 'Image',
-    maxImages: 1,
-    applicableOn: 'All',
-    serviceType: 'Accident',
-    bu: 'PV',
-  },
-  {
-    id: 'IDC-03',
-    section: 'Accident Details',
-    subSectionLevel1: 'Accident Details',
-    subSectionSequence: 1,
-    checkpoint: 'Impact Point and Structural Panel Damage Severity',
-    role: 'DSvAdv',
-    acceptableValues: 'Minor, Moderate, Severe',
-    sequencePriority: 2,
-    mandatory: 'Y',
-    active: 'Y',
-    evidenceType: 'Video/Image',
-    maxImages: 2,
-    applicableOn: 'All',
-    serviceType: 'Accident',
-    bu: 'PV',
-  },
-  {
-    id: 'IDC-04',
-    section: 'Internal',
-    subSectionLevel1: 'Cabin',
-    subSectionSequence: 1,
-    checkpoint: 'Dashboard, Airbag Deployment & Trim Condition',
-    role: 'DSvAdv',
-    acceptableValues: 'OK, NOT OK',
-    sequencePriority: 3,
-    mandatory: 'Y',
-    active: 'Y',
-    evidenceType: 'Image',
-    maxImages: 2,
-    applicableOn: 'Not OK',
-    serviceType: 'All',
-    bu: 'PV',
-  },
-  {
-    id: 'IDC-05',
-    section: 'Internal',
-    subSectionLevel1: 'Instrument Cluster',
-    subSectionSequence: 2,
-    checkpoint: 'Warning lights, Odometer readout, Fuel/SOC display',
-    role: 'DSvAdv',
-    acceptableValues: 'OK, NOT OK',
-    sequencePriority: 3,
-    mandatory: 'Y',
-    active: 'Y',
-    evidenceType: 'Video/Image',
-    maxImages: 1,
-    applicableOn: 'Not OK',
-    serviceType: 'All',
-    bu: 'PV',
-  },
-  {
-    id: 'IDC-06',
-    section: 'Internal',
-    subSectionLevel1: 'Seats & Belt',
-    subSectionSequence: 3,
-    checkpoint: 'Seat belt pretensioner lock and seat upholstery',
-    role: 'DSvAdv',
-    acceptableValues: 'OK, NOT OK',
-    sequencePriority: 3,
-    mandatory: 'Y',
-    active: 'Y',
-    evidenceType: 'Video/Image',
-    maxImages: 1,
-    applicableOn: 'Not OK',
-    serviceType: 'All',
-    bu: 'PV',
-  },
-  {
-    id: 'IDC-07',
-    section: 'Internal',
-    subSectionLevel1: 'Steering Controls',
-    subSectionSequence: 4,
-    checkpoint: 'Steering Wheel Condition',
-    role: 'DSvAdv',
-    acceptableValues: 'OK',
-    sequencePriority: 3,
-    mandatory: 'Y',
-    active: 'Y',
-    evidenceType: 'Image',
-    maxImages: 1,
-    applicableOn: 'All',
-    serviceType: 'All',
-    bu: 'PV',
-  },
-  {
-    id: 'IDC-08',
-    section: 'Internal',
-    subSectionLevel1: 'Steering Controls',
-    subSectionSequence: 5,
-    checkpoint: 'Horn Working',
-    role: 'DSvAdv',
-    acceptableValues: 'OK, NOT OK, NA',
-    sequencePriority: 3,
-    mandatory: 'Y',
-    active: 'Y',
-    evidenceType: 'Image',
-    maxImages: 2,
-    applicableOn: 'All',
-    serviceType: 'All',
-    bu: 'PV',
-  },
-  {
-    id: 'IDC-09',
-    section: 'Internal',
-    subSectionLevel1: 'Steering Controls',
-    subSectionSequence: 6,
-    checkpoint: 'Steering Controls Working',
-    role: 'DSvAdv',
-    acceptableValues: 'OK, NOT OK',
-    sequencePriority: 3,
-    mandatory: 'Y',
-    active: 'Y',
-    evidenceType: 'Image',
-    maxImages: 1,
-    applicableOn: 'All',
-    serviceType: 'All',
-    bu: 'PV',
-  },
-  {
-    id: 'IDC-10',
-    section: 'Inventory',
-    subSectionLevel1: 'Inventory Categories',
-    subSectionSequence: 1,
-    subSectionLevel2: 'Accessories Internal',
-    checkpoint: "Owner's Manual",
-    role: 'Driver',
-    acceptableValues: 'Count',
-    sequencePriority: 5,
-    mandatory: 'Y',
-    active: 'Y',
-    evidenceType: 'None',
-    maxImages: 0,
-    applicableOn: 'N/A',
-    serviceType: 'All',
-    bu: 'PV',
-  },
-  {
-    id: 'IDC-11',
-    section: 'Inventory',
-    subSectionLevel1: 'Inventory Categories',
-    subSectionSequence: 2,
-    subSectionLevel2: 'Accessories Internal',
-    checkpoint: 'Pen Drive',
-    role: 'Driver',
-    acceptableValues: 'Count',
-    sequencePriority: 5,
-    mandatory: 'Y',
-    active: 'Y',
-    evidenceType: 'None',
-    maxImages: 0,
-    applicableOn: 'N/A',
-    serviceType: 'All',
-    bu: 'PV',
-  },
-  {
-    id: 'IDC-12',
-    section: 'Tyre & Battery',
-    subSectionLevel1: 'Battery Information',
-    subSectionSequence: 1,
-    checkpoint: '12V Auxiliary / Traction Battery Voltage and Terminals',
-    role: 'Driver',
-    acceptableValues: 'OK, NOT OK',
-    sequencePriority: 7,
-    mandatory: 'Y',
-    active: 'Y',
-    evidenceType: 'Video',
-    maxImages: 1,
-    applicableOn: 'All',
-    serviceType: 'All',
-    bu: 'EV',
-  },
-];
-
-// Direct transcript from User's Excel Image 5!
-const SEED_INSURANCE_DOCS: InsuranceDocItem[] = [
-  {
-    id: 'DOC-01',
-    documentCategory: 'Police Complaint Report',
-    mandatoryFlag: 'N',
-    documentType: 'Image',
-    maxImages: 2,
-    sequence: 1,
-    active: 'Y',
-    stageNotice: 'Mandatory for Third-Party or Total Loss claims',
-  },
-  {
-    id: 'DOC-02',
-    documentCategory: 'Insurance Policy Copy',
-    mandatoryFlag: 'N',
-    documentType: 'PDF/Image',
-    maxImages: 2,
-    sequence: 2,
-    active: 'N',
-    stageNotice: 'Can be fetched automatically via Cashless Portal integration',
-  },
-  {
-    id: 'DOC-03',
-    documentCategory: 'Driver Driving License',
-    mandatoryFlag: 'Y',
-    documentType: 'PDF/Image',
-    maxImages: 2,
-    sequence: 3,
-    active: 'Y',
-    stageNotice: 'Mandatory verification for surveyor joint inspection',
-  },
-  {
-    id: 'DOC-04',
-    documentCategory: 'Vehicle Registration Certificate (RC)',
-    mandatoryFlag: 'Y',
-    documentType: 'PDF/Image',
-    maxImages: 2,
-    sequence: 4,
-    active: 'Y',
-    stageNotice: 'Chassis VIN and Engine number must match job card',
-  },
-  {
-    id: 'DOC-05',
-    documentCategory: 'Spot Accident Photographs',
-    mandatoryFlag: 'Y',
-    documentType: 'Image',
-    maxImages: 2,
-    sequence: 5,
-    active: 'Y',
-    stageNotice: 'Before-dismantling damage photos required by insurance surveyors',
-  },
-];
-
 const STORAGE_PREFIX = 'tata_motors_bodyshop_master_v1';
 
 export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () => {
   const { showToast, logAudit } = useApp();
 
   // Active Sub-Tab
-  const [activeTab, setActiveTab] = useState<
-    'facilities' | 'tools' | 'technicians' | 'inventory_capture' | 'insurance_docs'
-  >('facilities');
+  // Inventory Capture and Insurance Documents are catalogue masters (Bodyshop group), built from the BA workbook
+  const [activeTab, setActiveTab] = useState<'facilities' | 'tools' | 'technicians'>('facilities');
 
   // Selected Facility Filter
   const [selectedFacilityId, setSelectedFacilityId] = useState<string>('ALL');
@@ -669,24 +367,6 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
     }
   });
 
-  const [inventoryCheckpoints, setInventoryCheckpoints] = useState<InventoryCaptureItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(`${STORAGE_PREFIX}_inventory_checkpoints`);
-      return saved ? JSON.parse(saved) : SEED_INVENTORY_CHECKPOINTS;
-    } catch {
-      return SEED_INVENTORY_CHECKPOINTS;
-    }
-  });
-
-  const [insuranceDocs, setInsuranceDocs] = useState<InsuranceDocItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(`${STORAGE_PREFIX}_insurance_docs`);
-      return saved ? JSON.parse(saved) : SEED_INSURANCE_DOCS;
-    } catch {
-      return SEED_INSURANCE_DOCS;
-    }
-  });
-
   // Save changes to localStorage
   useEffect(() => {
     localStorage.setItem(`${STORAGE_PREFIX}_facilities`, JSON.stringify(facilities));
@@ -700,20 +380,9 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
     localStorage.setItem(`${STORAGE_PREFIX}_technicians`, JSON.stringify(technicians));
   }, [technicians]);
 
-  useEffect(() => {
-    localStorage.setItem(
-      `${STORAGE_PREFIX}_inventory_checkpoints`,
-      JSON.stringify(inventoryCheckpoints)
-    );
-  }, [inventoryCheckpoints]);
-
-  useEffect(() => {
-    localStorage.setItem(`${STORAGE_PREFIX}_insurance_docs`, JSON.stringify(insuranceDocs));
-  }, [insuranceDocs]);
-
   // Modal State for Adding / Editing Records
   const [modalType, setModalType] = useState<
-    'facility' | 'tool' | 'technician' | 'checkpoint' | 'doc' | null
+    'facility' | 'tool' | 'technician' | null
   >(null);
   const [editingItem, setEditingItem] = useState<any>(null);
 
@@ -721,8 +390,6 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
   const [facilityFormData, setFacilityFormData] = useState<Partial<BodyshopFacility>>({});
   const [toolFormData, setToolFormData] = useState<Partial<SpecializedTool>>({});
   const [techFormData, setTechFormData] = useState<Partial<LeadTechnician>>({});
-  const [checkpointFormData, setCheckpointFormData] = useState<Partial<InventoryCaptureItem>>({});
-  const [docFormData, setDocFormData] = useState<Partial<InsuranceDocItem>>({});
 
   // Reset to Defaults
   const handleResetDefaults = () => {
@@ -730,8 +397,6 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
       setFacilities(SEED_FACILITIES);
       setTools(SEED_TOOLS);
       setTechnicians(SEED_TECHNICIANS);
-      setInventoryCheckpoints(SEED_INVENTORY_CHECKPOINTS);
-      setInsuranceDocs(SEED_INSURANCE_DOCS);
       logAudit(
         'Bodyshop Master Factory Reset',
         'Bodyshop Operations',
@@ -824,52 +489,6 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
         tech.phone,
         tech.status,
       ]);
-    } else if (activeTab === 'inventory_capture') {
-      headers = [
-        'Section',
-        'Sub-Section Level 1',
-        'Checkpoint',
-        'Role',
-        'Acceptable Values',
-        'Mandatory',
-        'Active',
-        'Evidence Type',
-        'Max Images',
-        'Applicable On',
-        'Service Type',
-        'BU',
-      ];
-      rows = inventoryCheckpoints.map((c) => [
-        c.section,
-        c.subSectionLevel1,
-        c.checkpoint || '',
-        c.role,
-        c.acceptableValues,
-        c.mandatory,
-        c.active,
-        c.evidenceType,
-        String(c.maxImages),
-        c.applicableOn,
-        c.serviceType,
-        c.bu,
-      ]);
-    } else if (activeTab === 'insurance_docs') {
-      headers = [
-        'Document Category',
-        'Mandatory Flag',
-        'Document Type',
-        'No. of Image Required (Max 2)',
-        'Sequence',
-        'Active',
-      ];
-      rows = insuranceDocs.map((d) => [
-        d.documentCategory,
-        d.mandatoryFlag,
-        d.documentType,
-        String(d.maxImages),
-        String(d.sequence),
-        d.active,
-      ]);
     }
 
     const csvContent =
@@ -915,8 +534,7 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
               </div>
               <p className="text-xs text-orange-200 mt-1 max-w-2xl leading-relaxed">
                 Centralized administration of body shop facilities, bay capacities, paint spray booths,
-                hydraulic chassis jigs, specialized tool calibrations, certified technician rosters, and
-                insurance claim intake checkpoints.
+                hydraulic chassis jigs, specialized tool calibrations, and certified technician rosters.
               </p>
             </div>
           </div>
@@ -942,7 +560,7 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
         </div>
 
         {/* 5 High-Impact Facility KPIs */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-4 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 text-xs">
           <div className="bg-slate-900/60 rounded-xl p-3 border border-orange-900/40">
             <span className="text-orange-300 font-medium text-[11px] block">Bodyshop Bays</span>
             <div className="flex items-baseline gap-1.5 mt-1">
@@ -972,14 +590,6 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
             <div className="flex items-baseline gap-1.5 mt-1">
               <span className="text-2xl font-black text-emerald-400">{activeTechs}</span>
               <span className="text-[10px] text-slate-400">On Active Duty</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-900/60 rounded-xl p-3 border border-orange-900/40">
-            <span className="text-orange-300 font-medium text-[11px] block">Intake Checkpoints</span>
-            <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-2xl font-black text-white">{inventoryCheckpoints.length}</span>
-              <span className="text-[10px] text-orange-200">Across 7 Sections</span>
             </div>
           </div>
         </div>
@@ -1045,47 +655,6 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
             </span>
           </button>
 
-          <button
-            onClick={() => setActiveTab('inventory_capture')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'inventory_capture'
-                ? 'bg-orange-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <ClipboardList className="h-4 w-4" />
-            <span>Accident &amp; Inventory Intake</span>
-            <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                activeTab === 'inventory_capture'
-                  ? 'bg-orange-700 text-white'
-                  : 'bg-slate-100 text-slate-700'
-              }`}
-            >
-              {inventoryCheckpoints.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('insurance_docs')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'insurance_docs'
-                ? 'bg-orange-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <FileText className="h-4 w-4" />
-            <span>Insurance Document Gates</span>
-            <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                activeTab === 'insurance_docs'
-                  ? 'bg-orange-700 text-white'
-                  : 'bg-slate-100 text-slate-700'
-              }`}
-            >
-              {insuranceDocs.length}
-            </span>
-          </button>
         </div>
 
         {/* Global Action: Add New Item in active tab */}
@@ -1121,30 +690,6 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
                 status: 'On Duty',
               });
               setModalType('technician');
-            } else if (activeTab === 'inventory_capture') {
-              setCheckpointFormData({
-                section: 'Accident Details',
-                role: 'DSvAdv',
-                acceptableValues: 'OK, NOT OK',
-                sequencePriority: 2,
-                mandatory: 'Y',
-                active: 'Y',
-                evidenceType: 'Image',
-                maxImages: 1,
-                applicableOn: 'All',
-                serviceType: 'Accident',
-                bu: 'PV',
-              });
-              setModalType('checkpoint');
-            } else if (activeTab === 'insurance_docs') {
-              setDocFormData({
-                mandatoryFlag: 'Y',
-                documentType: 'PDF/Image',
-                maxImages: 2,
-                sequence: insuranceDocs.length + 1,
-                active: 'Y',
-              });
-              setModalType('doc');
             }
           }}
           className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs shadow-xs cursor-pointer transition-all border border-orange-400/40"
@@ -1461,214 +1006,6 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
                           }}
                           className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
                           title="Edit Technician"
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================================= */}
-      {/* SUB-TAB 4: ACCIDENT INTAKE & INVENTORY CAPTURE (MATCHES USER EXCEL)      */}
-      {/* ======================================================================= */}
-      {activeTab === 'inventory_capture' && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs space-y-2 p-3">
-          <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-950 font-semibold">
-            <div className="flex items-center gap-2">
-              <ClipboardList className="h-4 w-4 text-blue-700" />
-              <span>
-                Configured as per <strong>Inventory Capture Master</strong> specification. Enforced at
-                vehicle check-in and Bodyshop reception.
-              </span>
-            </div>
-            <span className="text-[10px] text-blue-700 font-mono">
-              {inventoryCheckpoints.length} Checkpoints Active
-            </span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                  <th className="p-3">Section</th>
-                  <th className="p-3">Sub-Section Level 1</th>
-                  <th className="p-3">Checkpoint / Inspection Item</th>
-                  <th className="p-3 text-center">Role</th>
-                  <th className="p-3">Acceptable Values</th>
-                  <th className="p-3 text-center">Priority</th>
-                  <th className="p-3 text-center">Mandatory</th>
-                  <th className="p-3 text-center">Active</th>
-                  <th className="p-3">Evidence Media</th>
-                  <th className="p-3 text-center">Max Images</th>
-                  <th className="p-3">Applicable On</th>
-                  <th className="p-3 text-center">BU</th>
-                  <th className="p-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {inventoryCheckpoints
-                  .filter((c) => {
-                    if (searchQuery.trim()) {
-                      const q = searchQuery.toLowerCase();
-                      return (
-                        c.section.toLowerCase().includes(q) ||
-                        c.subSectionLevel1.toLowerCase().includes(q) ||
-                        (c.checkpoint && c.checkpoint.toLowerCase().includes(q))
-                      );
-                    }
-                    return true;
-                  })
-                  .map((c) => (
-                    <tr key={c.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="p-3 font-bold text-slate-900">{c.section}</td>
-                      <td className="p-3 font-semibold text-slate-800">
-                        {c.subSectionLevel1}
-                        {c.subSectionLevel2 && (
-                          <span className="block text-[10px] text-slate-400 font-normal">
-                            &gt; {c.subSectionLevel2}
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 font-medium text-slate-700">{c.checkpoint || '—'}</td>
-                      <td className="p-3 text-center">
-                        <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-800">
-                          {c.role}
-                        </span>
-                      </td>
-                      <td className="p-3 font-mono text-[11px] text-slate-600 font-bold">
-                        {c.acceptableValues}
-                      </td>
-                      <td className="p-3 text-center font-bold text-slate-900">{c.sequencePriority}</td>
-                      <td className="p-3 text-center font-bold">
-                        <span
-                          className={`px-1.5 py-0.2 rounded text-[10px] ${
-                            c.mandatory === 'Y' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {c.mandatory}
-                        </span>
-                      </td>
-                      <td className="p-3 text-center">
-                        <span
-                          className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                            c.active === 'Y' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
-                          }`}
-                        >
-                          {c.active}
-                        </span>
-                      </td>
-                      <td className="p-3 font-medium text-indigo-900 text-[11px]">{c.evidenceType}</td>
-                      <td className="p-3 text-center font-bold text-slate-900">{c.maxImages}</td>
-                      <td className="p-3 text-[11px] text-slate-600">{c.applicableOn}</td>
-                      <td className="p-3 text-center font-bold text-slate-900">{c.bu}</td>
-                      <td className="p-3 text-right">
-                        <button
-                          onClick={() => {
-                            setEditingItem(c);
-                            setCheckpointFormData(c);
-                            setModalType('checkpoint');
-                          }}
-                          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
-                          title="Edit Checkpoint"
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================================= */}
-      {/* SUB-TAB 5: INSURANCE DOCUMENT COLLECTION (MATCHES USER EXCEL)            */}
-      {/* ======================================================================= */}
-      {activeTab === 'insurance_docs' && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs space-y-2 p-3">
-          <div className="p-2.5 bg-orange-50/80 border border-orange-200 rounded-xl flex items-center justify-between text-xs text-orange-950 font-semibold">
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-orange-700" />
-              <span>
-                Configured as per <strong>Ins. Doc Collection-Customer</strong> specification. Required
-                for Bodyshop insurance claims.
-              </span>
-            </div>
-            <span className="text-[10px] text-orange-700 font-mono">
-              {insuranceDocs.length} Document Types Defined
-            </span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                  <th className="p-3">Sequence</th>
-                  <th className="p-3">Document Category</th>
-                  <th className="p-3 text-center">Mandatory Flag</th>
-                  <th className="p-3">Document Type / Format</th>
-                  <th className="p-3 text-center">No. of Image Required (Max 2)</th>
-                  <th className="p-3">Surveyor &amp; Claim Rule Notice</th>
-                  <th className="p-3 text-center">Active</th>
-                  <th className="p-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {insuranceDocs
-                  .filter((d) => {
-                    if (searchQuery.trim()) {
-                      const q = searchQuery.toLowerCase();
-                      return (
-                        d.documentCategory.toLowerCase().includes(q) ||
-                        d.documentType.toLowerCase().includes(q)
-                      );
-                    }
-                    return true;
-                  })
-                  .map((doc) => (
-                    <tr key={doc.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="p-3 font-mono font-bold text-slate-900">{doc.sequence}</td>
-                      <td className="p-3 font-bold text-slate-900">{doc.documentCategory}</td>
-                      <td className="p-3 text-center">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            doc.mandatoryFlag === 'Y'
-                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {doc.mandatoryFlag === 'Y' ? 'MANDATORY' : 'OPTIONAL'}
-                        </span>
-                      </td>
-                      <td className="p-3 font-mono text-[11px] text-indigo-900 font-semibold">
-                        {doc.documentType}
-                      </td>
-                      <td className="p-3 text-center font-black text-slate-900">{doc.maxImages}</td>
-                      <td className="p-3 text-[11px] text-slate-500">{doc.stageNotice || '—'}</td>
-                      <td className="p-3 text-center">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            doc.active === 'Y' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
-                          }`}
-                        >
-                          {doc.active === 'Y' ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right">
-                        <button
-                          onClick={() => {
-                            setEditingItem(doc);
-                            setDocFormData(doc);
-                            setModalType('doc');
-                          }}
-                          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
-                          title="Edit Document Item"
                         >
                           <Edit className="h-3.5 w-3.5" />
                         </button>
@@ -2201,259 +1538,6 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
               </form>
             )}
 
-            {/* Checkpoint Form */}
-            {modalType === 'checkpoint' && (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (editingItem) {
-                    setInventoryCheckpoints(
-                      inventoryCheckpoints.map((c) =>
-                        c.id === editingItem.id ? ({ ...c, ...checkpointFormData } as any) : c
-                      )
-                    );
-                    showToast('Intake checkpoint updated.', 'success');
-                  } else {
-                    const newC: InventoryCaptureItem = {
-                      id: `IDC-${Date.now().toString().slice(-4)}`,
-                      section: checkpointFormData.section || 'Accident Details',
-                      subSectionLevel1: checkpointFormData.subSectionLevel1 || 'General',
-                      subSectionSequence: Number(checkpointFormData.subSectionSequence || 1),
-                      checkpoint: checkpointFormData.checkpoint || '',
-                      role: checkpointFormData.role || 'DSvAdv',
-                      acceptableValues: checkpointFormData.acceptableValues || 'OK, NOT OK',
-                      sequencePriority: Number(checkpointFormData.sequencePriority || 2),
-                      mandatory: checkpointFormData.mandatory || 'Y',
-                      active: checkpointFormData.active || 'Y',
-                      evidenceType: checkpointFormData.evidenceType || 'Image',
-                      maxImages: Number(checkpointFormData.maxImages || 1),
-                      applicableOn: checkpointFormData.applicableOn || 'All',
-                      serviceType: checkpointFormData.serviceType || 'Accident',
-                      bu: checkpointFormData.bu || 'PV',
-                    };
-                    setInventoryCheckpoints([...inventoryCheckpoints, newC]);
-                    showToast('New intake checkpoint added.', 'success');
-                  }
-                  setModalType(null);
-                  setEditingItem(null);
-                }}
-                className="space-y-3"
-              >
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Section *</label>
-                    <select
-                      value={checkpointFormData.section || 'Accident Details'}
-                      onChange={(e) =>
-                        setCheckpointFormData({ ...checkpointFormData, section: e.target.value as any })
-                      }
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg bg-white"
-                    >
-                      <option value="Documents">Documents</option>
-                      <option value="Accident Details">Accident Details</option>
-                      <option value="External">External</option>
-                      <option value="Internal">Internal</option>
-                      <option value="Inventory">Inventory</option>
-                      <option value="Accessories">Accessories</option>
-                      <option value="Tyre & Battery">Tyre & Battery</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Sub-Section Level 1 *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={checkpointFormData.subSectionLevel1 || ''}
-                      onChange={(e) =>
-                        setCheckpointFormData({
-                          ...checkpointFormData,
-                          subSectionLevel1: e.target.value,
-                        })
-                      }
-                      placeholder="e.g. Cabin, Steering Controls"
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Checkpoint / Item Description
-                  </label>
-                  <input
-                    type="text"
-                    value={checkpointFormData.checkpoint || ''}
-                    onChange={(e) =>
-                      setCheckpointFormData({ ...checkpointFormData, checkpoint: e.target.value })
-                    }
-                    placeholder="e.g. Steering Wheel Condition"
-                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Role</label>
-                    <select
-                      value={checkpointFormData.role || 'DSvAdv'}
-                      onChange={(e) =>
-                        setCheckpointFormData({ ...checkpointFormData, role: e.target.value as any })
-                      }
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg bg-white"
-                    >
-                      <option value="DSvAdv">DSvAdv (Service Advisor)</option>
-                      <option value="Driver">Driver</option>
-                      <option value="DSvAdv, Driver">DSvAdv, Driver</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Acceptable Values
-                    </label>
-                    <input
-                      type="text"
-                      value={checkpointFormData.acceptableValues || 'OK, NOT OK'}
-                      onChange={(e) =>
-                        setCheckpointFormData({
-                          ...checkpointFormData,
-                          acceptableValues: e.target.value,
-                        })
-                      }
-                      placeholder="OK, NOT OK, NA or Count"
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setModalType(null)}
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 font-semibold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold shadow-xs"
-                  >
-                    Save Checkpoint
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Document Form */}
-            {modalType === 'doc' && (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (editingItem) {
-                    setInsuranceDocs(
-                      insuranceDocs.map((d) => (d.id === editingItem.id ? ({ ...d, ...docFormData } as any) : d))
-                    );
-                    showToast('Insurance document requirement updated.', 'success');
-                  } else {
-                    const newD: InsuranceDocItem = {
-                      id: `DOC-${Date.now().toString().slice(-4)}`,
-                      documentCategory: docFormData.documentCategory || 'New Document',
-                      mandatoryFlag: docFormData.mandatoryFlag || 'Y',
-                      documentType: docFormData.documentType || 'PDF/Image',
-                      maxImages: Number(docFormData.maxImages || 2),
-                      sequence: Number(docFormData.sequence || insuranceDocs.length + 1),
-                      active: docFormData.active || 'Y',
-                      stageNotice: docFormData.stageNotice || '',
-                    };
-                    setInsuranceDocs([...insuranceDocs, newD]);
-                    showToast('New insurance document rule added.', 'success');
-                  }
-                  setModalType(null);
-                  setEditingItem(null);
-                }}
-                className="space-y-3"
-              >
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Document Category *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={docFormData.documentCategory || ''}
-                    onChange={(e) =>
-                      setDocFormData({ ...docFormData, documentCategory: e.target.value })
-                    }
-                    placeholder="e.g. Police Complaint Report"
-                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Mandatory Flag
-                    </label>
-                    <select
-                      value={docFormData.mandatoryFlag || 'Y'}
-                      onChange={(e) =>
-                        setDocFormData({ ...docFormData, mandatoryFlag: e.target.value as any })
-                      }
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg bg-white"
-                    >
-                      <option value="Y">Y (Mandatory)</option>
-                      <option value="N">N (Optional)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Document Type
-                    </label>
-                    <select
-                      value={docFormData.documentType || 'PDF/Image'}
-                      onChange={(e) =>
-                        setDocFormData({ ...docFormData, documentType: e.target.value as any })
-                      }
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg bg-white font-mono"
-                    >
-                      <option value="PDF/Image">PDF/Image</option>
-                      <option value="Image">Image</option>
-                      <option value="PDF">PDF</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Surveyor &amp; Claim Rule Notice
-                  </label>
-                  <input
-                    type="text"
-                    value={docFormData.stageNotice || ''}
-                    onChange={(e) => setDocFormData({ ...docFormData, stageNotice: e.target.value })}
-                    placeholder="e.g. Mandatory for Third-Party or Total Loss claims"
-                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg"
-                  />
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setModalType(null)}
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 font-semibold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold shadow-xs"
-                  >
-                    Save Document Rule
-                  </button>
-                </div>
-              </form>
-            )}
           </div>
         </div>
       )}

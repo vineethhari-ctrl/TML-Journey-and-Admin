@@ -1,5 +1,5 @@
 import { MasterFieldDef } from '../data/masterCatalogue';
-import { validateEqcRecord } from './eqcRules';
+import { validateMasterRecordRules } from './recordRules';
 
 export interface FieldValidationResult {
   isValid: boolean;
@@ -247,7 +247,7 @@ export const masterValidationSchema = {
 
     if (masterId) {
       // Only when every field is individually valid — otherwise the field errors say it better
-      if (Object.keys(errors).length === 0) Object.assign(errors, validateEqcRecord(masterId, sanitizedRecord));
+      if (Object.keys(errors).length === 0) Object.assign(errors, validateMasterRecordRules(masterId, sanitizedRecord));
     }
 
     return {

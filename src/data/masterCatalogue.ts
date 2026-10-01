@@ -53,7 +53,8 @@ export type LogicalModuleGroup =
   | 'Dealer Network'
   | 'Service Operations'
   | 'Parts, Claims & Support'
-  | 'Electronic Quality Check';
+  | 'Electronic Quality Check'
+  | 'Bodyshop';
 
 export interface LogicalModuleDef {
   id: LogicalModuleGroup;
@@ -130,7 +131,29 @@ export const LOGICAL_MODULES: LogicalModuleDef[] = [
     colorTheme: 'teal',
     badge: 'EQC',
   },
+  {
+    id: 'Bodyshop',
+    title: 'Bodyshop Masters',
+    shortDesc: 'Inventory capture sections & checkpoints, insurance documents, bodyshop facilities and process stages',
+    iconName: 'Flame',
+    colorTheme: 'orange',
+    badge: 'BODYSHOP',
+  },
 ];
+
+export const BS_ROLES = ['DSvAdv', 'Driver'];
+export const BS_SERVICE_TYPES = ['All', 'Accident'];
+export const BS_MEDIA_TYPES = ['Image', 'Video', 'Video/Image'];
+const BS_ROLES_PATTERN = '^\\s*(DSvAdv|Driver)(\\s*,\\s*(DSvAdv|Driver))?\\s*$';
+/** One Inventory Capture checkpoint row, in the Excel's column order. */
+const cp = (
+  id: string, section: string, subSection1: string, subSection1Seq: number | null, subSection2: string, subSection2Seq: number | null,
+  checkpoint: string, checkpointSeq: number | null, role: string, acceptableValues: string, mandatory: string, active: string,
+  mediaType: string, imagesRequired: number | null, mediaApplicableOn: string, serviceType: string
+) => ({
+  id, section, subSection1, subSection1Seq, subSection2, subSection2Seq, checkpoint,
+  checkpointSeq, role, acceptableValues, mandatory, active, mediaType, imagesRequired, mediaApplicableOn, serviceType,
+});
 
 /** PPLs offered in EQC masters. Blank = all PPLs. */
 export const EQC_PPLS = ['Nexon', 'Nexon EV', 'Altroz', 'Harrier', 'Safari', 'Punch', 'Punch EV', 'Tiago', 'Tiago EV', 'Tigor', 'Curvv', 'Curvv EV'];
@@ -607,7 +630,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     name: 'Bodyshop Master & Facility Operations',
     owner: 'DEALER_ADMIN',
     category: 'BodyShop Facilities',
-    logicalGroup: 'Dealer Network',
+    logicalGroup: 'Bodyshop',
     moduleCode: 'bodyshop',
     moduleName: 'BodyShop & Paint Operations',
     isInteractiveSpecial: true,
@@ -1008,12 +1031,119 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
       { id: 'SCL-07', bu: 'PV', section: 'Electricals', subSection: 'Headlamp aim and fog lamps', ppl: '', active: 'Y', notOkPhoto: 'N', notOkAudio: 'N', notOkVideo: 'Y', notOkText: 'Y', rangeStartKm: null, rangeEndKm: 30000 },
     ],
   },
+  // =========================================================================
+  // BODYSHOP — from the BA workbook "Bodyshop_Master_1.xlsx" (rows transcribed as given;
+  // blank cells stay blank so the checker can flag them). Rules: src/utils/bodyshopRules.ts
+  // =========================================================================
+  {
+    id: 'bs_inventory_sections',
+    name: 'Inventory Capture Master — Sections',
+    owner: 'TML_ADMIN',
+    category: 'Inventory Capture',
+    logicalGroup: 'Bodyshop',
+    moduleCode: 'bodyshop',
+    moduleName: 'BodyShop & Paint Operations',
+    description:
+      'Sections of the vehicle inventory capture, per BU, in Sequence Priority order. Roles decide who sees the section; Service Type "Accident" shows it only for accident jobs.',
+    fields: [
+      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], mandatory: true },
+      { key: 'section', label: 'Section', type: 'text', mandatory: true },
+      { key: 'roles', label: 'Roles', type: 'text', mandatory: true, description: 'DSvAdv, Driver or both (comma separated).', validation: { pattern: BS_ROLES_PATTERN, customErrorMessage: 'Use DSvAdv, Driver or "DSvAdv, Driver".' } },
+      { key: 'sequencePriority', label: 'Sequence Priority', type: 'number', mandatory: true, validation: { min: 1, max: 99 } },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'], mandatory: true },
+      { key: 'serviceType', label: 'Service Type', type: 'select', options: BS_SERVICE_TYPES, mandatory: true },
+    ],
+    records: (['PV', 'EV'] as const).flatMap((bu, b) =>
+      (
+        [
+          ['Documents', 'DSvAdv, Driver', 1, 'All'],
+          ['Accident Details', 'DSvAdv', 2, 'Accident'],
+          ['External', 'DSvAdv, Driver', 4, 'All'],
+          ['Internal', 'DSvAdv', 3, 'All'],
+          ['Inventory', 'DSvAdv', 5, 'All'],
+          ['Accessories', 'DSvAdv, Driver', 6, 'All'],
+          ['Tyre & Battery', 'DSvAdv, Driver', 7, 'All'],
+        ] as const
+      ).map(([section, roles, sequencePriority, serviceType], i) => ({
+        id: `BSS-${String(b * 7 + i + 1).padStart(2, '0')}`,
+        bu,
+        section,
+        roles,
+        sequencePriority,
+        active: 'Y',
+        serviceType,
+      }))
+    ),
+  },
+  {
+    id: 'bs_inventory_checkpoints',
+    name: 'Inventory Capture Master — Checkpoints',
+    owner: 'TML_ADMIN',
+    category: 'Inventory Capture',
+    logicalGroup: 'Bodyshop',
+    moduleCode: 'bodyshop',
+    moduleName: 'BodyShop & Paint Operations',
+    description:
+      'Rows as given in the BA workbook; incomplete rows are kept and listed in the preview checklist. What is captured inside each section: Sub-Section (Level 1 / Level 2) and Checkpoint, who captures it, acceptable values and the photo / video evidence. A row without a Checkpoint is captured at Sub-Section level.',
+    fields: [
+      { key: 'section', label: 'Section', type: 'text', description: 'Must match a Section in the Sections master. Blanks are listed in the preview checklist.' },
+      { key: 'subSection1', label: 'Sub-Section Level 1', type: 'text' },
+      { key: 'subSection1Seq', label: 'Sub-Section Sequence', type: 'number', defaultValue: '', validation: { min: 1, max: 999 } },
+      { key: 'subSection2', label: 'Sub-Section Level 2', type: 'text', defaultValue: '' },
+      { key: 'subSection2Seq', label: 'Sub-Section Level 2 Sequence', type: 'number', defaultValue: '', validation: { min: 1, max: 999 } },
+      { key: 'checkpoint', label: 'Checkpoint', type: 'text', defaultValue: '', description: 'Leave blank to capture at Sub-Section level.' },
+      { key: 'checkpointSeq', label: 'Checkpoint Sequence', type: 'number', defaultValue: '', validation: { min: 1, max: 999 } },
+      { key: 'role', label: 'Role', type: 'select', options: BS_ROLES, mandatory: true },
+      { key: 'acceptableValues', label: 'Acceptable Values', type: 'text', defaultValue: '', description: 'Comma separated, e.g. "OK, NOT OK, NA", or "Count".' },
+      { key: 'mandatory', label: 'Mandatory', type: 'select', options: ['Y', 'N'], defaultValue: 'Y' },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'], defaultValue: 'Y', description: 'Blank is treated as inactive.' },
+      { key: 'mediaType', label: 'Video/Image', type: 'select', options: BS_MEDIA_TYPES, defaultValue: '', blankLabel: '(No photo / video)' },
+      { key: 'imagesRequired', label: 'No. of Image Required (Max 2)', type: 'number', defaultValue: '', validation: { min: 1, max: 2 } },
+      { key: 'mediaApplicableOn', label: 'Image/Video Applicable On', type: 'select', options: ['All', 'Not OK'], defaultValue: '', blankLabel: '(Not applicable)' },
+      { key: 'serviceType', label: 'Service Type', type: 'select', options: BS_SERVICE_TYPES, defaultValue: 'All' },
+    ],
+    records: [
+      cp('BSC-01', 'Internal', 'Cabin', 1, '', null, '', null, 'DSvAdv', '', 'Y', 'Y', 'Image', 2, 'Not OK', 'All'),
+      cp('BSC-02', 'Internal', 'Instrument Cluster', 2, '', null, '', null, 'DSvAdv', '', 'Y', 'Y', 'Video/Image', 1, 'Not OK', 'All'),
+      cp('BSC-03', 'Internal', 'Seats & Belt', 3, '', null, '', null, 'DSvAdv', '', 'Y', 'Y', 'Video/Image', 1, 'Not OK', 'All'),
+      cp('BSC-04', 'Internal', 'Steering Controls', 4, '', null, 'Steering Wheel Condition', null, 'DSvAdv', 'OK', 'Y', 'Y', 'Image', 1, 'All', 'All'),
+      cp('BSC-05', 'Internal', 'Steering Controls', 5, '', null, 'Horn Working', null, 'DSvAdv', 'OK, NOT OK, NA', 'Y', 'Y', 'Image', 2, 'All', 'All'),
+      cp('BSC-06', 'Internal', 'Steering Controls', null, '', null, 'Steering Controls Working', null, 'DSvAdv', 'OK, NOT OK', 'Y', 'Y', 'Image', 1, 'All', 'All'),
+      cp('BSC-07', 'Documents', 'Insurance Copy', null, '', null, '', null, 'DSvAdv', '', 'Y', 'Y', 'Image', 1, 'All', 'Accident'),
+      cp('BSC-08', 'Documents', 'Police Complaint Report', null, '', null, '', null, 'DSvAdv', '', 'Y', 'Y', 'Image', 1, 'All', 'Accident'),
+      cp('BSC-09', 'Internal-Accessories', 'Battery Information', null, '', null, '', null, 'Driver', '', '', '', 'Video', null, '', ''),
+      cp('BSC-10', '', 'Inventory Categories', null, 'Accessories Internal', null, "Owner's Manual", null, 'Driver', 'Count', 'Y', 'Y', '', null, '', ''),
+      cp('BSC-11', '', '', null, '', null, 'Pen Drive', null, 'Driver', 'Count', 'Y', 'Y', '', null, '', ''),
+    ],
+  },
+  {
+    id: 'bs_insurance_documents',
+    name: 'Insurance Document Collection — Customer',
+    owner: 'TML_ADMIN',
+    category: 'Insurance Documents',
+    logicalGroup: 'Bodyshop',
+    moduleCode: 'bodyshop',
+    moduleName: 'BodyShop & Paint Operations',
+    description: 'Documents collected from the customer for insurance (accident) jobs, in Sequence order. Only active documents are asked for.',
+    fields: [
+      { key: 'documentCategory', label: 'Document Category', type: 'text', mandatory: true },
+      { key: 'mandatoryFlag', label: 'Mandatory Flag', type: 'select', options: ['Y', 'N'], mandatory: true },
+      { key: 'documentType', label: 'Document Type', type: 'select', options: ['PDF/Image', 'Image', 'PDF'], mandatory: true },
+      { key: 'imagesRequired', label: 'No. of Image Required (Max 2)', type: 'number', defaultValue: '', validation: { min: 1, max: 2 } },
+      { key: 'sequence', label: 'Sequence', type: 'number', mandatory: true, validation: { min: 1, max: 99 } },
+      { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'], mandatory: true },
+    ],
+    records: [
+      { id: 'BSD-01', documentCategory: 'Insurance Copy', mandatoryFlag: 'N', documentType: 'PDF/Image', imagesRequired: null, sequence: 2, active: 'N' },
+      { id: 'BSD-02', documentCategory: 'Police Complaint Report', mandatoryFlag: 'N', documentType: 'Image', imagesRequired: 2, sequence: 1, active: 'Y' },
+    ],
+  },
   {
     id: 'bodyshop_process_stages',
     name: 'BodyShop Denting & Paint Stage Master',
     owner: 'TML_ADMIN',
     category: 'BodyShop Workflow',
-    logicalGroup: 'Service Operations',
+    logicalGroup: 'Bodyshop',
     moduleCode: 'bodyshop',
     moduleName: 'BodyShop & Paint Operations',
     description: 'Sequenced bodyshop workflow stages from accident survey to bake oven finish.',

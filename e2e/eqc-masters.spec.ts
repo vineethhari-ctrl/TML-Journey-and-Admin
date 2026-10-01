@@ -88,3 +88,39 @@ test('sidebar "EQC Masters" brings the EQC group back after browsing another gro
   await page.locator('aside').getByRole('button', { name: /EQC Masters/ }).click();
   await expect(page.getByTestId('eqc-rule-tester')).toBeVisible();
 });
+
+test('Bodyshop masters from the BA Excel: preview per role/job, Excel gaps flagged, fixing a gap clears it', async ({ page }) => {
+  await page.goto('/#/dashboard');
+  await page.locator('aside').getByRole('button', { name: /Bodyshop Masters/ }).click();
+  const preview = page.getByTestId('bodyshop-preview');
+  await expect(preview).toBeVisible();
+
+  // Accident job, DSvAdv: Documents first (insurance copy + police report), Internal (3) before External (4)
+  const capture = page.getByTestId('bodyshop-capture');
+  await expect(capture.locator('[data-section="Documents"]')).toContainText('Police Complaint Report');
+  const order = await capture.locator('[data-section]').evaluateAll((els) => els.map((e) => e.getAttribute('data-section')));
+  expect(order.slice(0, 4)).toEqual(['Documents', 'Accident Details', 'Internal', 'External']);
+  await expect(capture.locator('[data-section="Internal"]')).toContainText('Horn Working');
+  await expect(page.getByTestId('bodyshop-docs')).toContainText('Police Complaint Report');
+  await expect(page.getByTestId('bodyshop-docs')).not.toContainText('Insurance Copy'); // inactive in the Excel
+
+  // General job hides accident-only items
+  await preview.getByLabel('Job type').selectOption('General');
+  await expect(capture.locator('[data-section="Accident Details"]')).toHaveCount(0);
+  await expect(capture.locator('[data-section="Documents"]')).not.toContainText('Police Complaint Report');
+
+  // Gaps from the Excel are listed
+  const issues = page.getByTestId('bodyshop-issues');
+  await expect(issues).toContainText('Section "Internal-Accessories" is not in the Sections master');
+  await expect(issues).toContainText("BSC-10 (Owner's Manual): Section is blank");
+
+  // BA fixes Owner's Manual in the Checkpoints master → that gap disappears
+  await page.getByRole('button', { name: /Inventory Capture Master — Checkpoints/ }).click();
+  await page.locator('tr', { hasText: "Owner's Manual" }).getByTitle('Edit Row').click();
+  await page.locator('#rec-field-section').fill('Accessories');
+  await page.locator('#rec-field-serviceType').selectOption('All');
+  await page.getByRole('button', { name: 'Update Row' }).click();
+  await expect(issues).not.toContainText("BSC-10 (Owner's Manual)");
+  await preview.getByLabel('Role').selectOption('Driver');
+  await expect(capture.locator('[data-section="Accessories"]')).toContainText("Owner's Manual");
+});

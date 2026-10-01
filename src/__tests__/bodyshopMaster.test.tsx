@@ -60,7 +60,8 @@ describe('BodyshopMaster Component', () => {
     expect(screen.getAllByText(/Tata Gold Master Bodyshop/i).length).toBeGreaterThan(0);
   });
 
-  it('integrates within MastersMaintenancePage via open=bodyshop parameter', async () => {
+  it('open=bodyshop opens the Bodyshop group: Excel masters with the capture preview, and the facility console', async () => {
+    const user = userEvent.setup();
     window.location.hash = '#/admin/masters?open=bodyshop';
 
     render(
@@ -71,7 +72,13 @@ describe('BodyshopMaster Component', () => {
       </AppProvider>
     );
 
-    expect(screen.getAllByText(/Bodyshop Master & Facility Operations/i).length).toBeGreaterThan(0);
+    expect(screen.getByTestId('bodyshop-preview')).toBeInTheDocument();
+    expect(screen.getAllByText(/Inventory Capture Master — Sections/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /Insurance Document Collection — Customer/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Bodyshop Master & Facility Operations/ }));
     expect(screen.getAllByText(/Bodyshop Master Management Console/i).length).toBeGreaterThan(0);
+    // Inventory capture / insurance documents now live only in the Excel-based catalogue masters
+    expect(screen.queryByRole('button', { name: /Accident & Inventory Intake/ })).not.toBeInTheDocument();
   });
 });
