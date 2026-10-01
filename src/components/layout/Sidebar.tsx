@@ -14,6 +14,7 @@ import {
   Layers,
   BookOpen,
   ClipboardCheck,
+  ListChecks,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useBays } from '../../context/BayContext';
@@ -22,7 +23,9 @@ export const Sidebar: React.FC = () => {
   const { currentRoute, navigate, canAccessRoute, activeRoleId } = useApp();
   const pendingBayRequests = useBays().requests.filter((r) => r.status === 'PENDING').length;
 
+  const eqcOpen = currentRoute.startsWith('/admin/masters?') && currentRoute.includes('open=eqc');
   const isCurrent = (route: string) => {
+    if (route === '/admin/masters' && eqcOpen) return false;
     if (route === '/journey' && (currentRoute === '/journey' || currentRoute.startsWith('/journey?'))) return true;
     if (route === '/journey/JC20260930001234' && currentRoute.startsWith('/journey/')) return true;
     return currentRoute.split('?')[0] === route;
@@ -115,6 +118,21 @@ export const Sidebar: React.FC = () => {
                 <span className="text-[9px] font-bold px-1.5 py-0.2 bg-blue-100 text-blue-900 rounded">
                   OEM/DLR
                 </span>
+              </button>
+            )}
+
+            {canAccessRoute('/admin/masters') && (
+              <button
+                onClick={() => {
+                  navigate('/admin/masters?open=eqc');
+                  // Re-open EQC even when the URL is already ?open=eqc (no route change to react to)
+                  window.dispatchEvent(new CustomEvent('tml:open-masters', { detail: 'eqc' }));
+                }}
+                className={`w-full cursor-pointer ${navItemClass(eqcOpen)}`}
+              >
+                <ListChecks className="h-4 w-4" />
+                <span className="flex-1 text-left">EQC Masters</span>
+                <span className="text-[9px] font-bold px-1.5 py-0.2 bg-teal-100 text-teal-900 rounded">EQC</span>
               </button>
             )}
 
