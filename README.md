@@ -10,6 +10,7 @@ React 19 + TypeScript + Vite + Tailwind. All data is generated in-memory (`src/d
 | `npm run dev` | Dev server on http://localhost:3000 |
 | `npm test` | Run the test suite once (Vitest + React Testing Library) |
 | `npm run test:watch` | Re-run tests on change |
+| `npm run test:e2e` | Browser end-to-end tests (Playwright) — starts the app automatically |
 | `npm run lint` | Type-check (`tsc --noEmit`) |
 | `npm run build` | Production build |
 
@@ -24,5 +25,14 @@ React 19 + TypeScript + Vite + Tailwind. All data is generated in-memory (`src/d
 
 ## Tests
 
-Tests live next to the code in `__tests__` folders and in `src/__tests__` (app-level flows).
-Add a regression test with every bug fix.
+- **Unit / integration** (`npm test`): next to the code in `__tests__` folders and in `src/__tests__` (app-level flows).
+- **End-to-end** (`npm run test:e2e`): `e2e/admin-to-dealer.spec.ts` drives a real browser and checks that
+  configuration made in the Admin portal reaches the dealer screens:
+  1. a custom master field with value mapping appears on the Vehicle Journey page,
+  2. a Rules Engine field's required/range validation is enforced on the dealer page,
+  3. Dealer App Preview shows/hides fields per vehicle and blocks publishing while errors exist.
+  First run on a new machine: `npx playwright install chromium`.
+- **CI**: `.github/workflows/ci.yml` runs type-check, unit tests, build and E2E on every pull request and push to `main`.
+
+Add a regression test with every bug fix. Stable selectors for E2E: `data-field-key` (dynamic dealer fields) and
+`data-master-field` (master attributes on the journey page).

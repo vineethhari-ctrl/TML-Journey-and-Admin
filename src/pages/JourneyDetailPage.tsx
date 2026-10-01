@@ -432,6 +432,7 @@ const JourneyDetailContent: React.FC<{ jcNumber: string }> = ({ jcNumber }) => {
               {exposedMasterFields.map((item) => (
                 <div
                   key={`${item.masterId}_${item.field.key}`}
+                  data-master-field={item.field.key}
                   className="bg-white p-3 rounded-lg border border-slate-200/90 shadow-2xs space-y-1 hover:border-blue-400 transition-colors"
                 >
                   <div className="flex items-center justify-between text-[10px]">

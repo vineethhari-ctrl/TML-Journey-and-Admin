@@ -223,7 +223,7 @@ export const DynamicFieldRenderer: React.FC<DynamicFieldRendererProps> = ({
                 : 'col-span-1';
 
             return (
-              <div key={rule.key} className={`space-y-1.5 ${gridClass}`}>
+              <div key={rule.key} data-field-key={rule.key} className={`space-y-1.5 ${gridClass}`}>
                 {/* Field Label & Indicators */}
                 <div className="flex items-center justify-between text-xs">
                   <label className="font-bold text-slate-800 flex items-center gap-1.5">
