@@ -3,8 +3,11 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vitest/config';
 
-export default defineConfig(() => {
+export default defineConfig(({ command }) => {
   return {
+    // Relative asset paths in production builds so the app works from any sub-path
+    // (e.g. GitHub Pages: /TML-Journey-and-Admin/). Routing is hash-based, so no server rewrites are needed.
+    base: command === 'build' ? './' : '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

@@ -9,6 +9,17 @@ No code change or release is needed. There are two ways:
 | A module's worth of masters prepared in Excel | **Import BA Workbook** |
 | A field or values that were missed in an existing master | **Import BA Workbook** with *Update existing masters* (or **+ Add Custom Parameter** on that master) |
 
+## Where to test
+
+Open **https://vineethhari-ctrl.github.io/TML-Journey-and-Admin/#/admin/masters** (Chrome or Edge).
+
+- Everything you import is saved **only in your own browser** — other BAs won't see it, and it is not a real system.
+- Use test copies of your workbooks; don't upload confidential data (the prototype site is publicly reachable).
+- To start again from a clean state, clear this site's data in your browser (Settings → Privacy → Site data → `vineethhari-ctrl.github.io`).
+
+Quick test: **Import BA Workbook → Download Template** → fill one master for your module → upload →
+fix any errors listed (sheet + row) → **Import** → open the master and check its fields and rows.
+
 ## Files
 
 | File | Purpose |
