@@ -129,7 +129,22 @@ export const MastersMaintenancePage: React.FC = () => {
   const [isCreateMasterOpen, setIsCreateMasterOpen] = useState(false);
   const [isWorkbookImportOpen, setIsWorkbookImportOpen] = useState(false);
 
-  // Deep links from the BA guide: #/admin/masters?open=create | ?open=import
+  const openEqc = () => {
+    setActiveMainTab('catalogues');
+    setActiveLogicalGroup('Electronic Quality Check');
+    setSelectedMasterId('eqc_gc_mandate');
+    setActiveLayout('workspace');
+    setSearchQuery('');
+    setOwnerFilter('ALL');
+  };
+  // Sidebar "EQC Masters" while the URL is already ?open=eqc
+  useEffect(() => {
+    const onOpen = (e: Event) => (e as CustomEvent).detail === 'eqc' && openEqc();
+    window.addEventListener('tml:open-masters', onOpen);
+    return () => window.removeEventListener('tml:open-masters', onOpen);
+  }, []);
+
+  // Deep links from the BA guide: #/admin/masters?open=create | ?open=import | ?open=bays | ?open=eqc
   useEffect(() => {
     const open = new URLSearchParams(currentRoute.split('?')[1] || '').get('open');
     if (open === 'create') setIsCreateMasterOpen(true);
@@ -139,12 +154,7 @@ export const MastersMaintenancePage: React.FC = () => {
       setSelectedMasterId('bay_management_interactive');
       setActiveLayout('workspace');
     }
-    if (open === 'eqc') {
-      setActiveMainTab('catalogues');
-      setActiveLogicalGroup('Electronic Quality Check');
-      setSelectedMasterId('eqc_gc_mandate');
-      setActiveLayout('workspace');
-    }
+    if (open === 'eqc') openEqc();
     if (open === 'import') {
       if (activeRoleId === 'dealerAdmin') {
         showToast('Importing BA master workbooks is a TML Admin task', 'error');
@@ -1406,8 +1416,9 @@ export const MastersMaintenancePage: React.FC = () => {
       {activeLayout === 'workspace' && (
         <div className="space-y-4">
           {/* Sub-Tabs of all masters inside the active logical module */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-2 shadow-2xs overflow-x-auto">
-            <div className="flex gap-1.5 min-w-max">
+          <div className="bg-white rounded-2xl border border-slate-200 p-2 shadow-2xs">
+            {/* Wrap instead of scrolling sideways, so every master in the group is visible */}
+            <div className="flex flex-wrap gap-1.5">
               {masterConfigs
                 .filter((m) => m.logicalGroup === activeLogicalGroup)
                 .map((m) => {

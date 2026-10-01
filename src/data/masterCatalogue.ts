@@ -124,7 +124,7 @@ export const LOGICAL_MODULES: LogicalModuleDef[] = [
   },
   {
     id: 'Electronic Quality Check',
-    title: 'Electronic Quality Check (EQC)',
+    title: 'EQC Masters',
     shortDesc: 'Guided Check & road test mandates, GC steps, PTD risk colours, DID thresholds, general & schedule checklists',
     iconName: 'ClipboardCheck',
     colorTheme: 'teal',

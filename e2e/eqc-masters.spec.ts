@@ -12,9 +12,13 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('EQC rule tester resolves GC mandate, steps, PTD risk, DID and checklists for a vehicle', async ({ page }) => {
-  await page.goto('/#/admin/masters?open=eqc');
+  // Reachable from the sidebar on any page
+  await page.goto('/#/dashboard');
+  await page.getByRole('button', { name: /EQC Masters/ }).first().click();
+  await expect(page).toHaveURL(/open=eqc/);
   const tester = page.getByTestId('eqc-rule-tester');
   await expect(tester).toBeVisible();
+  await expect(page.getByRole('button', { name: /Guided Check & Road Test Mandate Master/ })).toBeVisible();
   await expect(page.getByTestId('eqc-health')).toHaveText('Configuration OK');
 
   await tester.getByLabel('BU').selectOption('EV');
@@ -74,4 +78,13 @@ test('BA adds a PPL-specific GC rule; duplicates and invalid combinations are bl
   // The same PPL + complaint again is a duplicate
   await addRule({ ppl: 'Harrier', complaintCode: 'AC-COOL-04', gcApplicable: 'Y', gcMandatory: 'N', roadTestMandatory: 'N', active: 'Y' });
   await expect(page.getByText(/A rule for Harrier \+ AC-COOL-04 already exists/)).toBeVisible();
+});
+
+test('sidebar "EQC Masters" brings the EQC group back after browsing another group', async ({ page }) => {
+  await page.goto('/#/admin/masters?open=eqc');
+  await expect(page.getByTestId('eqc-rule-tester')).toBeVisible();
+  await page.getByRole('button', { name: /Vehicle & Product Data/ }).click();
+  await expect(page.getByTestId('eqc-rule-tester')).toHaveCount(0);
+  await page.locator('aside').getByRole('button', { name: /EQC Masters/ }).click();
+  await expect(page.getByTestId('eqc-rule-tester')).toBeVisible();
 });
