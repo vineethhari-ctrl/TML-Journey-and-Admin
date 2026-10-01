@@ -13,6 +13,13 @@ React 19 + TypeScript + Vite + Tailwind. All data is generated in-memory (`src/d
 | `npm run test:e2e` | Browser end-to-end tests (Playwright) — starts the app automatically |
 | `npm run lint` | Type-check (`tsc --noEmit`) |
 | `npm run build` | Production build |
+| `npm run templates` | Regenerate the BA Excel templates in `docs/templates` |
+
+## Defining masters without a deployment
+
+Masters Maintenance has **Create New Master** (form) and **Import BA Workbook** (Excel). See
+[`docs/BA_MASTER_GUIDE.md`](docs/BA_MASTER_GUIDE.md) and the templates in [`docs/templates`](docs/templates).
+Logic lives in `src/utils/masterWorkbook.ts` (build / parse / validate) and is covered by unit + E2E tests.
 
 ## Conventions (please keep these)
 
@@ -31,6 +38,9 @@ React 19 + TypeScript + Vite + Tailwind. All data is generated in-memory (`src/d
   1. a custom master field with value mapping appears on the Vehicle Journey page,
   2. a Rules Engine field's required/range validation is enforced on the dealer page,
   3. Dealer App Preview shows/hides fields per vehicle and blocks publishing while errors exist.
+
+  `e2e/master-onboarding.spec.ts` covers "Create New Master" and the BA workbook import (new masters,
+  a missed field added to an existing master, and rejection of a workbook with errors).
   First run on a new machine: `npx playwright install chromium`.
 - **CI**: `.github/workflows/ci.yml` runs type-check, unit tests, build and E2E on every pull request and push to `main`.
 

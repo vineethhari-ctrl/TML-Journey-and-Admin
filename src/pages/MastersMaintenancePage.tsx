@@ -12,6 +12,8 @@ import { MasterDataImportModal } from '../components/administration/MasterDataIm
 import { MasterChangeLogView } from '../components/administration/MasterChangeLogView';
 import { RulesEngineStudio } from '../components/administration/RulesEngineStudio';
 import { DealerAppPreviewSimulator } from '../components/administration/DealerAppPreviewSimulator';
+import { CreateMasterModal } from '../components/administration/CreateMasterModal';
+import { MasterWorkbookImportModal } from '../components/administration/MasterWorkbookImportModal';
 import {
   Building2,
   Wrench,
@@ -133,6 +135,19 @@ export const MastersMaintenancePage: React.FC = () => {
 
   // Universal Bulk Upload Modal state for any master catalogue
   const [bulkUploadMaster, setBulkUploadMaster] = useState<MasterConfig | null>(null);
+
+  // On-the-fly master creation (form) and BA workbook import
+  const [isCreateMasterOpen, setIsCreateMasterOpen] = useState(false);
+  const [isWorkbookImportOpen, setIsWorkbookImportOpen] = useState(false);
+
+  const openMasterInWorkspace = (m: MasterConfig) => {
+    setActiveMainTab('catalogues');
+    setActiveLogicalGroup(m.logicalGroup);
+    setSelectedMasterId(m.id);
+    setActiveLayout('workspace');
+    setSearchQuery('');
+    setOwnerFilter('ALL');
+  };
 
   // Search & Governance Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -1375,6 +1390,30 @@ export const MastersMaintenancePage: React.FC = () => {
             </button>
           </div>
 
+          {/* On-the-fly master definition: no code change or deployment needed */}
+          <button
+            onClick={() => setIsCreateMasterOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white text-blue-950 hover:bg-blue-50 text-xs font-bold border border-blue-200 cursor-pointer shadow-xs transition-all"
+            title="Define a brand-new master and its fields"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>Create New Master</span>
+          </button>
+          <button
+            onClick={() => {
+              if (adminRole !== 'TML Admin') {
+                showToast('Switch to TML Admin to import a BA master workbook', 'error');
+                return;
+              }
+              setIsWorkbookImportOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold border border-indigo-300/40 cursor-pointer shadow-xs transition-all"
+            title="Create or extend many masters at once from the BA Excel workbook"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            <span>Import BA Workbook</span>
+          </button>
+
           {/* Module-Level Reporting Downloads & Bulk Upload */}
           <button
             onClick={() => openBulkUpload(currentMaster)}
@@ -2452,6 +2491,19 @@ export const MastersMaintenancePage: React.FC = () => {
       )}
     </>
   )}
+
+      <CreateMasterModal
+        isOpen={isCreateMasterOpen}
+        onClose={() => setIsCreateMasterOpen(false)}
+        defaultGroup={activeLogicalGroup}
+        isAdminTml={adminRole === 'TML Admin'}
+        onCreated={openMasterInWorkspace}
+      />
+      <MasterWorkbookImportModal
+        isOpen={isWorkbookImportOpen}
+        onClose={() => setIsWorkbookImportOpen(false)}
+        onImported={(masters) => masters[0] && openMasterInWorkspace(masters[0])}
+      />
 
       {/* Bulk Import Modal for Bay Management */}
       <MasterDataImportModal

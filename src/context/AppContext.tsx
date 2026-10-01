@@ -20,6 +20,7 @@ import {
 import { generateInitialData, buildJourneyForCase } from '../data/mockDataGenerator';
 import { auditService } from '../services/auditService';
 import { diffConfiguration } from '../utils/configUtil';
+import { applyMasterImport } from '../utils/masterWorkbook';
 import { userService } from '../services/userService';
 import {
   MASTER_COLLECTIONS,
@@ -86,6 +87,8 @@ interface AppContextType {
   addCustomMasterField: (masterId: string, fieldDef: MasterFieldDef, defaultValue?: any) => void;
   updateMasterFieldMapping: (masterId: string, fieldKey: string, updates: Partial<MasterFieldDef>) => void;
   resetMasterConfigs: () => void;
+  createMaster: (config: MasterConfig) => boolean;
+  importMasters: (configs: MasterConfig[], source: string) => void;
 
   // Toast
   toast: ToastInfo | null;
@@ -784,6 +787,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     []
   );
 
+  const createMaster = useCallback(
+    (config: MasterConfig): boolean => {
+      if (masterConfigs.some((m) => m.id.toLowerCase() === config.id.toLowerCase())) {
+        showToast(`A master with ID "${config.id}" already exists`, 'error');
+        return false;
+      }
+      setMasterConfigs((prev) => {
+        const next = [...prev, config];
+        persistMasterConfigs(next);
+        return next;
+      });
+      logAudit(
+        'Master Created',
+        'Masters Maintenance',
+        `${config.name} (${config.id})`,
+        'None (New Master)',
+        `Module: ${config.moduleCode}, Owner: ${config.owner}, Fields: ${config.fields.map((f) => f.key).join(', ')}`
+      );
+      showToast(`Master "${config.name}" created — no deployment needed`, 'success');
+      return true;
+    },
+    [masterConfigs, logAudit, showToast]
+  );
+
+  const importMasters = useCallback(
+    (configs: MasterConfig[], source: string) => {
+      if (configs.length === 0) return;
+      const existingIds = new Set(masterConfigs.map((m) => m.id));
+      setMasterConfigs((prev) => {
+        const next = applyMasterImport(prev, configs);
+        persistMasterConfigs(next);
+        return next;
+      });
+      const created = configs.filter((c) => !existingIds.has(c.id));
+      const updated = configs.filter((c) => existingIds.has(c.id));
+      logAudit(
+        'Masters Imported from BA Workbook',
+        'Masters Maintenance',
+        source,
+        `${updated.length} existing master(s) updated`,
+        `Created: ${created.map((c) => c.id).join(', ') || 'none'}; Updated: ${updated.map((c) => c.id).join(', ') || 'none'}`
+      );
+      showToast(`Imported ${created.length} new and ${updated.length} updated master(s)`, 'success');
+    },
+    [masterConfigs, logAudit, showToast]
+  );
+
   const resetMasterConfigs = useCallback(() => {
     setMasterConfigs(MASTER_COLLECTIONS);
     try {
@@ -807,6 +857,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addCustomMasterField,
         updateMasterFieldMapping,
         resetMasterConfigs,
+        createMaster,
+        importMasters,
         users,
         devices,
         sessions,
