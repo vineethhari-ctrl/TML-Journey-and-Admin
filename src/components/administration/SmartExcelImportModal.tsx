@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, Info, Sparkles, Upload, XCircle } from 'lucide-react';
 import { Modal } from '../common/Modal';
+import { SmartExcelPicture } from './SmartExcelPicture';
 import { useApp } from '../../context/AppContext';
 import { LOGICAL_MODULES, MasterConfig, MasterFieldDef, WORKSHOP_MODULES } from '../../data/masterCatalogue';
 import { validateMasterDefinition } from '../../utils/masterWorkbook';
@@ -147,6 +148,15 @@ export const SmartExcelImportModal: React.FC<Props> = ({ isOpen, onClose, onImpo
             }}
           />
         </label>
+
+        {!result && (
+          <details className="rounded-xl border border-slate-200 bg-slate-50/60 p-3" open>
+            <summary className="cursor-pointer text-xs font-bold text-slate-800">What a good sheet looks like (and the template to send to BAs)</summary>
+            <div className="pt-3">
+              <SmartExcelPicture compact />
+            </div>
+          </details>
+        )}
 
         {readError && (
           <div className="flex items-center gap-2 p-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-800">

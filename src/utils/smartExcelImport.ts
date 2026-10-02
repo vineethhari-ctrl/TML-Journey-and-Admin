@@ -9,7 +9,8 @@
  *    A column with no blanks is mandatory.
  *  - Gaps are reported, never fixed silently: blank cells in mostly-filled columns,
  *    mixed types, values above a "(Max N)" limit, duplicate rows.
- *  - An index sheet ("Master Name" / "Status") is read as notes, not imported.
+ *  - An index sheet ("Master Name" / "Status") is read as notes, not imported; guide sheets
+ *    ("README…", "How to…", "Instructions", "Guide") are skipped.
  */
 import type { WorkBook } from 'xlsx';
 import * as XLSX from 'xlsx';
@@ -140,12 +141,19 @@ function uniqueKeys(cols: DetectedColumn[]) {
   });
 }
 
+/** Help sheets in a BA workbook ("README", "How to fill", "Instructions", "Guide") are never imported. */
+export const GUIDE_SHEET = /^(readme|how to|instructions?|guide)\b/i;
+
 /** Finds the tables in every sheet and turns each into a draft master. */
 export function detectMasters(wb: WorkBook): SmartImportResult {
   const masters: DetectedMaster[] = [];
   const notes: string[] = [];
 
   for (const sheet of wb.SheetNames) {
+    if (GUIDE_SHEET.test(sheet.trim())) {
+      notes.push(`Sheet "${sheet}" is a guide sheet — skipped.`);
+      continue;
+    }
     const grid = XLSX.utils.sheet_to_json<Cell[]>(wb.Sheets[sheet], { header: 1, defval: null, raw: true, blankrows: true });
     const blocks = columnBlocks(grid);
     if (blocks.length === 0) {

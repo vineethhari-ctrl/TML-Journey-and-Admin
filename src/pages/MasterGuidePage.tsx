@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { SmartExcelPicture, SMART_TEMPLATE_FILE } from '../components/administration/SmartExcelPicture';
 import { LOGICAL_MODULES, WORKSHOP_MODULES } from '../data/masterCatalogue';
 import {
   buildMasterWorkbook,
@@ -28,6 +29,12 @@ import {
 const downloadUrl = (file: string) => `${import.meta.env.BASE_URL}downloads/${file}`;
 
 const FILES = [
+  {
+    file: SMART_TEMPLATE_FILE,
+    title: '★ Smart Excel Template',
+    desc: 'Colour-coded, with a picture of a good sheet, Wrong vs Right examples, a filled example and dropdowns. For Smart Excel Import.',
+    icon: Sparkles,
+  },
   {
     file: 'TML_Master_Definition_Template.xlsx',
     title: 'Blank Template',
@@ -233,17 +240,8 @@ export const MasterGuidePage: React.FC = () => {
             <>Click <strong>Create master(s)</strong>. The new master opens with all its rows.</>,
           ]}
         />
-        <div className="rounded-lg border border-violet-200 bg-violet-50 p-3">
-          <div className="font-bold text-violet-950 mb-1">Excel checklist for BAs (for a clean import first time)</div>
-          <ul className="list-disc pl-5 space-y-0.5">
-            <li>One table per master. Row 1 of the table holds the column names.</li>
-            <li>Two tables on one sheet? Leave <strong>one empty column</strong> between them.</li>
-            <li>Use Y / N for yes-no columns, real numbers for counts and sequences, and real dates (or YYYY-MM-DD).</li>
-            <li>Fill every row fully. Don't leave a cell blank to mean "same as above"; repeat the value.</li>
-            <li>Write a limit into the header if there is one, e.g. "No. of Images (Max 2)".</li>
-            <li>An optional "Master List" sheet (Master Name, Status) is read as notes.</li>
-          </ul>
-        </div>
+        <div className="font-bold text-violet-950">What a good sheet looks like</div>
+        <SmartExcelPicture />
       </Section>
 
       <Section id="choose" title="Which option to use" icon={ListChecks}>

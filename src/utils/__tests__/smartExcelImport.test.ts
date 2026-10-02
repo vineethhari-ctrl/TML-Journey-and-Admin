@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as XLSX from 'xlsx';
-import { detectMasters, masterIdFor, guessPlacement, toMasterConfig, fieldsFor } from '../smartExcelImport';
+import { detectMasters, readRawWorkbook, masterIdFor, guessPlacement, toMasterConfig, fieldsFor } from '../smartExcelImport';
 import { validateMasterDefinition } from '../masterWorkbook';
 import { masterValidationSchema } from '../masterValidationSchema';
 
@@ -103,5 +103,23 @@ describe('Smart Excel Import — creating masters', () => {
     const fields = fieldsFor(right.columns);
     const bad = right.records.filter((r) => !masterValidationSchema.validateRecord(fields, r).isValid);
     expect(bad.map((r) => r.checkpoint)).toEqual(['Steering Wheel']);
+  });
+});
+
+describe('Smart Excel Template (public/downloads)', () => {
+  it('imports cleanly: guide sheet skipped, empty "Your Master" skipped, the example becomes 2 masters', async () => {
+    const fs = await import('fs');
+    for (const dir of ['public/downloads', 'docs/templates']) {
+      const res = detectMasters(readRawWorkbook(fs.readFileSync(`${dir}/TML_Smart_Excel_Template.xlsx`)));
+      expect(res.notes).toEqual([
+        'Sheet "README - How to fill" is a guide sheet — skipped.',
+        'Sheet "Your Master" columns A–F: header only, no data rows — skipped.',
+      ]);
+      expect(res.masters.map((m) => [m.name, m.records.length, m.issues])).toEqual([
+        ['Example - Inventory Capture — Part 1', 8, ['Row(s) 6 repeat the header and were skipped (e.g. a second PV/EV block).']],
+        ['Example - Inventory Capture — Part 2', 5, []],
+      ]);
+      expect(res.masters[1].columns.find((c) => c.label === 'No. of Images Required (Max 2)')).toMatchObject({ type: 'number', max: 2 });
+    }
   });
 });

@@ -17,8 +17,8 @@ test('BA guide is reachable, every download works, and the practice exercise suc
   await page.getByRole('button', { name: /BA Guide: Masters/ }).click();
   await expect(page.getByRole('heading', { name: /Adding Masters Without a Deployment/ })).toBeVisible();
 
-  // All three files download and are real .xlsx files (zip signature "PK")
-  const files = ['TML_Master_Definition_Template.xlsx', 'TML_Master_Practice_Workbook.xlsx', 'TML_Existing_Masters_Catalogue.xlsx'];
+  // Every file downloads and is a real .xlsx file (zip signature "PK")
+  const files = ['TML_Smart_Excel_Template.xlsx', 'TML_Master_Definition_Template.xlsx', 'TML_Master_Practice_Workbook.xlsx', 'TML_Existing_Masters_Catalogue.xlsx'];
   const saved: Record<string, string> = {};
   for (const name of files) {
     const download = page.waitForEvent('download');
@@ -29,6 +29,20 @@ test('BA guide is reachable, every download works, and the practice exercise suc
     expect(fs.readFileSync(p!).subarray(0, 2).toString()).toBe('PK');
     saved[name] = p!;
   }
+
+  // The picture of a good sheet is shown, and the Smart template imports cleanly as 2 masters
+  await expect(page.getByTestId('smart-excel-picture')).toBeVisible();
+  await page.getByRole('button', { name: 'Open Smart Excel Import' }).click();
+  await page.getByLabel('BA Excel file').setInputFiles({
+    name: 'TML_Smart_Excel_Template.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: fs.readFileSync(saved['TML_Smart_Excel_Template.xlsx']),
+  });
+  await expect(page.getByTestId('smart-import-notes')).toContainText('"README - How to fill" is a guide sheet');
+  await expect(page.getByTestId('smart-draft')).toHaveCount(2);
+  await expect(page.getByTestId('smart-draft').filter({ hasText: 'ready' })).toHaveCount(2);
+  await page.keyboard.press('Escape');
+  await page.goto('/#/admin/masters-guide');
 
   // Practice: open the import dialog from the guide and import the practice workbook
   await page.getByRole('button', { name: 'Open Import BA Workbook' }).click();
