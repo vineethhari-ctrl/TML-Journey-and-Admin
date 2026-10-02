@@ -55,6 +55,12 @@ side-by-side tables, repeated PV/EV headers, an index sheet. It infers column ty
 gaps with row numbers, and creates the masters after review. Logic: `src/utils/smartExcelImport.ts` (unit-tested);
 UI: `SmartExcelImportModal.tsx`. BA checklist: [`docs/BA_EXCEL_CHECKLIST.md`](docs/BA_EXCEL_CHECKLIST.md).
 
+## Backend design & API contract
+
+- Design (architecture, data model, flows, roles, migration, build order): [`docs/backend/README.md`](docs/backend/README.md)
+- Database: [`docs/backend/schema.sql`](docs/backend/schema.sql) (PostgreSQL 16) with tests [`schema_test.sql`](docs/backend/schema_test.sql), run in CI
+- API: [`public/api-docs/openapi.yaml`](public/api-docs/openapi.yaml), browsable on the live site at `/api-docs/`
+
 ## Conventions (please keep these)
 
 - **Routing** lives in the URL hash (`#/journey/JC…`, `#/admin/users?search=…`). Use `navigate()` from `useApp()`; pages read `?search=` via `useRouteSearchParam`.

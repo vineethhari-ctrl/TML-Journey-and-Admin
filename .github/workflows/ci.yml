@@ -18,6 +18,8 @@ jobs:
       - run: npm ci
       - name: Type-check
         run: npm run lint
+      - name: API contract is valid (OpenAPI lint)
+        run: npx -y @redocly/cli@2.57.0 lint public/api-docs/openapi.yaml
       - name: Unit & integration tests
         run: npm test
       - name: Build
@@ -34,3 +36,30 @@ jobs:
           name: playwright-results
           path: test-results/
           retention-days: 7
+
+  # The backend database design (docs/backend/schema.sql) must load on PostgreSQL 16
+  # and pass its own rule tests (docs/backend/schema_test.sql).
+  database-schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tml
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Load schema and run schema tests
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: tml
+        run: psql -v ON_ERROR_STOP=1 -f docs/backend/schema.sql -f docs/backend/schema_test.sql

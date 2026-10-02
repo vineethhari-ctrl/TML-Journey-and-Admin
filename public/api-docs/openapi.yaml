@@ -1,0 +1,1647 @@
+openapi: 3.1.0
+info:
+  title: TML Service Transformation — Admin Portal API
+  version: 1.0.0
+  summary: Masters, bay governance, holiday calendars, rule resolution for dealer apps, imports and audit.
+  description: |
+    Contract between the Admin Portal (this repository), the backend, and the dealer applications.
+
+    **Design in one line:** masters are *data*, not tables. A new master or a missed field is created at run time
+    (Create New Master, Smart Excel Import, BA Workbook) and is immediately served by the same endpoints.
+    No backend change is needed per master.
+
+    **Conventions**
+    - JSON everywhere; dates `YYYY-MM-DD`, timestamps ISO-8601 UTC.
+    - Errors: [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) `application/problem+json`. Validation errors list
+      the field (and, for imports, the Excel sheet and row).
+    - Lists are cursor-paginated: `?limit=50&cursor=…`, response has `nextCursor`.
+    - Optimistic locking: every `GET` of a single resource returns an `ETag`; `PUT/PATCH/DELETE` must send `If-Match`.
+      A stale ETag returns `412 Precondition Failed`.
+    - Every change is written to the audit log; the user comes from the access token.
+    - Dealer users (`DEALER_ADMIN`) are automatically scoped to their own `dealerCode` (also enforced in the database).
+
+    Design notes: `docs/backend/README.md`. Database: `docs/backend/schema.sql`.
+  contact:
+    name: TML Service Transformation — Admin Portal
+  license:
+    name: Proprietary — Tata Motors Ltd. internal use
+    identifier: LicenseRef-TML-Proprietary
+servers:
+  - url: https://{host}/api/v1
+    variables:
+      host:
+        default: admin-portal.example.tatamotors.com
+        description: Set by TML IT per environment (DEV / UAT / PROD)
+security:
+  - sso: []
+tags:
+  - name: Session
+    description: Who am I, what can I do
+  - name: Masters
+    description: Master definitions and fields (TML Admin / BA)
+  - name: Master records
+    description: Rows of a master; validation runs server-side with the same rules as the portal
+  - name: Imports
+    description: Smart Excel Import, BA Workbook and bulk uploads — preview first, then commit (all-or-nothing)
+  - name: Dealer apps
+    description: Read-only, cache-friendly endpoints for dealer applications (delta sync by version)
+  - name: Rule resolution
+    description: Server-side business rules so dealer apps never re-implement them
+  - name: Bays
+    description: Bays, TML allocation, status changes and approvals
+  - name: Calendars
+    description: Non-operational hours and holiday calendar per dealer division
+  - name: Organisation
+    description: Dealers and divisions
+  - name: Notifications & audit
+    description: The bell, and the append-only audit trail
+
+paths:
+  /me:
+    get:
+      tags: [Session]
+      summary: Current user, roles, permissions and dealer scope
+      operationId: getMe
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ---------------------------------------------------------------- Masters
+  /masters:
+    get:
+      tags: [Masters]
+      summary: List master definitions
+      operationId: listMasters
+      parameters:
+        - { name: logicalGroup, in: query, schema: { type: string }, example: Electronic Quality Check }
+        - { name: moduleCode, in: query, schema: { type: string }, example: eqc }
+        - { name: owner, in: query, schema: { $ref: '#/components/schemas/Owner' } }
+        - { name: q, in: query, description: Search in name / description, schema: { type: string } }
+      responses:
+        '200':
+          description: Masters (without records)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/MasterDefinition' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Masters]
+      summary: Create a master (Create New Master)
+      description: Requires `TML_ADMIN` or `BA`. The master is usable immediately; no deployment.
+      operationId: createMaster
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MasterDefinitionInput' }
+      responses:
+        '201':
+          description: Created
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MasterDefinition' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /masters/{masterId}:
+    parameters: [{ $ref: '#/components/parameters/MasterId' }]
+    get:
+      tags: [Masters]
+      summary: Get a master definition with its fields
+      operationId: getMaster
+      responses:
+        '200':
+          description: Master
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MasterDefinition' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Masters]
+      summary: Update name, group, description or active flag
+      operationId: updateMaster
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                masterName: { type: string, maxLength: 150 }
+                logicalGroup: { type: string }
+                category: { type: string }
+                description: { type: string }
+                isActive: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MasterDefinition' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
+  /masters/{masterId}/fields:
+    parameters: [{ $ref: '#/components/parameters/MasterId' }]
+    post:
+      tags: [Masters]
+      summary: Add a field to a master (e.g. a parameter the BAs missed)
+      description: Existing records get the field's default value (or blank). Fields are never hard-deleted.
+      operationId: addField
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MasterField' }
+      responses:
+        '201':
+          description: Field added; returns the updated master
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MasterDefinition' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
+  /masters/{masterId}/fields/{fieldKey}:
+    parameters:
+      - { $ref: '#/components/parameters/MasterId' }
+      - { name: fieldKey, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [Masters]
+      summary: Change a field (label, options, mandatory, validation, dealer exposure, deactivate)
+      description: |
+        Changes that would make existing records invalid (e.g. making a field mandatory while rows are blank,
+        removing an option still in use) are refused with the list of affected record ids.
+      operationId: updateField
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MasterFieldPatch' }
+      responses:
+        '200':
+          description: Updated master
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MasterDefinition' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
+  /masters/{masterId}/history:
+    parameters: [{ $ref: '#/components/parameters/MasterId' }]
+    get:
+      tags: [Masters]
+      summary: Change log — definition versions and record changes
+      operationId: getMasterHistory
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/ChangeEntry' } }
+                  nextCursor: { type: [string, 'null'] }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  # ---------------------------------------------------------------- Records
+  /masters/{masterId}/records:
+    parameters: [{ $ref: '#/components/parameters/MasterId' }]
+    get:
+      tags: [Master records]
+      summary: List records
+      operationId: listRecords
+      parameters:
+        - { name: q, in: query, description: Free-text search across all fields, schema: { type: string } }
+        - name: filter
+          in: query
+          description: Exact match per field, e.g. `filter[complaintCode]=BRK-VIB-02&filter[ppl]=`
+          style: deepObject
+          explode: true
+          schema: { type: object, additionalProperties: { type: string } }
+        - { name: active, in: query, schema: { type: boolean } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Records
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecordPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Master records]
+      summary: Add a record
+      description: Field rules (type, mandatory, options, min/max, pattern, dates) and the master's business rules (e.g. EQC "GC Mandatory needs GC Applicable", duplicates) are checked.
+      operationId: createRecord
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MasterRecordInput' }
+      responses:
+        '201':
+          description: Created
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MasterRecord' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /masters/{masterId}/records/{recordId}:
+    parameters:
+      - { $ref: '#/components/parameters/MasterId' }
+      - { name: recordId, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Master records]
+      summary: Get a record
+      operationId: getRecord
+      responses:
+        '200':
+          description: Record
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MasterRecord' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Master records]
+      summary: Replace a record's data
+      operationId: updateRecord
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MasterRecordInput' }
+      responses:
+        '200':
+          description: Updated
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MasterRecord' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      tags: [Master records]
+      summary: Delete a record (kept in history)
+      operationId: deleteRecord
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '204': { description: Deleted }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
+  /masters/{masterId}/records/bulk:
+    parameters: [{ $ref: '#/components/parameters/MasterId' }]
+    post:
+      tags: [Master records]
+      summary: Bulk upsert / edit / delete records in one transaction
+      description: All rows are validated first; nothing is saved if any row fails. `dryRun=true` only validates.
+      operationId: bulkRecords
+      parameters:
+        - { name: dryRun, in: query, schema: { type: boolean, default: false } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operations]
+              properties:
+                operations:
+                  type: array
+                  maxItems: 5000
+                  items:
+                    type: object
+                    required: [op]
+                    properties:
+                      op: { type: string, enum: [upsert, delete] }
+                      recordId: { type: string }
+                      data: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Result per row
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BulkResult' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+
+  /masters/{masterId}/export:
+    parameters: [{ $ref: '#/components/parameters/MasterId' }]
+    get:
+      tags: [Master records]
+      summary: Export a master (CSV or Excel)
+      operationId: exportMaster
+      parameters:
+        - { name: format, in: query, required: true, schema: { type: string, enum: [csv, xlsx] } }
+      responses:
+        '200':
+          description: File
+          content:
+            text/csv: { schema: { type: string } }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  # ---------------------------------------------------------------- Imports
+  /imports:
+    post:
+      tags: [Imports]
+      summary: Upload a file (or a parsed payload) and get a preview with every issue
+      description: |
+        Nothing is saved yet. Returns the detected masters / records and a report of errors (blocking) and
+        gaps (warnings, with Excel sheet + row). The original file is kept for audit.
+        - `SMART_EXCEL`: a BA's own Excel in any layout (same detection as the portal's Smart Excel Import)
+        - `BA_WORKBOOK`: the TML master-definition workbook (Masters / Fields / record sheets)
+        - `BULK_RECORDS`: rows for one existing master (`masterId` required)
+      operationId: createImport
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [kind, file]
+              properties:
+                kind: { $ref: '#/components/schemas/ImportKind' }
+                masterId: { type: string, description: Required for BULK_RECORDS }
+                file: { type: string, format: binary }
+          application/json:
+            schema:
+              type: object
+              required: [kind, fileName, payload]
+              description: Already parsed in the browser (the portal parses Excel locally); the server re-validates everything.
+              properties:
+                kind: { $ref: '#/components/schemas/ImportKind' }
+                fileName: { type: string }
+                masterId: { type: string }
+                payload: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: Preview created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportJob' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '413': { description: File too large (limit 10 MB) }
+
+  /imports/{importId}:
+    parameters: [{ $ref: '#/components/parameters/ImportId' }]
+    get:
+      tags: [Imports]
+      summary: Get an import preview / result
+      operationId: getImport
+      responses:
+        '200':
+          description: Import job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportJob' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /imports/{importId}/commit:
+    parameters: [{ $ref: '#/components/parameters/ImportId' }]
+    post:
+      tags: [Imports]
+      summary: Save the previewed import (all-or-nothing)
+      description: The reviewer's edits from the preview (names, ids, groups, column types, mandatory flags, mode) are applied, the whole import is re-validated and committed in one transaction.
+      operationId: commitImport
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                existingMasterMode: { type: string, enum: [skip, update], default: skip }
+                masters:
+                  type: array
+                  description: Per detected master — include flag and the reviewer's adjustments
+                  items:
+                    type: object
+                    required: [draftKey, include]
+                    properties:
+                      draftKey: { type: string }
+                      include: { type: boolean }
+                      masterId: { type: string }
+                      masterName: { type: string }
+                      logicalGroup: { type: string }
+                      moduleCode: { type: string }
+                      owner: { $ref: '#/components/schemas/Owner' }
+                      fields: { type: array, items: { $ref: '#/components/schemas/MasterField' } }
+      responses:
+        '200':
+          description: Committed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportJob' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '409': { description: Already committed or expired, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  # ---------------------------------------------------------------- Dealer apps
+  /dealer/masters:
+    get:
+      tags: [Dealer apps]
+      summary: Masters published to dealer apps, with their current versions
+      description: Only fields with `displayInDealerApp = true` (plus keys needed for rules) are exposed, with dealer labels and value mappings.
+      operationId: listDealerMasters
+      security: [{ sso: [] }, { dealerApp: [] }]
+      parameters:
+        - { name: targetModule, in: query, schema: { $ref: '#/components/schemas/DealerTargetModule' } }
+      responses:
+        '200':
+          description: Published masters
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [masterId, masterName, version, fields]
+                      properties:
+                        masterId: { type: string }
+                        masterName: { type: string }
+                        version: { type: integer, description: Increases on every change; use it for delta sync }
+                        fields: { type: array, items: { $ref: '#/components/schemas/MasterField' } }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /dealer/masters/{masterId}/records:
+    parameters: [{ $ref: '#/components/parameters/MasterId' }]
+    get:
+      tags: [Dealer apps]
+      summary: Records for a dealer app — full or changes since a version
+      description: |
+        Call once with no `sinceVersion` to load everything, then with the last `currentVersion` to get only
+        changed and deleted rows. Supports `If-None-Match` → `304 Not Modified`.
+      operationId: syncDealerRecords
+      security: [{ sso: [] }, { dealerApp: [] }]
+      parameters:
+        - { name: sinceVersion, in: query, schema: { type: integer, minimum: 0 } }
+        - { name: If-None-Match, in: header, schema: { type: string } }
+      responses:
+        '200':
+          description: Records
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [masterId, currentVersion, records, deletedRecordIds]
+                properties:
+                  masterId: { type: string }
+                  currentVersion: { type: integer }
+                  records: { type: array, items: { $ref: '#/components/schemas/MasterRecord' } }
+                  deletedRecordIds: { type: array, items: { type: string } }
+        '304': { description: Not modified }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  # ---------------------------------------------------------------- Rule resolution
+  /rules/eqc/resolve:
+    post:
+      tags: [Rule resolution]
+      summary: Everything EQC needs for one vehicle in one call
+      description: |
+        Same rules as the portal's EQC Rule Tester (`src/utils/eqcRules.ts`): blank PPL = all PPLs and a
+        PPL-specific row wins; blank Km range = any odometer; GC stops being mandatory after "GC Mandatory Till";
+        PTD colour from the PTD Risk master; DID value checked against the expected range.
+      operationId: resolveEqc
+      security: [{ sso: [] }, { dealerApp: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EqcResolveRequest' }
+      responses:
+        '200':
+          description: Resolved rules
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EqcResolveResponse' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+
+  /rules/bodyshop/inventory-capture:
+    post:
+      tags: [Rule resolution]
+      summary: What a role captures at vehicle intake (sections, checkpoints, evidence, insurance documents)
+      description: Same rules as the portal's Inventory Capture Preview (`src/utils/bodyshopRules.ts`).
+      operationId: resolveInventoryCapture
+      security: [{ sso: [] }, { dealerApp: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bu, jobType, role]
+              properties:
+                bu: { type: string, enum: [PV, EV] }
+                jobType: { type: string, enum: [General, Accident] }
+                role: { type: string, enum: [DSvAdv, Driver] }
+      responses:
+        '200':
+          description: Ordered sections
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InventoryCaptureResponse' }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  # ---------------------------------------------------------------- Bays
+  /bays:
+    get:
+      tags: [Bays]
+      summary: List bays
+      operationId: listBays
+      parameters:
+        - { name: dealerCode, in: query, schema: { type: string }, description: Ignored for dealer users (always their own dealer) }
+        - { name: divisionId, in: query, schema: { type: string, format: uuid } }
+        - { name: bu, in: query, schema: { $ref: '#/components/schemas/BU' } }
+        - { name: bayType, in: query, schema: { type: string } }
+        - { name: bayStatus, in: query, schema: { type: string, enum: [Active, Inactive] } }
+        - { name: approvalStatus, in: query, schema: { $ref: '#/components/schemas/ApprovalStatus' } }
+        - { name: q, in: query, description: Bay name contains, schema: { type: string } }
+      responses:
+        '200':
+          description: Bays
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Bay' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Bays]
+      summary: Add a bay (or save as Draft)
+      description: |
+        Within the TML allocation → Approved and Active immediately. Beyond it (Dealer Admin) → `justification`
+        required; the bay is Pending Approval and a request + e-mail go to the TML Network Manager.
+        `asDraft=true` saves without submitting.
+      operationId: createBay
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BayInput' }
+      responses:
+        '201':
+          description: Bay created; `request` is present when approval is needed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BayCommandResult' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /bays/{bayId}:
+    parameters: [{ name: bayId, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      tags: [Bays]
+      summary: Get a bay
+      operationId: getBay
+      responses:
+        '200':
+          description: Bay
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bay' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Bays]
+      summary: Edit physical details (name, floor, lift, equipment, technicians)
+      description: Type, division, BU and status are governed and cannot be changed here.
+      operationId: updateBayDetails
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bayName: { type: string }
+                floor: { type: string }
+                liftAvailability: { type: string }
+                specialEquipments: { type: array, items: { type: string } }
+                techSupervisor: { type: string }
+                technician1: { type: string }
+                technician2: { type: string }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bay' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
+  /bays/submit:
+    post:
+      tags: [Bays]
+      summary: Send Draft / Rejected bays for approval
+      description: Each bay within the allocation is approved; the rest need the justification and go to the TML Network Manager.
+      operationId: submitBays
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bayIds]
+              properties:
+                bayIds: { type: array, minItems: 1, items: { type: string, format: uuid } }
+                justification: { type: string }
+      responses:
+        '200':
+          description: Outcome per bay
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      required: [bayId, outcome]
+                      properties:
+                        bayId: { type: string, format: uuid }
+                        outcome: { type: string, enum: [APPROVED, PENDING_APPROVAL, NOT_SENT] }
+                        requestId: { type: string, format: uuid }
+                        error: { type: string }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /bays/{bayId}/status-change:
+    parameters: [{ name: bayId, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [Bays]
+      summary: Activate / Inactivate a bay (reason required)
+      description: TML Admin → applied immediately. Dealer Admin → per policy, either applied or a request to TML Admin (L1/L2).
+      operationId: changeBayStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toStatus, reason]
+              properties:
+                toStatus: { type: string, enum: [Active, Inactive] }
+                reason: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Applied or sent for approval
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BayCommandResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /bay-allocations:
+    get:
+      tags: [Bays]
+      summary: TML allocation with usage (allocated / approved / remaining)
+      operationId: listAllocations
+      parameters:
+        - { name: dealerCode, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Allocations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/BayAllocation' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Bays]
+      summary: Set an allocation (TML Admin)
+      operationId: setAllocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dealerCode, divisionId, bu, bayType, allocated]
+              properties:
+                dealerCode: { type: string }
+                divisionId: { type: string, format: uuid }
+                bu: { $ref: '#/components/schemas/BU' }
+                bayType: { type: string }
+                allocated: { type: integer, minimum: 0, maximum: 500 }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BayAllocation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /bay-requests:
+    get:
+      tags: [Bays]
+      summary: Approval inbox / request history
+      operationId: listBayRequests
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [PENDING, APPROVED, REJECTED, WITHDRAWN] } }
+        - { name: dealerCode, in: query, schema: { type: string } }
+        - { name: mine, in: query, description: Only requests I can decide, schema: { type: boolean } }
+      responses:
+        '200':
+          description: Requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/BayRequest' } }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /bay-requests/{requestId}:
+    parameters: [{ name: requestId, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      tags: [Bays]
+      summary: Get a request (target of the e-mail deep link)
+      operationId: getBayRequest
+      responses:
+        '200':
+          description: Request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BayRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /bay-requests/{requestId}/decision:
+    parameters: [{ name: requestId, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [Bays]
+      summary: Approve or reject (note required to reject)
+      description: Only the approver role of the request (TML Network Manager for additional bays, TML Admin for status changes).
+      operationId: decideBayRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [APPROVED, REJECTED] }
+                note: { type: string }
+      responses:
+        '200':
+          description: Decided; the bay is updated in the same transaction
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BayRequest' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Already decided, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /bay-policy:
+    get:
+      tags: [Bays]
+      summary: Status-change policy switches
+      operationId: getBayPolicy
+      responses:
+        '200':
+          description: Policy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BayPolicy' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Bays]
+      summary: Change the policy (TML Admin)
+      operationId: setBayPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BayPolicy' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BayPolicy' }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  # ---------------------------------------------------------------- Calendars
+  /calendars/{divisionId}:
+    parameters: [{ $ref: '#/components/parameters/DivisionId' }]
+    get:
+      tags: [Calendars]
+      summary: A month of the division calendar with computed effective hours
+      operationId: getCalendarMonth
+      security: [{ sso: [] }, { dealerApp: [] }]
+      parameters:
+        - { name: month, in: query, required: true, schema: { type: string, pattern: '^\d{4}-\d{2}$' }, example: '2026-10' }
+      responses:
+        '200':
+          description: Calendar month
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalendarMonth' }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /calendars/{divisionId}/weekly-pattern:
+    parameters: [{ $ref: '#/components/parameters/DivisionId' }]
+    put:
+      tags: [Calendars]
+      summary: Replace the weekly operating pattern (7 days)
+      operationId: setWeeklyPattern
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 7
+              maxItems: 7
+              items: { $ref: '#/components/schemas/DayPattern' }
+      responses:
+        '200': { description: Saved }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+
+  /calendars/{divisionId}/dates/{date}:
+    parameters:
+      - { $ref: '#/components/parameters/DivisionId' }
+      - { name: date, in: path, required: true, schema: { type: string, format: date } }
+    put:
+      tags: [Calendars]
+      summary: Set a holiday / hours override for one date (past dates are locked)
+      operationId: setDateOverride
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DateOverride' }
+      responses:
+        '200': { description: Saved }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '409': { description: Date is in the past (locked), content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    delete:
+      tags: [Calendars]
+      summary: Remove an override (back to the weekly pattern)
+      operationId: deleteDateOverride
+      responses:
+        '204': { description: Removed }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /calendars/{divisionId}/bulk-holiday:
+    parameters: [{ $ref: '#/components/parameters/DivisionId' }]
+    post:
+      tags: [Calendars]
+      summary: Mark every <weekday> in a month as a holiday (future dates only)
+      operationId: bulkHoliday
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [month, weekday]
+              properties:
+                month: { type: string, pattern: '^\d{4}-\d{2}$' }
+                weekday: { type: string, enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday] }
+                holidayName: { type: string }
+      responses:
+        '200':
+          description: Dates marked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count: { type: integer }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  # ---------------------------------------------------------------- Organisation, notifications, audit
+  /dealers:
+    get:
+      tags: [Organisation]
+      summary: Dealers (a dealer user sees only their own)
+      operationId: listDealers
+      responses:
+        '200':
+          description: Dealers with their divisions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Dealer' } }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /notifications:
+    get:
+      tags: [Notifications & audit]
+      summary: My notifications (bell)
+      operationId: listNotifications
+      parameters:
+        - { name: unreadOnly, in: query, schema: { type: boolean } }
+      responses:
+        '200':
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Notification' } }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /notifications/{notificationId}/read:
+    parameters: [{ name: notificationId, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [Notifications & audit]
+      summary: Mark as read
+      operationId: markNotificationRead
+      responses:
+        '204': { description: Marked }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /audit-log:
+    get:
+      tags: [Notifications & audit]
+      summary: Search the audit trail
+      operationId: searchAuditLog
+      parameters:
+        - { name: module, in: query, schema: { type: string } }
+        - { name: userId, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: q, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Audit entries, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/AuditEntry' } }
+                  nextCursor: { type: [string, 'null'] }
+
+        '401': { $ref: '#/components/responses/Unauthorized' }
+components:
+  securitySchemes:
+    sso:
+      type: oauth2
+      description: TML SSO (OpenID Connect, e.g. Azure AD). Users sign in to the portal; roles come from `/me`.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://login.example.tatamotors.com/oauth2/authorize
+          tokenUrl: https://login.example.tatamotors.com/oauth2/token
+          scopes: {}
+    dealerApp:
+      type: oauth2
+      description: Service-to-service access for dealer applications (role DEALER_APP, read + rule resolution only).
+      flows:
+        clientCredentials:
+          tokenUrl: https://login.example.tatamotors.com/oauth2/token
+          scopes: {}
+
+  headers:
+    ETag:
+      description: Version of the resource; send it back in If-Match to update
+      schema: { type: string, example: 'W/"7"' }
+
+  parameters:
+    MasterId:
+      name: masterId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[a-z][a-z0-9_]{2,30}$' }
+      example: eqc_gc_mandate
+    ImportId:
+      name: importId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DivisionId:
+      name: divisionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 500, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+
+  responses:
+    Unauthorized:
+      description: Missing or expired token
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Forbidden:
+      description: Role or dealer scope does not allow this
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    NotFound:
+      description: Not found (or outside the caller's dealer scope)
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Conflict:
+      description: Duplicate or conflicting data (e.g. same PPL + Complaint Code, duplicate bay name, open request exists)
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    PreconditionFailed:
+      description: Someone else changed it first (stale If-Match). Reload and retry.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    ValidationFailed:
+      description: Validation failed
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: https://errors.example.tatamotors.com/validation
+            title: Validation failed
+            status: 400
+            errors:
+              - { field: gcMandatory, message: GC can only be mandatory when GC Applicable is Y. }
+
+  schemas:
+    Problem:
+      type: object
+      required: [title, status]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        correlationId: { type: string, format: uuid }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [message]
+            properties:
+              field: { type: string }
+              recordId: { type: string }
+              sheet: { type: string }
+              row: { type: integer }
+              message: { type: string }
+
+    Owner: { type: string, enum: [TML_ADMIN, DEALER_ADMIN] }
+    BU: { type: string, enum: [PV, EV, CV] }
+    ApprovalStatus: { type: string, enum: [Draft, Approved, Pending Approval, Rejected] }
+    DealerTargetModule: { type: string, enum: [vehicle_journey, job_card, reception, workshop_floor, general] }
+    ImportKind: { type: string, enum: [SMART_EXCEL, BA_WORKBOOK, BULK_RECORDS] }
+
+    Me:
+      type: object
+      required: [userId, name, roles, permissions]
+      properties:
+        userId: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        roles: { type: array, items: { type: string, enum: [TML_ADMIN, TML_NETWORK_MANAGER, BA, DEALER_ADMIN, READ_ONLY, DEALER_APP] } }
+        dealerCode: { type: [string, 'null'], description: Set for dealer users — all data is scoped to it }
+        permissions:
+          type: array
+          items:
+            type: object
+            required: [module]
+            properties:
+              module: { type: string }
+              view: { type: boolean }
+              create: { type: boolean }
+              edit: { type: boolean }
+              approve: { type: boolean }
+              delete: { type: boolean }
+              export: { type: boolean }
+
+    FieldValidation:
+      type: object
+      properties:
+        min: { type: number }
+        max: { type: number }
+        minDate: { type: string, format: date }
+        maxDate: { type: string, format: date }
+        pattern: { type: string, description: Regular expression for text fields }
+        customErrorMessage: { type: string }
+
+    MasterField:
+      type: object
+      required: [key, label, type]
+      properties:
+        key: { type: string, pattern: '^[a-zA-Z][a-zA-Z0-9_]*$', example: complaintCode }
+        label: { type: string, example: Complaint Code }
+        type: { type: string, enum: [text, number, select, boolean, date] }
+        options: { type: array, items: { type: string }, minItems: 2, description: Required for select }
+        mandatory: { type: boolean, default: false }
+        defaultValue: { description: Pre-filled for new records; empty string = start blank }
+        blankLabel: { type: string, example: (All PPLs) }
+        validation: { $ref: '#/components/schemas/FieldValidation' }
+        description: { type: string }
+        isCustom: { type: boolean, readOnly: true }
+        isActive: { type: boolean, default: true }
+        displayInDealerApp: { type: boolean, default: false }
+        dealerTargetModule: { $ref: '#/components/schemas/DealerTargetModule' }
+        dealerDisplayLabel: { type: string }
+        valueMapping: { type: object, additionalProperties: { type: string }, example: { PLATINUM: Platinum 5-Yr Cover } }
+
+    MasterFieldPatch:
+      type: object
+      properties:
+        label: { type: string }
+        options: { type: array, items: { type: string } }
+        mandatory: { type: boolean }
+        defaultValue: {}
+        validation: { $ref: '#/components/schemas/FieldValidation' }
+        description: { type: string }
+        isActive: { type: boolean }
+        displayInDealerApp: { type: boolean }
+        dealerTargetModule: { $ref: '#/components/schemas/DealerTargetModule' }
+        dealerDisplayLabel: { type: string }
+        valueMapping: { type: object, additionalProperties: { type: string } }
+
+    MasterDefinitionInput:
+      type: object
+      required: [masterId, masterName, logicalGroup, moduleCode, owner, fields]
+      properties:
+        masterId: { type: string, pattern: '^[a-z][a-z0-9_]{2,30}$', example: tyre_brand_master }
+        masterName: { type: string, example: Tyre Brand Master }
+        logicalGroup: { type: string, example: Vehicle Data }
+        moduleCode: { type: string, example: jc_creation }
+        owner: { $ref: '#/components/schemas/Owner' }
+        category: { type: string }
+        description: { type: string }
+        isDealerScoped: { type: boolean, default: false }
+        fields: { type: array, minItems: 1, items: { $ref: '#/components/schemas/MasterField' } }
+
+    MasterDefinition:
+      allOf:
+        - $ref: '#/components/schemas/MasterDefinitionInput'
+        - type: object
+          required: [version, recordCount, isActive, updatedAt, updatedBy]
+          properties:
+            ruleSet: { type: [string, 'null'], enum: [eqc, bodyshop, null], description: Server-side business rules plug-in }
+            isSystem: { type: boolean }
+            source: { type: string, example: 'Smart Excel Import: Bodyshop_Master_1.xlsx' }
+            version: { type: integer }
+            recordCount: { type: integer }
+            isActive: { type: boolean }
+            updatedAt: { type: string, format: date-time }
+            updatedBy: { type: string }
+
+    MasterRecordInput:
+      type: object
+      required: [data]
+      properties:
+        recordId: { type: string, description: Optional on create — generated when blank, example: GCM-07 }
+        dealerCode: { type: string, description: Only for dealer-scoped masters (set automatically for dealer users) }
+        data:
+          type: object
+          additionalProperties: true
+          example: { ppl: '', complaintCode: BRK-VIB-02, gcApplicable: Y, gcMandatory: Y, roadTestMandatory: Y, active: Y }
+
+    MasterRecord:
+      allOf:
+        - $ref: '#/components/schemas/MasterRecordInput'
+        - type: object
+          required: [recordId, rowVersion, changedInVersion, updatedAt, updatedBy]
+          properties:
+            isActive: { type: boolean }
+            rowVersion: { type: integer }
+            changedInVersion: { type: integer }
+            updatedAt: { type: string, format: date-time }
+            updatedBy: { type: string }
+
+    RecordPage:
+      type: object
+      required: [items, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/MasterRecord' } }
+        total: { type: integer }
+        nextCursor: { type: [string, 'null'] }
+
+    BulkResult:
+      type: object
+      required: [saved, results]
+      properties:
+        saved: { type: boolean, description: false when dryRun or any row failed }
+        results:
+          type: array
+          items:
+            type: object
+            required: [index, status]
+            properties:
+              index: { type: integer }
+              recordId: { type: string }
+              status: { type: string, enum: [CREATED, UPDATED, DELETED, UNCHANGED, ERROR] }
+              errors: { type: array, items: { type: string } }
+
+    ChangeEntry:
+      type: object
+      required: [changedAt, changedBy, kind]
+      properties:
+        changedAt: { type: string, format: date-time }
+        changedBy: { type: string }
+        kind: { type: string, enum: [DEFINITION, INSERT, UPDATE, DELETE] }
+        recordId: { type: string }
+        version: { type: integer }
+        oldData: { type: object, additionalProperties: true }
+        newData: { type: object, additionalProperties: true }
+        importId: { type: string, format: uuid }
+
+    ImportJob:
+      type: object
+      required: [importId, kind, fileName, status, report]
+      properties:
+        importId: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/ImportKind' }
+        fileName: { type: string }
+        status: { type: string, enum: [PREVIEW, COMMITTED, REJECTED, EXPIRED] }
+        drafts:
+          type: array
+          description: Detected masters (Smart Excel / BA workbook) with their records
+          items:
+            type: object
+            required: [draftKey, sheet, range, masterName, masterId, fields, recordCount]
+            properties:
+              draftKey: { type: string }
+              sheet: { type: string }
+              range: { type: string, example: 'A1:F19' }
+              masterName: { type: string }
+              masterId: { type: string }
+              action: { type: string, enum: [CREATE, UPDATE, SKIP] }
+              fields: { type: array, items: { $ref: '#/components/schemas/MasterField' } }
+              recordCount: { type: integer }
+              sampleRecords: { type: array, items: { type: object, additionalProperties: true } }
+        report:
+          type: object
+          required: [errors, warnings]
+          properties:
+            notes: { type: array, items: { type: string }, example: ['Sheet "README - How to fill" is a guide sheet — skipped.'] }
+            errors: { type: array, items: { $ref: '#/components/schemas/ImportIssue' }, description: Blocking }
+            warnings: { type: array, items: { $ref: '#/components/schemas/ImportIssue' }, description: Gaps to send back to the BA }
+        committedAt: { type: [string, 'null'], format: date-time }
+        committedBy: { type: [string, 'null'] }
+
+    ImportIssue:
+      type: object
+      required: [message]
+      properties:
+        sheet: { type: string }
+        row: { type: integer, description: Excel row number }
+        column: { type: string }
+        draftKey: { type: string }
+        message: { type: string, example: '"Section" is blank in row(s) 11, 12.' }
+
+    EqcResolveRequest:
+      type: object
+      required: [bu, ppl, complaintCode, odometerKm, jobDate]
+      properties:
+        bu: { type: string, enum: [PV, EV] }
+        ppl: { type: string, example: Nexon EV }
+        complaintCode: { type: string, example: BAT-SOC-03 }
+        odometerKm: { type: integer, minimum: 0, example: 25000 }
+        jobDate: { type: string, format: date, example: '2026-10-02' }
+        minutesToPtd: { type: integer, description: Minutes left before the Promised Time of Delivery (negative = late), example: 90 }
+        didReadings:
+          type: array
+          items:
+            type: object
+            required: [parameterName, value]
+            properties:
+              parameterName: { type: string, example: HV Battery SOC }
+              value: { type: number, example: 18 }
+
+    EqcResolveResponse:
+      type: object
+      required: [guidedCheck, steps, generalChecklist, scheduleChecklist]
+      properties:
+        guidedCheck:
+          type: [object, 'null']
+          description: null when no rule exists for the complaint code
+          properties:
+            gcApplicable: { type: boolean }
+            gcMandatory: { type: boolean }
+            mandateExpired: { type: boolean }
+            gcMandatoryTill: { type: [string, 'null'], format: date, example: '2027-03-31' }
+            roadTestMandatory: { type: boolean }
+            scope: { type: string, enum: [PPL, ALL] }
+            ruleId: { type: string }
+        steps:
+          type: array
+          items:
+            type: object
+            required: [stepNo, text]
+            properties:
+              stepNo: { type: integer }
+              text: { type: string }
+              images: { type: array, items: { type: string } }
+        ptdRisk:
+          type: object
+          properties:
+            risk: { type: string, enum: [Red, Orange, On Track] }
+            thresholdMinutes: { type: integer }
+        didResults:
+          type: array
+          items:
+            type: object
+            required: [parameterName, status]
+            properties:
+              parameterName: { type: string }
+              status: { type: string, enum: [OK, NOT OK, NO RULE] }
+              expected: { type: string, example: '>=20' }
+              unit: { type: string }
+        generalChecklist: { type: array, items: { $ref: '#/components/schemas/ChecklistItem' } }
+        scheduleChecklist:
+          type: array
+          items:
+            type: object
+            required: [section, items]
+            properties:
+              section: { type: string }
+              items: { type: array, items: { $ref: '#/components/schemas/ChecklistItem' } }
+
+    ChecklistItem:
+      type: object
+      required: [recordId, label, notOkCapture]
+      properties:
+        recordId: { type: string }
+        label: { type: string }
+        type: { type: string, description: Checklist Type (general checklist) }
+        notOkCapture:
+          type: object
+          properties:
+            photo: { type: boolean }
+            audio: { type: boolean }
+            video: { type: boolean }
+            text: { type: boolean }
+
+    InventoryCaptureResponse:
+      type: object
+      required: [sections, insuranceDocuments]
+      properties:
+        sections:
+          type: array
+          items:
+            type: object
+            required: [section, sequencePriority, items]
+            properties:
+              section: { type: string }
+              sequencePriority: { type: integer }
+              items:
+                type: array
+                items:
+                  type: object
+                  required: [recordId, label, mandatory]
+                  properties:
+                    recordId: { type: string }
+                    label: { type: string }
+                    subSection1: { type: string }
+                    subSection2: { type: string }
+                    acceptableValues: { type: array, items: { type: string } }
+                    mandatory: { type: boolean }
+                    evidence:
+                      type: [object, 'null']
+                      properties:
+                        type: { type: string, enum: [Image, Video, Video/Image] }
+                        count: { type: integer, minimum: 1, maximum: 2 }
+                        on: { type: string, enum: [All, Not OK] }
+        insuranceDocuments:
+          type: array
+          description: Accident jobs only
+          items:
+            type: object
+            required: [documentCategory, mandatory, documentType]
+            properties:
+              documentCategory: { type: string }
+              mandatory: { type: boolean }
+              documentType: { type: string, enum: [PDF/Image, Image, PDF] }
+              imagesRequired: { type: [integer, 'null'] }
+              sequence: { type: integer }
+
+    Bay:
+      type: object
+      required: [bayId, bayNo, dealerCode, divisionId, bu, bayName, bayType, bayStatus, approvalStatus]
+      properties:
+        bayId: { type: string, format: uuid }
+        bayNo: { type: integer }
+        region: { type: string }
+        dealerCode: { type: string }
+        dealerName: { type: string }
+        divisionId: { type: string, format: uuid }
+        divisionName: { type: string }
+        bu: { $ref: '#/components/schemas/BU' }
+        bayName: { type: string }
+        bayType: { type: string, enum: [Mechanical, Electrical, EV, Fleet, Speedo, AC, BodyShop] }
+        bayStatus: { type: string, enum: [Active, Inactive] }
+        approvalStatus: { $ref: '#/components/schemas/ApprovalStatus' }
+        statusReason: { type: [string, 'null'] }
+        pendingRequestId: { type: [string, 'null'], format: uuid }
+        floor: { type: string }
+        liftAvailability: { type: string }
+        specialEquipments: { type: array, items: { type: string } }
+        techSupervisor: { type: string }
+        technician1: { type: string }
+        technician2: { type: string }
+        rowVersion: { type: integer }
+
+    BayInput:
+      type: object
+      required: [dealerCode, divisionId, bu, bayType, bayName]
+      properties:
+        dealerCode: { type: string }
+        divisionId: { type: string, format: uuid }
+        bu: { $ref: '#/components/schemas/BU' }
+        bayType: { type: string }
+        bayName: { type: string }
+        floor: { type: string }
+        liftAvailability: { type: string }
+        specialEquipments: { type: array, items: { type: string } }
+        techSupervisor: { type: string }
+        technician1: { type: string }
+        technician2: { type: string }
+        justification: { type: string, description: Required when a Dealer Admin adds beyond the allocation }
+        asDraft: { type: boolean, default: false }
+
+    BayCommandResult:
+      type: object
+      required: [bay, outcome]
+      properties:
+        bay: { $ref: '#/components/schemas/Bay' }
+        outcome: { type: string, enum: [APPROVED, DRAFT, PENDING_APPROVAL, APPLIED] }
+        request: { $ref: '#/components/schemas/BayRequest' }
+
+    BayAllocation:
+      type: object
+      required: [dealerCode, divisionId, bu, bayType, allocated, used, remaining]
+      properties:
+        allocationId: { type: string, format: uuid }
+        dealerCode: { type: string }
+        divisionId: { type: string, format: uuid }
+        divisionName: { type: string }
+        bu: { $ref: '#/components/schemas/BU' }
+        bayType: { type: string }
+        allocated: { type: integer }
+        used: { type: integer, description: Approved bays (Active or Inactive) }
+        remaining: { type: integer }
+        updatedBy: { type: string }
+        updatedAt: { type: string, format: date-time }
+
+    BayRequest:
+      type: object
+      required: [requestId, requestNo, kind, bayId, reason, approverRole, status, requestedBy, requestedAt]
+      properties:
+        requestId: { type: string, format: uuid }
+        requestNo: { type: string, example: BREQ-2026-000123 }
+        kind: { type: string, enum: [ADD_BAY, STATUS_CHANGE] }
+        bayId: { type: string, format: uuid }
+        bayName: { type: string }
+        dealerCode: { type: string }
+        dealerName: { type: string }
+        fromStatus: { type: string, enum: [Active, Inactive] }
+        toStatus: { type: string, enum: [Active, Inactive] }
+        reason: { type: string }
+        allocation:
+          type: object
+          properties:
+            allocated: { type: integer }
+            used: { type: integer }
+        approverRole: { type: string, enum: [TML_NETWORK_MANAGER, TML_ADMIN] }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED, WITHDRAWN] }
+        requestedBy: { type: string }
+        requestedAt: { type: string, format: date-time }
+        decidedBy: { type: [string, 'null'] }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        decisionNote: { type: [string, 'null'] }
+        deepLink: { type: string, format: uri, description: Portal link sent in the e-mail }
+
+    BayPolicy:
+      type: object
+      required: [dealerCanChangeStatus, dealerStatusChangeNeedsApproval]
+      properties:
+        dealerCanChangeStatus: { type: boolean }
+        dealerStatusChangeNeedsApproval: { type: boolean }
+
+    DayPattern:
+      type: object
+      required: [weekday, isWeekOff]
+      properties:
+        weekday: { type: string, enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday] }
+        isWeekOff: { type: boolean }
+        open: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$', example: '09:00' }
+        close: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$', example: '19:00' }
+
+    DateOverride:
+      type: object
+      properties:
+        isHoliday: { type: boolean }
+        holidayName: { type: string }
+        remark: { type: string }
+        open: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        close: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+
+    CalendarMonth:
+      type: object
+      required: [divisionId, month, weeklyPattern, days]
+      properties:
+        divisionId: { type: string, format: uuid }
+        month: { type: string, example: '2026-10' }
+        weeklyPattern: { type: array, items: { $ref: '#/components/schemas/DayPattern' } }
+        days:
+          type: array
+          items:
+            type: object
+            required: [date, weekday, kind, label, locked]
+            properties:
+              date: { type: string, format: date }
+              weekday: { type: string }
+              kind: { type: string, enum: [open, weekoff, holiday, override] }
+              label: { type: string, example: '09:00–19:00' }
+              locked: { type: boolean, description: Past date }
+              override: { $ref: '#/components/schemas/DateOverride' }
+
+    Dealer:
+      type: object
+      required: [dealerCode, dealerName, region, divisions]
+      properties:
+        dealerCode: { type: string }
+        dealerName: { type: string }
+        region: { type: string, enum: [North, South, East, West] }
+        city: { type: string }
+        divisions:
+          type: array
+          items:
+            type: object
+            required: [divisionId, divisionName]
+            properties:
+              divisionId: { type: string, format: uuid }
+              divisionName: { type: string }
+
+    Notification:
+      type: object
+      required: [notificationId, type, title, message, createdAt, read]
+      properties:
+        notificationId: { type: string, format: uuid }
+        type: { type: string, enum: [EXCEPTION, SECURITY, USER, DEVICE, CONFIG, APPROVAL] }
+        title: { type: string }
+        message: { type: string }
+        targetPath: { type: string, example: /admin/bay-approvals?request=… }
+        createdAt: { type: string, format: date-time }
+        read: { type: boolean }
+
+    AuditEntry:
+      type: object
+      required: [auditId, occurredAt, userId, action, module, entity, status]
+      properties:
+        auditId: { type: integer }
+        occurredAt: { type: string, format: date-time }
+        userId: { type: string }
+        userName: { type: string }
+        action: { type: string }
+        module: { type: string }
+        entity: { type: string }
+        oldValue: { type: [string, 'null'] }
+        newValue: { type: [string, 'null'] }
+        ipAddress: { type: [string, 'null'] }
+        status: { type: string, enum: [SUCCESS, FAILED, WARNING] }
