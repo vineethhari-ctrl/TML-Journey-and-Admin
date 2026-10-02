@@ -67,3 +67,24 @@ test('BA uploads their own Excel: tables detected, gaps shown, problem fixed in 
   await page.getByRole('button', { name: /Glass Inspection Master — Part 2/ }).click();
   await expect(page.getByText('Power window working').first()).toBeVisible();
 });
+
+test('Masters toolbar: one Import menu and one Export menu instead of separate buttons', async ({ page }) => {
+  await page.goto('/#/admin/masters');
+  await expect(page.getByRole('button', { name: /Bulk Upload \(JSON/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Download CSV' })).toHaveCount(0);
+
+  const toolbarMenu = (name: string) => page.locator('button[aria-haspopup="menu"]', { hasText: name });
+  await toolbarMenu('Import').click();
+  const importMenu = page.getByRole('menu', { name: 'Import' });
+  await expect(importMenu.getByRole('menuitem')).toHaveText([/Smart Excel Import/, /Import BA Workbook/]);
+  await importMenu.getByRole('menuitem', { name: /Smart Excel Import/ }).click();
+  await expect(page.getByTestId('smart-import')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  await toolbarMenu('Export').click();
+  const exportMenu = page.getByRole('menu', { name: 'Export' });
+  await expect(exportMenu.getByRole('menuitem')).toHaveText([/This master \(CSV\)/, /Whole group \(CSV\)/, /Whole group \(Excel\)/]);
+  const download = page.waitForEvent('download');
+  await exportMenu.getByRole('menuitem', { name: /This master \(CSV\)/ }).click();
+  expect((await download).suggestedFilename()).toMatch(/\.csv$/);
+});
