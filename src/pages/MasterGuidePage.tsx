@@ -12,6 +12,7 @@ import {
   ListChecks,
   HelpCircle,
   Wrench,
+  Sparkles,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { LOGICAL_MODULES, WORKSHOP_MODULES } from '../data/masterCatalogue';
@@ -106,6 +107,7 @@ const Code: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 const TOC = [
   ['before', 'Before you start'],
   ['downloads', 'Downloads'],
+  ['smart', '★ Fastest: Smart Excel Import'],
   ['choose', 'Which option to use'],
   ['create', 'A. Create one master (form)'],
   ['workbook', 'B. Prepare a workbook'],
@@ -140,6 +142,12 @@ export const MasterGuidePage: React.FC = () => {
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white text-blue-950 text-xs font-bold hover:bg-blue-50 cursor-pointer"
           >
             <Plus className="h-3.5 w-3.5" /> Open Create New Master
+          </button>
+          <button
+            onClick={() => navigate('/admin/masters?open=smart-import')}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-violet-600 text-white text-xs font-bold hover:bg-violet-500 cursor-pointer"
+          >
+            <Sparkles className="h-3.5 w-3.5" /> Open Smart Excel Import
           </button>
           <button
             onClick={() => navigate('/admin/masters?open=import')}
@@ -209,6 +217,33 @@ export const MasterGuidePage: React.FC = () => {
         >
           <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" /> Export my current masters (includes what I created)
         </button>
+      </Section>
+
+      <Section id="smart" title="★ Fastest: Smart Excel Import (your own Excel, any layout)" icon={Sparkles}>
+        <p>
+          Already have the master in your own Excel? Upload it as it is. The portal finds each table, works out the column types
+          (Y/N, numbers, dates, dropdowns) and which columns are mandatory, and lists any gaps with their Excel row numbers.
+        </p>
+        <Steps
+          items={[
+            <>Masters Maintenance (TML Admin) → <strong>Smart Excel Import</strong>, and choose the .xlsx file.</>,
+            <>Check each detected table: rename it, pick the <strong>Group</strong> and <strong>Module</strong>, and adjust a column's type or "Mandatory" if needed.</>,
+            <>Read the amber <strong>Gaps</strong> list. Gaps are imported as they are, nothing is guessed. Send them back to the BA who owns the sheet.</>,
+            <>If a table shows <strong>"fix before import"</strong>, untick Mandatory for a column the BA left blank, or change its type.</>,
+            <>Click <strong>Create master(s)</strong>. The new master opens with all its rows.</>,
+          ]}
+        />
+        <div className="rounded-lg border border-violet-200 bg-violet-50 p-3">
+          <div className="font-bold text-violet-950 mb-1">Excel checklist for BAs (for a clean import first time)</div>
+          <ul className="list-disc pl-5 space-y-0.5">
+            <li>One table per master. Row 1 of the table holds the column names.</li>
+            <li>Two tables on one sheet? Leave <strong>one empty column</strong> between them.</li>
+            <li>Use Y / N for yes-no columns, real numbers for counts and sequences, and real dates (or YYYY-MM-DD).</li>
+            <li>Fill every row fully. Don't leave a cell blank to mean "same as above"; repeat the value.</li>
+            <li>Write a limit into the header if there is one, e.g. "No. of Images (Max 2)".</li>
+            <li>An optional "Master List" sheet (Master Name, Status) is read as notes.</li>
+          </ul>
+        </div>
       </Section>
 
       <Section id="choose" title="Which option to use" icon={ListChecks}>

@@ -14,6 +14,7 @@ import { RulesEngineStudio } from '../components/administration/RulesEngineStudi
 import { DealerAppPreviewSimulator } from '../components/administration/DealerAppPreviewSimulator';
 import { CreateMasterModal } from '../components/administration/CreateMasterModal';
 import { MasterWorkbookImportModal } from '../components/administration/MasterWorkbookImportModal';
+import { SmartExcelImportModal } from '../components/administration/SmartExcelImportModal';
 import { BayManagementConsole } from '../components/administration/BayManagementConsole';
 import { EqcRuleTester } from '../components/administration/EqcRuleTester';
 import { BodyshopCapturePreview } from '../components/administration/BodyshopCapturePreview';
@@ -133,6 +134,7 @@ export const MastersMaintenancePage: React.FC = () => {
   // On-the-fly master creation (form) and BA workbook import
   const [isCreateMasterOpen, setIsCreateMasterOpen] = useState(false);
   const [isWorkbookImportOpen, setIsWorkbookImportOpen] = useState(false);
+  const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
 
   const openEqc = () => {
     setActiveMainTab('catalogues');
@@ -175,6 +177,14 @@ export const MastersMaintenancePage: React.FC = () => {
     }
     if (open === 'bodyshop') openBodyshop();
     if (open === 'eqc') openEqc();
+    if (open === 'smart-import') {
+      if (activeRoleId === 'dealerAdmin') {
+        showToast('Importing BA Excel files is a TML Admin task', 'error');
+      } else {
+        setAdminRole('TML Admin');
+        setIsSmartImportOpen(true);
+      }
+    }
     if (open === 'import') {
       if (activeRoleId === 'dealerAdmin') {
         showToast('Importing BA master workbooks is a TML Admin task', 'error');
@@ -1176,6 +1186,20 @@ export const MastersMaintenancePage: React.FC = () => {
           <button
             onClick={() => {
               if (adminRole !== 'TML Admin') {
+                showToast('Switch to TML Admin to import a BA Excel file', 'error');
+                return;
+              }
+              setIsSmartImportOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-violet-700 hover:bg-violet-600 text-white text-xs font-bold border border-violet-300/40 cursor-pointer shadow-xs transition-all"
+            title="Upload a BA's Excel as it is — tables, column types and gaps are detected automatically"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>Smart Excel Import</span>
+          </button>
+          <button
+            onClick={() => {
+              if (adminRole !== 'TML Admin') {
                 showToast('Switch to TML Admin to import a BA master workbook', 'error');
                 return;
               }
@@ -1731,6 +1755,12 @@ export const MastersMaintenancePage: React.FC = () => {
         isAdminTml={adminRole === 'TML Admin'}
         onCreated={openMasterInWorkspace}
       />
+      <SmartExcelImportModal
+        isOpen={isSmartImportOpen}
+        onClose={() => setIsSmartImportOpen(false)}
+        onImported={(masters) => masters[0] && openMasterInWorkspace(masters[0])}
+      />
+
       <MasterWorkbookImportModal
         isOpen={isWorkbookImportOpen}
         onClose={() => setIsWorkbookImportOpen(false)}
