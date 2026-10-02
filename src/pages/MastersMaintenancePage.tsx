@@ -72,6 +72,7 @@ import {
   ListFilter,
   ChevronLeft,
   LayoutGrid,
+  ChevronDown,
   Table2,
 } from 'lucide-react';
 import { masterExportUtil } from '../utils/masterExportUtil';
@@ -94,6 +95,70 @@ const getGroupIcon = (iconName: string, className = 'h-4 w-4') => {
     default:
       return <Package className={className} />;
   }
+};
+
+interface ToolbarMenuItem {
+  label: string;
+  hint: string;
+  icon: React.ElementType;
+  onClick: () => void;
+}
+
+/** A toolbar button that opens a short list of related actions. */
+const ToolbarMenu: React.FC<{ label: string; icon: React.ElementType; className: string; items: ToolbarMenuItem[] }> = ({
+  label,
+  icon: Icon,
+  className,
+  items,
+}) => {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-white text-xs font-bold border cursor-pointer shadow-xs transition-all ${className}`}
+      >
+        <Icon className="h-3.5 w-3.5" />
+        <span>{label}</span>
+        <ChevronDown className="h-3.5 w-3.5 opacity-80" />
+      </button>
+      {open && (
+        <div role="menu" aria-label={label} className="absolute right-0 z-40 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-1 shadow-xl text-slate-800">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                item.onClick();
+              }}
+              className="w-full flex items-start gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-slate-50 cursor-pointer"
+            >
+              <item.icon className="h-4 w-4 mt-0.5 text-slate-500 shrink-0" />
+              <span>
+                <span className="block text-xs font-bold">{item.label}</span>
+                <span className="block text-[11px] text-slate-500">{item.hint}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
 export const MastersMaintenancePage: React.FC = () => {
@@ -1137,42 +1202,29 @@ export const MastersMaintenancePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Layout Switcher & Action Controls */}
+        {/* Layout Switcher & Action Controls — one button per job: create, import, export */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Grouped Cards vs Tabbed Workspace Toggle */}
-          <div className="bg-blue-950/80 p-0.5 rounded-xl border border-blue-400/30 flex items-center text-xs">
-            <button
-              onClick={() => setActiveLayout('grouped_cards')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                activeLayout === 'grouped_cards'
-                  ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-blue-200 hover:text-white'
-              }`}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              <span>Grouped Cards View</span>
-            </button>
-            <button
-              onClick={() => setActiveLayout('workspace')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                activeLayout === 'workspace'
-                  ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'text-blue-200 hover:text-white'
-              }`}
-            >
-              <Table2 className="h-3.5 w-3.5" />
-              <span>Tabbed Workspace</span>
-            </button>
+          <div className="bg-blue-950/80 p-0.5 rounded-xl border border-blue-400/30 flex items-center text-xs" role="group" aria-label="Layout">
+            {(
+              [
+                ['grouped_cards', LayoutGrid, 'Grouped cards view'],
+                ['workspace', Table2, 'Tabbed workspace'],
+              ] as const
+            ).map(([layout, Icon, label]) => (
+              <button
+                key={layout}
+                aria-label={label}
+                title={label}
+                aria-pressed={activeLayout === layout}
+                onClick={() => setActiveLayout(layout)}
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                  activeLayout === layout ? 'bg-blue-600 text-white shadow-2xs' : 'text-blue-200 hover:text-white'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </button>
+            ))}
           </div>
-
-          <button
-            onClick={() => navigate('/admin/masters-guide')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-100 text-xs font-bold border border-emerald-300/40 cursor-pointer transition-all"
-            title="Step-by-step guide, templates and practice files for BAs"
-          >
-            <HelpCircle className="h-3.5 w-3.5" />
-            <span>BA Guide</span>
-          </button>
 
           {/* On-the-fly master definition: no code change or deployment needed */}
           <button
@@ -1183,61 +1235,51 @@ export const MastersMaintenancePage: React.FC = () => {
             <Plus className="h-3.5 w-3.5" />
             <span>Create New Master</span>
           </button>
-          <button
-            onClick={() => {
-              if (adminRole !== 'TML Admin') {
-                showToast('Switch to TML Admin to import a BA Excel file', 'error');
-                return;
-              }
-              setIsSmartImportOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-violet-700 hover:bg-violet-600 text-white text-xs font-bold border border-violet-300/40 cursor-pointer shadow-xs transition-all"
-            title="Upload a BA's Excel as it is — tables, column types and gaps are detected automatically"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>Smart Excel Import</span>
-          </button>
-          <button
-            onClick={() => {
-              if (adminRole !== 'TML Admin') {
-                showToast('Switch to TML Admin to import a BA master workbook', 'error');
-                return;
-              }
-              setIsWorkbookImportOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold border border-indigo-300/40 cursor-pointer shadow-xs transition-all"
-            title="Create or extend many masters at once from the BA Excel workbook"
-          >
-            <FileSpreadsheet className="h-3.5 w-3.5" />
-            <span>Import BA Workbook</span>
-          </button>
 
-          {/* Module-Level Reporting Downloads & Bulk Upload */}
-          <button
-            onClick={() => openBulkUpload(currentMaster)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-xs font-bold border border-blue-400/40 cursor-pointer shadow-xs transition-all"
-            title={`Bulk upload parameter records into ${currentMaster.name} (JSON or Excel)`}
-          >
-            <Upload className="h-3.5 w-3.5 text-blue-200" />
-            <span>Bulk Upload (JSON / Excel)</span>
-          </button>
+          <ToolbarMenu
+            label="Import"
+            icon={Upload}
+            className="bg-violet-700 hover:bg-violet-600 border-violet-300/40"
+            items={[
+              {
+                label: 'Smart Excel Import',
+                hint: "BA's own Excel, any layout → new masters (recommended)",
+                icon: Sparkles,
+                onClick: () => {
+                  if (adminRole !== 'TML Admin') return showToast('Switch to TML Admin to import a BA Excel file', 'error');
+                  setIsSmartImportOpen(true);
+                },
+              },
+              {
+                label: 'Import BA Workbook',
+                hint: 'Template workbook → add fields / rows to existing masters',
+                icon: FileSpreadsheet,
+                onClick: () => {
+                  if (adminRole !== 'TML Admin') return showToast('Switch to TML Admin to import a BA master workbook', 'error');
+                  setIsWorkbookImportOpen(true);
+                },
+              },
+            ]}
+          />
 
-          <button
-            onClick={handleDownloadModuleCSV}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold border border-emerald-400/40 cursor-pointer shadow-xs transition-all"
-            title={`Download consolidated CSV report for ${currentGroupMeta.title} module`}
-          >
-            <Download className="h-3.5 w-3.5" />
-            <span>Download CSV</span>
-          </button>
+          <ToolbarMenu
+            label="Export"
+            icon={Download}
+            className="bg-emerald-600 hover:bg-emerald-500 border-emerald-400/40"
+            items={[
+              { label: `This master (CSV)`, hint: currentMaster.name, icon: Download, onClick: handleDownloadCurrentMasterCSV },
+              { label: `Whole group (CSV)`, hint: currentGroupMeta.title, icon: Download, onClick: handleDownloadModuleCSV },
+              { label: `Whole group (Excel)`, hint: currentGroupMeta.title, icon: FileSpreadsheet, onClick: handleExportModuleExcel },
+            ]}
+          />
 
           <button
-            onClick={handleExportModuleExcel}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-800/80 hover:bg-blue-700 text-white text-xs font-bold border border-blue-400/40 cursor-pointer shadow-2xs transition-all"
-            title={`Export ${currentGroupMeta.title} module to Excel`}
+            onClick={() => navigate('/admin/masters-guide')}
+            aria-label="BA Guide"
+            className="p-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-100 border border-emerald-300/40 cursor-pointer transition-all"
+            title="BA Guide: step-by-step help, templates and practice files"
           >
-            <FileSpreadsheet className="h-3.5 w-3.5 text-blue-200" />
-            <span>Export Excel</span>
+            <HelpCircle className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -1296,14 +1338,6 @@ export const MastersMaintenancePage: React.FC = () => {
             )}
           </div>
 
-          <button
-            onClick={handleDownloadModuleCSV}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs transition-colors cursor-pointer shadow-2xs"
-            title="Download CSV report of current master data module"
-          >
-            <Download className="h-3.5 w-3.5 text-emerald-600" />
-            <span className="hidden sm:inline">Download CSV</span>
-          </button>
         </div>
       </div>
 
@@ -1520,15 +1554,6 @@ export const MastersMaintenancePage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleDownloadCurrentMasterCSV}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
-                title={`Download ${currentMaster.name} as CSV for reporting`}
-              >
-                <Download className="h-3.5 w-3.5" />
-                <span>Download CSV</span>
-              </button>
-
               <button
                 onClick={() => setActiveLayout('grouped_cards')}
                 className="text-xs font-semibold text-blue-700 hover:underline cursor-pointer flex items-center gap-1 pl-2"

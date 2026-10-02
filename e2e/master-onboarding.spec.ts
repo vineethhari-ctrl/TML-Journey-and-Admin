@@ -109,7 +109,8 @@ function baWorkbook(): Buffer {
 
 test('BA workbook import creates new masters and fills a missed field in an existing one', async ({ page }) => {
   await page.goto('/#/admin/masters');
-  await page.getByRole('button', { name: 'Import BA Workbook' }).click();
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await page.getByRole('menuitem', { name: /Import BA Workbook/ }).click();
 
   // Template download works
   const download = page.waitForEvent('download');
@@ -164,7 +165,8 @@ test('BA workbook with mistakes is rejected with row-level errors and nothing is
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['id', 'days'], ['L1', '30']]), 'loaner_master');
 
   await page.goto('/#/admin/masters');
-  await page.getByRole('button', { name: 'Import BA Workbook' }).click();
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await page.getByRole('menuitem', { name: /Import BA Workbook/ }).click();
   await page.getByLabel('Master workbook file').setInputFiles({
     name: 'bad.xlsx',
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
