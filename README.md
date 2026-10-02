@@ -48,6 +48,13 @@ masters are registered in `src/utils/recordRules.ts`.
 
 **Note for AI Studio / other tools:** never delete `package-lock.json` — CI (`npm ci`) and the Pages deploy fail without it.
 
+## Smart Excel Import (BA's own Excel → masters)
+
+Masters Maintenance → **Smart Excel Import** (`#/admin/masters?open=smart-import`) reads an Excel in any layout:
+side-by-side tables, repeated PV/EV headers, an index sheet. It infers column types and mandatory flags, reports
+gaps with row numbers, and creates the masters after review. Logic: `src/utils/smartExcelImport.ts` (unit-tested);
+UI: `SmartExcelImportModal.tsx`. BA checklist: [`docs/BA_EXCEL_CHECKLIST.md`](docs/BA_EXCEL_CHECKLIST.md).
+
 ## Conventions (please keep these)
 
 - **Routing** lives in the URL hash (`#/journey/JC…`, `#/admin/users?search=…`). Use `navigate()` from `useApp()`; pages read `?search=` via `useRouteSearchParam`.
