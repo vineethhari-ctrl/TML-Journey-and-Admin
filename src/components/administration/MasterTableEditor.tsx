@@ -46,6 +46,7 @@ import {
 import { AuditTrailMiddleware } from '../../middleware/auditTrailMiddleware';
 import { masterExportUtil } from '../../utils/masterExportUtil';
 import { findEqcConflict } from '../../utils/eqcRules';
+import { findThdConflict } from '../../utils/thdRules';
 import { masterValidationSchema } from '../../utils/masterValidationSchema';
 import { MasterDataImportModal } from './MasterDataImportModal';
 import { BatchUndoModal, MasterChangeSnapshot } from './BatchUndoModal';
@@ -626,7 +627,8 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
       return;
     }
 
-    const conflict = findEqcConflict(master.id, sanitizedData, master.records.filter((r) => r.id !== editingRecordId));
+    const others = master.records.filter((r) => r.id !== editingRecordId);
+    const conflict = findEqcConflict(master.id, sanitizedData, others) ?? findThdConflict(master.id, sanitizedData, others);
     if (conflict) {
       showToast(conflict, 'error');
       return;

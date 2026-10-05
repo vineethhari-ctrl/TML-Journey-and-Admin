@@ -19,6 +19,7 @@ import { SmartExcelImportModal } from '../components/administration/SmartExcelIm
 import { BayManagementConsole } from '../components/administration/BayManagementConsole';
 import { EqcRuleTester } from '../components/administration/EqcRuleTester';
 import { BodyshopCapturePreview } from '../components/administration/BodyshopCapturePreview';
+import { ThdRuleTester } from '../components/administration/ThdRuleTester';
 import { HolidayCalendarConsole } from '../components/administration/HolidayCalendarConsole';
 import { BodyshopMaster } from '../components/administration/BodyshopMaster';
 import { ServiceTransformationPortal } from '../components/common/ServiceTransformationPortal';
@@ -2008,6 +2009,7 @@ export const MastersMaintenancePage: React.FC = () => {
               <div className="space-y-4">
                 {currentMaster.logicalGroup === 'Electronic Quality Check' && <EqcRuleTester />}
                 {currentMaster.logicalGroup === 'Bodyshop' && <BodyshopCapturePreview />}
+                {currentMaster.moduleCode === 'thd' && <ThdRuleTester />}
                 <MasterTableEditor
                   master={currentMaster}
                   isAdminTml={adminRole === 'TML Admin'}

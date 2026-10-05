@@ -16,7 +16,7 @@ describe('Project Modules and Masters Alignment', () => {
     const validCodes = new Set(WORKSHOP_MODULES.map((m) => m.code));
     const validGroups = new Set(LOGICAL_MODULES.map((g) => g.id));
 
-    expect(MASTER_COLLECTIONS.length).toBe(41);
+    expect(MASTER_COLLECTIONS.length).toBe(54);
 
     MASTER_COLLECTIONS.forEach((m) => {
       expect(validCodes.has(m.moduleCode)).toBe(true);
@@ -100,11 +100,13 @@ describe('Project Modules and Masters Alignment', () => {
     expect(byModule['eqc'].length).toBe(9);
     expect(byModule['eqc']).toContain('ev_safety_protocols');
 
-    // 9. THD: plant helpdesk & telematics alerts (3)
+    // 9. THD: plant helpdesk & telematics alerts (3) + 13 masters from the BA THD workbooks
     expect(byModule['thd']).toContain('thd_escalation_categories');
     expect(byModule['thd']).toContain('tib_bulletin_codes');
     expect(byModule['thd']).toContain('dtc_telematics_alerts');
-    expect(byModule['thd'].length).toBe(3);
+    expect(byModule['thd']).toContain('thd_auto_trigger_rules');
+    expect(byModule['thd']).toContain('thd_progress_sub_status');
+    expect(byModule['thd'].length).toBe(16);
 
     // 10. SPD: 2 spare parts masters (2)
     expect(byModule['spd']).toContain('spd_issuance_priority');
@@ -123,7 +125,7 @@ describe('Project Modules and Masters Alignment', () => {
 
     // Total = 41 masters accounted for
     const totalAssigned = Object.values(byModule).reduce((acc, list) => acc + list.length, 0);
-    expect(totalAssigned).toBe(41);
+    expect(totalAssigned).toBe(54);
   });
 
   it('renders 12 Project Modules alignment view and allows switching between modules and domains', async () => {
