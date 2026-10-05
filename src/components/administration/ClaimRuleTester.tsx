@@ -60,7 +60,7 @@ export const ClaimRuleTester: React.FC = () => {
         <div className="px-4 pb-4 space-y-3 text-xs">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">1 · Warranty Authorization Request</div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">1 · AMC / Warranty Authorization Request</div>
               <label htmlFor="claim-amount" className="block text-[11px] font-semibold text-slate-600">Request amount (₹)</label>
               <input id="claim-amount" className={input} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ''))} />
               <ol className="space-y-1.5" data-testid="claim-route">
@@ -70,7 +70,7 @@ export const ClaimRuleTester: React.FC = () => {
                     <span className="flex-1">{s.persona}</span>
                     <span className={s.canApprove ? 'font-bold text-emerald-800' : 'text-slate-500'}>{s.canApprove ? 'Approves' : 'Forwards'}</span>
                     <ArrowRight className="h-3 w-3 text-slate-400" />
-                    <span className="text-slate-500">{s.reminderHours} h reminder</span>
+                    <span className="text-slate-500" title="Notification + email only">{s.reminderHours} h reminder</span>
                   </li>
                 ))}
               </ol>
