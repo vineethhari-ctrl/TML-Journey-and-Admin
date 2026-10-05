@@ -88,7 +88,7 @@ export function buildClaimMasters(): MasterConfig[] {
         { key: 'actions', label: 'Action / Authority', type: 'text', mandatory: true, description: 'Comma-separated actions available to this persona.' },
         { key: 'forwardTo', label: 'Forwards To', type: 'text', defaultValue: '', description: 'Persona of the next level, for amounts this level cannot approve.' },
         { key: 'reminderHours', label: 'Reminder (Hrs)', type: 'number', mandatory: true, validation: { min: 1, max: 720 } },
-        { key: 'reminderVia', label: 'Reminder Via', type: 'select', options: ['Notification + Email'], mandatory: true, defaultValue: 'Notification + Email' },
+        { key: 'reminderVia', label: 'Reminder Via', type: 'text', mandatory: true, defaultValue: 'Notification + Email', description: 'BA: a notification and an email only — no automatic escalation.' },
         STATUS_FIELD,
       ],
       records: [
