@@ -53,6 +53,12 @@ closure dropdowns, Progress → Sub-Status, search filters and assignment users.
 list of questions for the BA — see [`docs/THD_MASTERS.md`](docs/THD_MASTERS.md). Data: `src/data/thdMasters.ts`;
 rules: `src/utils/thdRules.ts`.
 
+## Claims masters
+
+Goodwill and Warranty / AMC / EW authorisation masters from the BA workbook *Claims Masters List*: dropdowns, Goodwill
+Request Category mapping, the Warranty Authorization approval matrix, Service Guideline files and SHQ approvers. They come
+with a **Claims Rule Tester** and the open BA questions — see [`docs/CLAIM_MASTERS.md`](docs/CLAIM_MASTERS.md).
+
 **Note for AI Studio / other tools:** never delete or regenerate `package-lock.json` — CI (`npm ci`) and the Pages deploy
 depend on it.
 

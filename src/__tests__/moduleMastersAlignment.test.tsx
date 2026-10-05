@@ -16,7 +16,7 @@ describe('Project Modules and Masters Alignment', () => {
     const validCodes = new Set(WORKSHOP_MODULES.map((m) => m.code));
     const validGroups = new Set(LOGICAL_MODULES.map((g) => g.id));
 
-    expect(MASTER_COLLECTIONS.length).toBe(54);
+    expect(MASTER_COLLECTIONS.length).toBe(62);
 
     MASTER_COLLECTIONS.forEach((m) => {
       expect(validCodes.has(m.moduleCode)).toBe(true);
@@ -117,7 +117,8 @@ describe('Project Modules and Masters Alignment', () => {
     expect(byModule['claim']).toContain('amc_pricing');
     expect(byModule['claim']).toContain('warranty_defect_codes');
     expect(byModule['claim']).toContain('goodwill_approval_limits');
-    expect(byModule['claim'].length).toBe(3);
+    expect(byModule['claim']).toContain('claim_warranty_approval_matrix');
+    expect(byModule['claim'].length).toBe(11);
 
     // 12. Customer Journey: dealer details & network facility registry (1)
     expect(byModule['customer_journey']).toContain('dealer_details_registry');
@@ -125,7 +126,7 @@ describe('Project Modules and Masters Alignment', () => {
 
     // Total = 41 masters accounted for
     const totalAssigned = Object.values(byModule).reduce((acc, list) => acc + list.length, 0);
-    expect(totalAssigned).toBe(54);
+    expect(totalAssigned).toBe(62);
   });
 
   it('renders 12 Project Modules alignment view and allows switching between modules and domains', async () => {

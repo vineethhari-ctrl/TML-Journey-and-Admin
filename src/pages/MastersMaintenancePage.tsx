@@ -20,6 +20,7 @@ import { BayManagementConsole } from '../components/administration/BayManagement
 import { EqcRuleTester } from '../components/administration/EqcRuleTester';
 import { BodyshopCapturePreview } from '../components/administration/BodyshopCapturePreview';
 import { ThdRuleTester } from '../components/administration/ThdRuleTester';
+import { ClaimRuleTester } from '../components/administration/ClaimRuleTester';
 import { HolidayCalendarConsole } from '../components/administration/HolidayCalendarConsole';
 import { BodyshopMaster } from '../components/administration/BodyshopMaster';
 import { ServiceTransformationPortal } from '../components/common/ServiceTransformationPortal';
@@ -2010,6 +2011,7 @@ export const MastersMaintenancePage: React.FC = () => {
                 {currentMaster.logicalGroup === 'Electronic Quality Check' && <EqcRuleTester />}
                 {currentMaster.logicalGroup === 'Bodyshop' && <BodyshopCapturePreview />}
                 {currentMaster.moduleCode === 'thd' && <ThdRuleTester />}
+                {currentMaster.moduleCode === 'claim' && <ClaimRuleTester />}
                 <MasterTableEditor
                   master={currentMaster}
                   isAdminTml={adminRole === 'TML Admin'}

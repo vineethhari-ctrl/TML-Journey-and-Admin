@@ -1,4 +1,5 @@
 import type { MasterConfig, MasterFieldDef } from './masterCatalogue';
+import { ORDER_FIELD, STATUS_FIELD, lovMaster } from './lovMaster';
 
 /**
  * THD (Technical Help Desk) masters, built from the BA workbooks
@@ -6,8 +7,8 @@ import type { MasterConfig, MasterFieldDef } from './masterCatalogue';
  * User names in the BA sheet are replaced with test users because this repository is public.
  */
 
-const STATUS: MasterFieldDef = { key: 'status', label: 'Status', type: 'select', options: ['Active', 'Inactive'], mandatory: true, defaultValue: 'Active' };
-const ORDER: MasterFieldDef = { key: 'order', label: 'Order', type: 'number', mandatory: true, validation: { min: 1, max: 99 }, description: 'Display order in the dropdown.' };
+const STATUS = STATUS_FIELD;
+const ORDER = ORDER_FIELD;
 
 const base = {
   owner: 'TML_ADMIN' as const,
@@ -16,18 +17,8 @@ const base = {
   moduleName: 'THD',
 };
 
-/** A dropdown list (LOV) from one BA sheet: value + Status + Order. */
-function lov(id: string, prefix: string, name: string, label: string, sheet: string, use: string, values: string[]): MasterConfig {
-  return {
-    ...base,
-    id,
-    name,
-    category: 'THD Dropdown Lists',
-    description: `${use} (BA sheet "${sheet}"). Only Active values are shown, in Order.`,
-    fields: [{ key: 'value', label, type: 'text', mandatory: true }, STATUS, ORDER],
-    records: values.map((value, i) => ({ id: `${prefix}-${String(i + 1).padStart(2, '0')}`, value, status: 'Active', order: i + 1 })),
-  };
-}
+const lov = (id: string, prefix: string, name: string, label: string, sheet: string, use: string, values: string[]): MasterConfig =>
+  lovMaster(base, 'THD Dropdown Lists', { id, prefix, name, label, sheet, use, values });
 
 export const THD_PROGRESS = [
   'Under Diagnosis',
