@@ -34,7 +34,7 @@ export function buildClaimMasters(): MasterConfig[] {
       name: 'Special Goodwill Claim Master',
       label: 'Special Claim',
       sheet: 'Special claim',
-      use: 'Selected by the Claim Manager for special claim approvals',
+      use: 'Identification tag on a Goodwill Authorization Request (does not change the approval path)',
       values: ['IUPR', 'Thrive'],
     }),
     lovMaster(base, 'Claim Dropdown Lists', {
@@ -76,22 +76,25 @@ export function buildClaimMasters(): MasterConfig[] {
     {
       ...base,
       id: 'claim_warranty_approval_matrix',
-      name: 'Warranty Authorization Approval Matrix',
+      name: 'AMC / Warranty Authorization Approval Matrix',
       category: 'Claim Rules',
       description:
-        'Who can approve a Warranty Authorization Request, by Level (BA sheet "Warranty Approval Matrix"). A level approves amounts below its "Approves Below (₹)"; blank = cannot approve and must forward. A reminder goes out after the Reminder hours.',
+        'Who approves an Authorization Request, level by level (BA sheet "Warranty Approval Matrix" and BA answers). A level with Can Approve = Y approves amounts up to and including its limit; a blank limit means no upper limit. Otherwise the request moves to the next level. After the Reminder hours the pending approver gets a notification and an email only; nothing is escalated automatically.',
       fields: [
         { key: 'level', label: 'Level', type: 'number', mandatory: true, validation: { min: 1, max: 9 } },
         { key: 'persona', label: 'Persona', type: 'text', mandatory: true },
-        { key: 'approvesBelow', label: 'Approves Below (₹)', type: 'number', defaultValue: '', validation: { min: 1, max: 100000000 }, description: 'Blank = this persona cannot approve.' },
+        { key: 'canApprove', label: 'Can Approve', type: 'select', options: ['Y', 'N'], mandatory: true },
+        { key: 'approvesUpTo', label: 'Approves Up To (₹)', type: 'number', defaultValue: '', validation: { min: 1, max: 100000000 }, description: 'Inclusive. Blank with Can Approve = Y means no upper limit.' },
         { key: 'actions', label: 'Action / Authority', type: 'text', mandatory: true, description: 'Comma-separated actions available to this persona.' },
-        { key: 'forwardTo', label: 'Forwards To', type: 'text', defaultValue: '', description: 'Persona of the next level, when the amount is above this level.' },
+        { key: 'forwardTo', label: 'Forwards To', type: 'text', defaultValue: '', description: 'Persona of the next level, for amounts this level cannot approve.' },
         { key: 'reminderHours', label: 'Reminder (Hrs)', type: 'number', mandatory: true, validation: { min: 1, max: 720 } },
+        { key: 'reminderVia', label: 'Reminder Via', type: 'select', options: ['Notification + Email'], mandatory: true, defaultValue: 'Notification + Email' },
         STATUS_FIELD,
       ],
       records: [
-        { id: 'WAM-01', level: 1, persona: 'Claim Manager', approvesBelow: 20000, actions: 'Approve, Send to CCM/ACCM', forwardTo: 'CCM/ACCM', reminderHours: 24, status: 'Active' },
-        { id: 'WAM-02', level: 2, persona: 'CCM/ACCM', approvesBelow: null, actions: 'Send to SHQ Lead 1, Send Back for Correction', forwardTo: 'SHQ Lead 1', reminderHours: 24, status: 'Active' },
+        { id: 'WAM-01', level: 1, persona: 'Claim Manager', canApprove: 'Y', approvesUpTo: 20000, actions: 'Approve, Send to CCM/ACCM', forwardTo: 'CCM/ACCM', reminderHours: 24, reminderVia: 'Notification + Email', status: 'Active' },
+        { id: 'WAM-02', level: 2, persona: 'CCM/ACCM', canApprove: 'N', approvesUpTo: null, actions: 'Send to SHQ Lead 1, Send Back for Correction', forwardTo: 'SHQ Lead 1', reminderHours: 24, reminderVia: 'Notification + Email', status: 'Active' },
+        { id: 'WAM-03', level: 3, persona: 'SHQ Lead 1', canApprove: 'Y', approvesUpTo: null, actions: 'Approve', forwardTo: '', reminderHours: 24, reminderVia: 'Notification + Email', status: 'Active' },
       ],
     },
     {

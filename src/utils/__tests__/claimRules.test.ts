@@ -24,47 +24,62 @@ describe('Claims masters match the BA workbook "Claims Masters List"', () => {
     expect(goodwillCategory(rows(CLAIM_MASTER_IDS.goodwillCategory), 'Flood')).toBeNull();
   });
 
-  it('has the two approval levels with 24 h reminders, and test SHQ users only', () => {
-    expect(matrix.map((m) => [m.level, m.persona, m.approvesBelow, m.reminderHours])).toEqual([
-      [1, 'Claim Manager', 20000, 24],
-      [2, 'CCM/ACCM', null, 24],
+  it('has the three approval levels (BA answer: SHQ Lead 1 approves above ₹20,000) with 24 h reminders, and test SHQ users only', () => {
+    expect(matrix.map((m) => [m.level, m.persona, m.canApprove, m.approvesUpTo, m.reminderHours, m.reminderVia])).toEqual([
+      [1, 'Claim Manager', 'Y', 20000, 24, 'Notification + Email'],
+      [2, 'CCM/ACCM', 'N', null, 24, 'Notification + Email'],
+      [3, 'SHQ Lead 1', 'Y', null, 24, 'Notification + Email'],
     ]);
     expect(rows(CLAIM_MASTER_IDS.shqUsers).every((u) => u.userName.startsWith('Test User'))).toBe(true);
   });
 
-  it('is consistent, with the SHQ Lead 1 level and the guideline files pending from business', () => {
+  it('is consistent, with only the guideline files pending from business', () => {
     expect(claimHealthCheck(all())).toEqual([]);
-    const pending = claimPendingItems(all());
-    expect(pending).toHaveLength(3);
-    expect(pending[0]).toMatch(/₹20,000 and above go to "SHQ Lead 1"/);
+    expect(claimPendingItems(all())).toEqual(['No AMC Service Guideline file uploaded yet.', 'No Extended Warranty Service Guideline file uploaded yet.']);
   });
 });
 
-describe('Warranty Authorization routing', () => {
-  it('Claim Manager approves below ₹20,000', () => {
-    const r = routeWarrantyRequest(matrix, 19999);
-    expect(r.approver).toBe('Claim Manager');
-    expect(r.steps).toHaveLength(1);
+describe('Authorization request routing', () => {
+  it('Claim Manager approves up to and including ₹20,000', () => {
+    for (const amount of [1, 19999, 20000]) {
+      const r = routeWarrantyRequest(matrix, amount);
+      expect(r.approver).toBe('Claim Manager');
+      expect(r.steps).toHaveLength(1);
+    }
   });
 
-  it('₹20,000 and above passes CCM/ACCM and has no approver until SHQ Lead 1 is added', () => {
-    const r = routeWarrantyRequest(matrix, 20000);
-    expect(r.approver).toBeNull();
-    expect(r.steps.map((s) => s.persona)).toEqual(['Claim Manager', 'CCM/ACCM']);
-    expect(r.gap).toMatch(/"SHQ Lead 1" is not in the approval matrix/);
+  it('above ₹20,000 goes through CCM/ACCM to SHQ Lead 1, who approves any amount', () => {
+    for (const amount of [20001, 5000000]) {
+      const r = routeWarrantyRequest(matrix, amount);
+      expect(r.approver).toBe('SHQ Lead 1');
+      expect(r.steps.map((s) => [s.persona, s.canApprove])).toEqual([
+        ['Claim Manager', false],
+        ['CCM/ACCM', false],
+        ['SHQ Lead 1', true],
+      ]);
+      expect(r.gap).toBeUndefined();
+    }
   });
 
-  it('routes to a new top level once it is added', () => {
-    const withShq = [...matrix, { id: 'WAM-03', level: 3, persona: 'SHQ Lead 1', approvesBelow: 500000, actions: 'Approve', forwardTo: '', reminderHours: 48, status: 'Active' }];
-    expect(routeWarrantyRequest(withShq, 250000).approver).toBe('SHQ Lead 1');
-    expect(claimPendingItems({ ...all(), [CLAIM_MASTER_IDS.approvalMatrix]: withShq }).some((p) => p.includes('Approval matrix'))).toBe(false);
+  it('reports a gap when the top level cannot approve', () => {
+    const noShq = matrix.filter((m) => m.persona !== 'SHQ Lead 1');
+    expect(routeWarrantyRequest(noShq, 25000).gap).toMatch(/"SHQ Lead 1" is not in the approval matrix/);
+    expect(claimPendingItems({ ...all(), [CLAIM_MASTER_IDS.approvalMatrix]: noShq })[0]).toMatch(/above ₹20,000 go to "SHQ Lead 1"/);
+  });
+
+  it('ignores inactive levels', () => {
+    const shqOff = matrix.map((m) => (m.persona === 'SHQ Lead 1' ? { ...m, status: 'Inactive' } : m));
+    expect(routeWarrantyRequest(shqOff, 25000).approver).toBeNull();
   });
 });
 
 describe('Claims validation', () => {
   it('a level that cannot approve must forward', () => {
-    expect(validateMasterRecordRules(CLAIM_MASTER_IDS.approvalMatrix, { approvesBelow: null, forwardTo: '' })).toHaveProperty('forwardTo');
-    expect(validateMasterRecordRules(CLAIM_MASTER_IDS.approvalMatrix, { approvesBelow: 5000, forwardTo: '' })).toEqual({});
+    const rule = (r: Record<string, unknown>) => validateMasterRecordRules(CLAIM_MASTER_IDS.approvalMatrix, r);
+    expect(rule({ canApprove: 'N', approvesUpTo: null, forwardTo: '' })).toHaveProperty('forwardTo');
+    expect(rule({ canApprove: 'N', approvesUpTo: 5000, forwardTo: 'X' })).toHaveProperty('approvesUpTo');
+    expect(rule({ canApprove: 'Y', approvesUpTo: 5000, forwardTo: '' })).toHaveProperty('forwardTo');
+    expect(rule({ canApprove: 'Y', approvesUpTo: null, forwardTo: '' })).toEqual({});
   });
 
   it('rejects duplicates', () => {
@@ -76,10 +91,16 @@ describe('Claims validation', () => {
     const data = all();
     data[CLAIM_MASTER_IDS.issueDescription] = [...data[CLAIM_MASTER_IDS.issueDescription], { id: 'ISD-03', value: 'Flood Damage', status: 'Active', order: 3 }];
     data[CLAIM_MASTER_IDS.goodwillCategory] = [...data[CLAIM_MASTER_IDS.goodwillCategory], { id: 'GWC-03', issueDescription: 'Fire', issueType: 'X', requestCategory: 'Red', status: 'Active' }];
-    data[CLAIM_MASTER_IDS.approvalMatrix] = [...matrix, { id: 'WAM-03', level: 3, persona: 'SHQ Lead 1', approvesBelow: 10000, actions: 'Approve', forwardTo: '', reminderHours: 24, status: 'Active' }];
+    data[CLAIM_MASTER_IDS.approvalMatrix] = matrix.map((m) => (m.persona === 'SHQ Lead 1' ? { ...m, approvesUpTo: 10000, forwardTo: 'SHQ Lead 2' } : m));
     const issues = claimHealthCheck(data);
     expect(issues.some((i) => i.includes('"Flood Damage" has no Request Category'))).toBe(true);
     expect(issues.some((i) => i.includes('"Fire" is not an active Issue Description'))).toBe(true);
     expect(issues.some((i) => i.includes('limits must increase'))).toBe(true);
+  });
+
+  it('health check flags approver levels hidden behind an unlimited approver', () => {
+    const data = all();
+    data[CLAIM_MASTER_IDS.approvalMatrix] = [...matrix, { id: 'WAM-04', level: 4, persona: 'SHQ Lead 2', canApprove: 'Y', approvesUpTo: null, actions: 'Approve', forwardTo: '', reminderHours: 24, reminderVia: 'Notification + Email', status: 'Active' }];
+    expect(claimHealthCheck(data).some((i) => i.includes('SHQ Lead 1 has no upper limit'))).toBe(true);
   });
 });

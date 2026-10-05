@@ -35,15 +35,19 @@ export interface ApprovalStep {
   reminderHours: number;
 }
 
+const yes = (v: unknown) => norm(v) === 'y';
+/** True when this level may approve `amount` (limit inclusive; blank limit = no upper limit). */
+const approves = (l: Rec, amount: number) => yes(l.canApprove) && (blank(l.approvesUpTo) || amount <= Number(l.approvesUpTo));
+
 /**
- * Route a Warranty Authorization Request of `amount` through the approval matrix.
- * Levels are visited in order until one can approve (amount below its limit). If none can, `gap` says who is missing.
+ * Route an Authorization Request of `amount` through the approval matrix.
+ * Levels are visited in order until one can approve. If none can, `gap` says who is missing.
  */
 export function routeWarrantyRequest(matrix: Rec[], amount: number): { steps: ApprovalStep[]; approver: string | null; gap?: string } {
   const levels = matrix.filter(isActive).sort((a, b) => Number(a.level) - Number(b.level));
   const steps: ApprovalStep[] = [];
   for (const l of levels) {
-    const canApprove = !blank(l.approvesBelow) && amount < Number(l.approvesBelow);
+    const canApprove = approves(l, amount);
     steps.push({ level: Number(l.level), persona: String(l.persona), canApprove, reminderHours: Number(l.reminderHours) });
     if (canApprove) return { steps, approver: String(l.persona) };
   }
@@ -54,8 +58,13 @@ export function routeWarrantyRequest(matrix: Rec[], amount: number): { steps: Ap
 
 /** Field-level business rules that look at more than one field of a record. */
 export const CLAIM_RECORD_RULES: Record<string, (r: Rec) => Record<string, string>> = {
-  [CLAIM_MASTER_IDS.approvalMatrix]: (r): Record<string, string> =>
-    blank(r.approvesBelow) && blank(r.forwardTo) ? { forwardTo: 'A level that cannot approve must forward to the next persona.' } : {},
+  [CLAIM_MASTER_IDS.approvalMatrix]: (r) => {
+    const e: Record<string, string> = {};
+    if (!yes(r.canApprove) && !blank(r.approvesUpTo)) e.approvesUpTo = 'Leave the limit blank when this persona cannot approve.';
+    if (!yes(r.canApprove) && blank(r.forwardTo)) e.forwardTo = 'A level that cannot approve must forward to the next persona.';
+    if (yes(r.canApprove) && !blank(r.approvesUpTo) && blank(r.forwardTo)) e.forwardTo = 'Name who approves amounts above this limit.';
+    return e;
+  },
 };
 
 const LIST_IDS: string[] = [CLAIM_MASTER_IDS.budgetPurpose, CLAIM_MASTER_IDS.specialGoodwill, CLAIM_MASTER_IDS.issueDescription, CLAIM_MASTER_IDS.complaintType];
@@ -97,9 +106,13 @@ export function claimHealthCheck(records: Record<string, Rec[]>): string[] {
       issues.push(`${CLAIM_MASTER_IDS.issueDescription} ${d.id}: "${d.value}" has no Request Category mapping.`);
   });
   const levels = (records[CLAIM_MASTER_IDS.approvalMatrix] ?? []).filter(isActive).sort((a, b) => Number(a.level) - Number(b.level));
-  const limits = levels.filter((l) => !blank(l.approvesBelow)).map((l) => Number(l.approvesBelow));
+  const approvers = levels.filter((l) => yes(l.canApprove));
+  const limits = approvers.filter((l) => !blank(l.approvesUpTo)).map((l) => Number(l.approvesUpTo));
   if (limits.some((v, i) => i > 0 && v <= limits[i - 1]))
     issues.push(`${CLAIM_MASTER_IDS.approvalMatrix}: approval limits must increase with each level.`);
+  const unlimited = approvers.findIndex((l) => blank(l.approvesUpTo));
+  if (unlimited >= 0 && unlimited < approvers.length - 1)
+    issues.push(`${CLAIM_MASTER_IDS.approvalMatrix}: ${approvers[unlimited].persona} has no upper limit, so the approver levels after it are never reached.`);
   return issues;
 }
 
@@ -108,8 +121,10 @@ export function claimPendingItems(records: Record<string, Rec[]>): string[] {
   const pending: string[] = [];
   const levels = (records[CLAIM_MASTER_IDS.approvalMatrix] ?? []).filter(isActive).sort((a, b) => Number(a.level) - Number(b.level));
   const top = levels.at(-1);
-  if (top && blank(top.approvesBelow))
-    pending.push(`Approval matrix: requests of ${inr(Math.max(...levels.map((l) => Number(l.approvesBelow) || 0)))} and above go to "${top.forwardTo || 'the next level'}", which is not in the matrix yet.`);
+  if (top && !(yes(top.canApprove) && blank(top.approvesUpTo))) {
+    const highest = Math.max(0, ...levels.filter((l) => yes(l.canApprove)).map((l) => Number(l.approvesUpTo) || 0));
+    pending.push(`Approval matrix: requests above ${inr(highest)} go to "${top.forwardTo || 'the next level'}", which is not in the matrix yet.`);
+  }
   const guides = (records[CLAIM_MASTER_IDS.guideline] ?? []).filter(isActive);
   ['AMC', 'Extended Warranty'].forEach((t) => {
     if (!guides.some((g) => norm(g.requestType) === norm(t))) pending.push(`No ${t} Service Guideline file uploaded yet.`);

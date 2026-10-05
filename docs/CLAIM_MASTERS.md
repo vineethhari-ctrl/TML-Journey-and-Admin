@@ -13,7 +13,7 @@ Data: `src/data/claimMasters.ts` · Rules: `src/utils/claimRules.ts` (unit-teste
 | Goodwill Issue Description Master | *Issue Description LOV* | 2 |
 | Goodwill Request Category Mapping | *Goodwill Req Catagory Mapping* | 2 |
 | AMC / EW Complaint Type Master | *Complaint Type LOV* | 2 |
-| Warranty Authorization Approval Matrix | *Warranty Approval Matrix* | 2 |
+| AMC / Warranty Authorization Approval Matrix | *Warranty Approval Matrix* + BA answers | 3 |
 | AMC / EW Service Guideline File Master | *Master List* row 5 (no sheet yet) | 0 — pending |
 | Goodwill SHQ Approver Users Master | *List of SHQ users* | 1 (test user) |
 
@@ -26,15 +26,16 @@ The older demo masters in the same card (*AMC Products & Pricing*, *Warranty Def
 
 ## How the system uses them
 
-1. **Warranty Authorization Request** — the request goes through the approval matrix level by level. A level approves when the
-   amount is **below** its limit; otherwise it forwards to the next persona. Each level gets a reminder after its Reminder hours.
-   - Below ₹20,000 → **Claim Manager** approves (or sends to CCM/ACCM).
-   - ₹20,000 and above → **CCM/ACCM** cannot approve; it sends to *SHQ Lead 1* or back for correction. **SHQ Lead 1 is not in
-     the matrix yet**, so the tester reports these requests as having no approver.
+1. **AMC / Warranty Authorization Request** — the request goes through the approval matrix level by level. A level with
+   *Can Approve = Y* approves amounts **up to and including** its limit (blank limit = no upper limit); otherwise the request
+   moves on. After **24 hours** the pending approver gets a **notification and an email**; nothing is escalated automatically.
+   - Up to ₹20,000 → **Claim Manager** approves (or sends to CCM/ACCM).
+   - Above ₹20,000 → **CCM/ACCM** cannot approve; it sends to SHQ Lead 1 or back for correction → **SHQ Lead 1** approves.
 2. **Goodwill Request** — the Claim Manager picks an **Issue Description**. The mapping gives its **Issue Type** and
    **Request Category**: *Thermal Incident → Catastrophic Situation, Red*; *Engine Failure → Minor Product Failure, Amber*.
-3. **Dropdowns** — Budget Allocation Purpose (yearly budget), Special Goodwill Claim (IUPR, Thrive) and Complaint Type (AMC / EW
-   requests) show their Active values in Order.
+3. **Dropdowns** — Budget Allocation Purpose (yearly budget), Special Goodwill Claim (IUPR, Thrive — an identification tag on the
+   Goodwill Authorization Request; it does not change the approval path) and Complaint Type (AMC / EW requests) show their
+   Active values in Order.
 4. **Service Guideline** — before an AMC or EW request, the Claim Manager downloads the active guideline file for the request
    type and BU.
 
@@ -42,15 +43,19 @@ Checks on save and on Excel import: duplicate values, one category per Issue Des
 level that cannot approve must name who it forwards to. The health check also finds issue descriptions without a category,
 categories for unknown issue descriptions, and approval limits that do not increase level by level.
 
-## Questions for the BA
+## BA answers (5 Oct 2026) and what is still open
 
-1. **SHQ Lead 1 and higher levels** — limit, actions and reminder hours for every level above CCM/ACCM. Until then, requests of
-   ₹20,000 and above have no approver.
-2. **"Below 20,000"** — is exactly ₹20,000 approved by the Claim Manager? It is set up as *less than* ₹20,000.
-3. **Reminder** — what happens after the 24-hour reminder? Auto-escalate to the next level, or only a notification?
-4. **Service Guideline files** — please share the AMC and Extended Warranty guideline PDFs (per BU, with version).
-5. **Goodwill approval flow** — which approver handles which category? Do SHQ users approve all goodwill requests, and KAM users
-   the fleet vehicles? Is *Green* used? No issue description maps to it yet.
-6. **Special Goodwill Claims (IUPR, Thrive)** — do they follow a different approval path or capture extra fields?
-7. **Demo masters** — should the older *Goodwill & Special Concession Matrix*, *AMC Products & Pricing* and *Warranty Defect*
-   masters be kept, replaced by BA data, or removed?
+| # | Question | BA answer | Status |
+| --- | --- | --- | --- |
+| 1 | Levels above CCM/ACCM | AMC requests up to ₹20,000: Claim Manager approves; above ₹20,000: SHQ Lead 1 approves | **Done** — SHQ Lead 1 added as level 3 with no upper limit |
+| 2 | Is exactly ₹20,000 Claim Manager? | Yes (≤ 20,000) | **Done** — limits are inclusive |
+| 3 | What happens after the reminder? | Notification and email only | **Done** — no auto-escalation |
+| 4 | Service Guideline PDFs | Business is preparing them | **Pending** |
+| 5 | Goodwill approvers per category (Red / Amber / Green) | BA will share the colour-wise Goodwill approval hierarchy | **Pending** — a Goodwill approval master is built when it arrives |
+| 6 | IUPR / Thrive approval path | Only an identification on the Goodwill Authorization Request | **Done** — no separate path |
+| 7 | Keep or remove the 3 demo masters | To be discussed in the module update call | **Open** |
+
+To confirm with the BA:
+- The answer names **AMC** requests, while the sheet is titled *Warranty* Approval Matrix. Does the same matrix apply to AMC,
+  Extended Warranty and Warranty requests?
+- Does a request above ₹20,000 go **through CCM/ACCM** to SHQ Lead 1 (as in the sheet), or straight to SHQ Lead 1?
