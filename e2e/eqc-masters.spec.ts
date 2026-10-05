@@ -83,7 +83,7 @@ test('BA adds a PPL-specific GC rule; duplicates and invalid combinations are bl
 test('sidebar "EQC Masters" brings the EQC group back after browsing another group', async ({ page }) => {
   await page.goto('/#/admin/masters?open=eqc');
   await expect(page.getByTestId('eqc-rule-tester')).toBeVisible();
-  await page.getByRole('button', { name: /Vehicle & Product Data/ }).click();
+  await page.getByRole('button', { name: /JC Creation- Mechanical/ }).first().click();
   await expect(page.getByTestId('eqc-rule-tester')).toHaveCount(0);
   await page.locator('aside').getByRole('button', { name: /EQC Masters/ }).click();
   await expect(page.getByTestId('eqc-rule-tester')).toBeVisible();

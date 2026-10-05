@@ -22,6 +22,7 @@ test.beforeEach(async ({ page }) => {
 
 test('a custom master field with value mapping appears on the dealer Vehicle Journey page', async ({ page }) => {
   await page.goto('/#/admin/masters');
+  await page.getByRole('button', { name: /JC Creation- Mechanical/ }).first().click();
 
   // Admin: add a dropdown parameter to the default master, exposed to the dealer app
   await page.getByRole('button', { name: '+ Add Custom Parameter' }).click();

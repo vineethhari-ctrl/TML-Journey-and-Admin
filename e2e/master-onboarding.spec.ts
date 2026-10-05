@@ -138,7 +138,7 @@ test('BA workbook import creates new masters and fills a missed field in an exis
   await expect(page.getByRole('cell', { name: 'MH01ZZ0001' })).toBeVisible();
 
   // Existing master gained the field, with the value for PPL-01
-  await page.getByRole('button', { name: /Vehicle & Pr/ }).first().click();
+  await page.getByRole('button', { name: /JC Creation- Mechanical/ }).first().click();
   await page.getByRole('button', { name: /^PPL & PL \(Product Line\) Master/ }).click();
   await expect(page.locator('thead').getByText('ADAS Level')).toBeVisible();
   await expect(page.locator('tbody tr', { hasText: 'PPL-NEXON-EV' })).toContainText('L2');

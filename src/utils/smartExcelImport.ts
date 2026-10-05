@@ -289,11 +289,14 @@ const MODULE_HINTS: Array<[RegExp, ModuleCode]> = [
   [/spd|spare|parts/i, 'spd'],
   [/thd|helpdesk/i, 'thd'],
   [/appointment|booking|slot/i, 'appointment'],
-  [/reception|pick\s*&?\s*drop|p&d/i, 'reception'],
+  [/receptionist|lounge/i, 'receptionist'],
+  [/reception|pick\s*&?\s*drop|p&d|driver/i, 'reception'],
   [/security|gate/i, 'security'],
   [/job\s*card|jc\b|complaint/i, 'jc_creation'],
-  [/ira\b|telematic/i, 'ira'],
-  [/dealer|bay|holiday/i, 'dealer_network'],
+  [/ira\b|telematic|dtc/i, 'thd'],
+  [/holiday/i, 'appointment'],
+  [/bay/i, 'jc_tracking'],
+  [/dealer|journey/i, 'customer_journey'],
 ];
 
 const GROUP_FOR: Partial<Record<ModuleCode, LogicalModuleGroup>> = {
@@ -304,6 +307,7 @@ const GROUP_FOR: Partial<Record<ModuleCode, LogicalModuleGroup>> = {
   thd: 'Parts, Claims & Support',
   security: 'Parts, Claims & Support',
   dealer_network: 'Dealer Network',
+  customer_journey: 'Dealer Network',
 };
 
 /** Best guess of module / group from the file and sheet names (the BA can change it). */
