@@ -23,10 +23,16 @@ import {
   Info,
   Layers,
   GitBranch,
+  LayoutGrid,
 } from 'lucide-react';
+import { WORKSHOP_MODULES } from '../data/masterCatalogue';
+import { ServiceTransformationPortal } from '../components/common/ServiceTransformationPortal';
 
 export const DashboardPage: React.FC = () => {
   const { navigate, exceptions, updateExceptionStatus } = useApp();
+
+  // State to toggle the official 12 Service Transformation Modules portal
+  const [showTransformationSuite, setShowTransformationSuite] = useState(false);
 
   // State to toggle the metric reconciliation breakdown drawer
   const [showLogicBreakdown, setShowLogicBreakdown] = useState(false);
@@ -65,7 +71,18 @@ export const DashboardPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={() => setShowTransformationSuite(!showTransformationSuite)}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
+              showTransformationSuite
+                ? 'bg-white text-blue-950 border-white shadow-md'
+                : 'bg-white/15 hover:bg-white/25 text-white border-white/20 shadow-sm'
+            }`}
+          >
+            <LayoutGrid className="h-4 w-4 text-blue-300" />
+            <span>12 Transformation Modules</span>
+          </button>
           <button
             onClick={() => navigate('/journey/JC20260930001234')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white text-blue-900 font-bold text-xs hover:bg-blue-50 shadow-md transition-all cursor-pointer"
@@ -76,6 +93,17 @@ export const DashboardPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Expandable Official 12 Service Transformation Portal */}
+      {showTransformationSuite && (
+        <div className="animate-in fade-in duration-200">
+          <ServiceTransformationPortal
+            modules={WORKSHOP_MODULES}
+            activeModuleCode=""
+            onSelectModule={() => navigate('/admin/masters')}
+          />
+        </div>
+      )}
 
       {/* Section 1: Journey Metrics */}
       <div className="space-y-3">

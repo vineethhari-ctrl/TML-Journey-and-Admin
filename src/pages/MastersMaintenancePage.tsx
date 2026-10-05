@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import {
   MASTER_COLLECTIONS,
   LOGICAL_MODULES,
+  WORKSHOP_MODULES,
   LogicalModuleGroup,
   MasterConfig,
   ModuleCode,
@@ -20,6 +21,7 @@ import { EqcRuleTester } from '../components/administration/EqcRuleTester';
 import { BodyshopCapturePreview } from '../components/administration/BodyshopCapturePreview';
 import { HolidayCalendarConsole } from '../components/administration/HolidayCalendarConsole';
 import { BodyshopMaster } from '../components/administration/BodyshopMaster';
+import { ServiceTransformationPortal } from '../components/common/ServiceTransformationPortal';
 import { calendarKey, createSeedCalendars } from '../data/holidayData';
 import { DEALER_DIVISIONS } from '../data/bayData';
 import { DivisionCalendar, effectiveHours, toIsoDate } from '../utils/holidayCalendar';
@@ -81,19 +83,36 @@ import { mergeImportedRecords } from '../utils/recordMerge';
 // Icon helper function for rendering module icons
 const getGroupIcon = (iconName: string, className = 'h-4 w-4') => {
   switch (iconName) {
+    case 'Calendar':
+      return <Calendar className={className} />;
     case 'Car':
       return <Car className={className} />;
-    case 'Building2':
-      return <Building2 className={className} />;
+    case 'ShieldCheck':
+      return <ShieldCheck className={className} />;
+    case 'FileText':
+      return <FileText className={className} />;
     case 'Wrench':
       return <Wrench className={className} />;
+    case 'Package':
+      return <Package className={className} />;
+    case 'HelpCircle':
+      return <HelpCircle className={className} />;
+    case 'CheckSquare':
+      return <CheckSquare className={className} />;
+    case 'Award':
+      return <Award className={className} />;
+    case 'Paintbrush':
+      return <Paintbrush className={className} />;
+    case 'Zap':
+      return <Zap className={className} />;
+    case 'Building2':
+      return <Building2 className={className} />;
     case 'ClipboardCheck':
       return <ClipboardCheck className={className} />;
     case 'Flame':
       return <Flame className={className} />;
-    case 'Package':
     default:
-      return <Package className={className} />;
+      return <Database className={className} />;
   }
 };
 
@@ -184,14 +203,23 @@ export const MastersMaintenancePage: React.FC = () => {
   // Primary Navigation Tab: 'catalogues' (Parameter master tables) vs 'changelog' (Change Log) vs 'rules_engine' (Rules Engine Studio) vs 'dealer_preview' (Dealer App Preview Simulator)
   const [activeMainTab, setActiveMainTab] = useState<'catalogues' | 'changelog' | 'rules_engine' | 'dealer_preview'>('catalogues');
 
+  // Alignment View Mode: 'by_module' (Project's 12 Specific Modules) vs 'by_domain' (6 Enterprise Groups)
+  const [alignmentMode, setAlignmentMode] = useState<'by_module' | 'by_domain'>('by_module');
+
   // Active Logical Module Tab (Default: 'Vehicle Data' as requested by user)
   const [activeLogicalGroup, setActiveLogicalGroup] = useState<LogicalModuleGroup>('Vehicle Data');
+
+  // Active Project Workshop Module (Default: 'appointment')
+  const [activeModuleCode, setActiveModuleCode] = useState<ModuleCode>('appointment');
+
+  // Presentation style for the 12 modules: 'portal' (Official 3x4 Transformation Cards) vs 'compact' (Horizontal tab pills)
+  const [moduleDisplayStyle, setModuleDisplayStyle] = useState<'portal' | 'compact'>('portal');
 
   // Display Layout: 'workspace' (Tabbed editor workspace) by default so MasterTableEditor is immediately visible
   const [activeLayout, setActiveLayout] = useState<'grouped_cards' | 'workspace'>('workspace');
 
   // Currently Selected Master (for editing / detailed interactive view)
-  const [selectedMasterId, setSelectedMasterId] = useState<string>('ppl_master');
+  const [selectedMasterId, setSelectedMasterId] = useState<string>('time_slot_quotas_master');
 
   // Universal Bulk Upload Modal state for any master catalogue
   const [bulkUploadMaster, setBulkUploadMaster] = useState<MasterConfig | null>(null);
@@ -204,6 +232,7 @@ export const MastersMaintenancePage: React.FC = () => {
   const openEqc = () => {
     setActiveMainTab('catalogues');
     setActiveLogicalGroup('Electronic Quality Check');
+    setActiveModuleCode('eqc');
     setSelectedMasterId('eqc_gc_mandate');
     setActiveLayout('workspace');
     setSearchQuery('');
@@ -213,6 +242,7 @@ export const MastersMaintenancePage: React.FC = () => {
   const openBodyshop = () => {
     setActiveMainTab('catalogues');
     setActiveLogicalGroup('Bodyshop');
+    setActiveModuleCode('bodyshop');
     setSelectedMasterId('bs_inventory_sections');
     setActiveLayout('workspace');
     setSearchQuery('');
@@ -237,6 +267,7 @@ export const MastersMaintenancePage: React.FC = () => {
     if (open === 'bays') {
       setActiveMainTab('catalogues');
       setActiveLogicalGroup('Dealer Network');
+      setActiveModuleCode('jc_tracking');
       setSelectedMasterId('bay_management_interactive');
       setActiveLayout('workspace');
     }
@@ -402,11 +433,37 @@ export const MastersMaintenancePage: React.FC = () => {
   ]);
 
   // ---------------------------------------------------------------------------
-  // LOGICAL GROUP DERIVATIONS & SELECTIONS
+  // SCOPE DERIVATIONS & SELECTIONS (PROJECT MODULES VS LOGICAL GROUPS)
   // ---------------------------------------------------------------------------
   const currentGroupMeta = useMemo(() => {
     return LOGICAL_MODULES.find((g) => g.id === activeLogicalGroup) || LOGICAL_MODULES[0];
   }, [activeLogicalGroup]);
+
+  const currentModuleMeta = useMemo(() => {
+    return WORKSHOP_MODULES.find((m) => m.code === activeModuleCode) || WORKSHOP_MODULES[0];
+  }, [activeModuleCode]);
+
+  // Scope filter: whether a master belongs to the active view scope
+  const isMasterInActiveScope = (m: MasterConfig) => {
+    if (alignmentMode === 'by_domain') {
+      return m.logicalGroup === activeLogicalGroup;
+    }
+    // by_module alignment:
+    if (m.moduleCode === activeModuleCode) return true;
+    if (activeModuleCode === 'customer_journey' && (m.moduleCode === 'dealer_network' || m.logicalGroup === 'Dealer Network')) {
+      return true;
+    }
+    if (activeModuleCode === 'dealer_network' && (m.moduleCode === 'customer_journey' || m.logicalGroup === 'Dealer Network')) {
+      return true;
+    }
+    if (activeModuleCode === 'reception' && (m.moduleCode === 'reception' || m.id === 'driver_transit_roster')) {
+      return true;
+    }
+    if (activeModuleCode === 'receptionist' && (m.moduleCode === 'receptionist' || m.id === 'lounge_reception_checklist')) {
+      return true;
+    }
+    return false;
+  };
 
   // Deep search matching across names, descriptions, field columns, and record values
   const doesMasterMatchSearch = (m: MasterConfig, q: string) => {
@@ -425,15 +482,15 @@ export const MastersMaintenancePage: React.FC = () => {
     return matchesName || matchesDesc || matchesCategory || matchesModule || matchesFields || matchesRecords;
   };
 
-  // Masters filtered by the active logical module
+  // Masters filtered by the active scope (Project Module or Logical Group)
   const groupMasters = useMemo(() => {
     return masterConfigs.filter((m) => {
-      if (m.logicalGroup !== activeLogicalGroup) return false;
+      if (!isMasterInActiveScope(m)) return false;
       if (ownerFilter !== 'ALL' && m.owner !== ownerFilter) return false;
       if (searchQuery.trim() && !doesMasterMatchSearch(m, searchQuery.trim())) return false;
       return true;
     });
-  }, [masterConfigs, activeLogicalGroup, ownerFilter, searchQuery]);
+  }, [masterConfigs, alignmentMode, activeLogicalGroup, activeModuleCode, ownerFilter, searchQuery]);
 
   // Real-time matches across all modules for quick discovery
   const crossModuleMatches = useMemo(() => {
@@ -441,29 +498,54 @@ export const MastersMaintenancePage: React.FC = () => {
     const q = searchQuery.trim();
     const result: Record<string, number> = {};
 
-    LOGICAL_MODULES.forEach((mod) => {
-      const count = masterConfigs.filter((m) => {
-        if (m.logicalGroup !== mod.id) return false;
-        if (ownerFilter !== 'ALL' && m.owner !== ownerFilter) return false;
-        return doesMasterMatchSearch(m, q);
-      }).length;
-
-      if (count > 0) {
-        result[mod.id] = count;
-      }
-    });
+    if (alignmentMode === 'by_module') {
+      WORKSHOP_MODULES.forEach((mod) => {
+        const count = masterConfigs.filter((m) => {
+          const inMod = m.moduleCode === mod.code || (mod.code === 'dealer_network' && m.logicalGroup === 'Dealer Network');
+          if (!inMod) return false;
+          if (ownerFilter !== 'ALL' && m.owner !== ownerFilter) return false;
+          return doesMasterMatchSearch(m, q);
+        }).length;
+        if (count > 0) result[mod.code] = count;
+      });
+    } else {
+      LOGICAL_MODULES.forEach((mod) => {
+        const count = masterConfigs.filter((m) => {
+          if (m.logicalGroup !== mod.id) return false;
+          if (ownerFilter !== 'ALL' && m.owner !== ownerFilter) return false;
+          return doesMasterMatchSearch(m, q);
+        }).length;
+        if (count > 0) result[mod.id] = count;
+      });
+    }
 
     return result;
-  }, [masterConfigs, ownerFilter, searchQuery]);
+  }, [masterConfigs, ownerFilter, searchQuery, alignmentMode]);
 
   // Current active master config
   const currentMaster = useMemo(() => {
     const found = masterConfigs.find((m) => m.id === selectedMasterId);
-    if (found && found.logicalGroup === activeLogicalGroup) return found;
-    // Otherwise fallback to first master in active group
-    const firstInGroup = masterConfigs.find((m) => m.logicalGroup === activeLogicalGroup);
-    return firstInGroup || masterConfigs[0];
-  }, [masterConfigs, selectedMasterId, activeLogicalGroup]);
+    if (found && isMasterInActiveScope(found)) return found;
+    // Otherwise fallback to first master in active scope
+    const firstInScope = masterConfigs.find((m) => isMasterInActiveScope(m));
+    return firstInScope || masterConfigs[0];
+  }, [masterConfigs, selectedMasterId, alignmentMode, activeLogicalGroup, activeModuleCode]);
+
+  // Counts for workshop module tabs
+  const moduleCounts = useMemo(() => {
+    const counts: Record<string, { masters: number; records: number }> = {};
+    WORKSHOP_MODULES.forEach((mod) => {
+      const mastersInM = masterConfigs.filter((m) => {
+        if (m.moduleCode === mod.code) return true;
+        if (mod.code === 'customer_journey' && (m.moduleCode === 'dealer_network' || m.logicalGroup === 'Dealer Network')) return true;
+        if (mod.code === 'dealer_network' && (m.moduleCode === 'customer_journey' || m.logicalGroup === 'Dealer Network')) return true;
+        return false;
+      });
+      const totalRecs = mastersInM.reduce((acc, m) => acc + m.records.length, 0);
+      counts[mod.code] = { masters: mastersInM.length, records: totalRecs };
+    });
+    return counts;
+  }, [masterConfigs]);
 
   // Counts for logical group tabs
   const groupCounts = useMemo(() => {
@@ -498,6 +580,11 @@ export const MastersMaintenancePage: React.FC = () => {
   const handleLaunchMaster = (masterId: string) => {
     setSelectedMasterId(masterId);
     setActiveLayout('workspace');
+    const target = masterConfigs.find((m) => m.id === masterId);
+    if (target) {
+      setActiveLogicalGroup(target.logicalGroup);
+      setActiveModuleCode(target.moduleCode);
+    }
   };
 
   // Action: Export the entire active logical module to CSV for reporting
@@ -922,7 +1009,9 @@ export const MastersMaintenancePage: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className="font-bold text-blue-900">
                 Found {groupMasters.length} master{groupMasters.length !== 1 ? 's' : ''} in{' '}
-                <span className="underline">{currentGroupMeta.title}</span>
+                <span className="underline">
+                  {alignmentMode === 'by_module' ? currentModuleMeta.title : currentGroupMeta.title}
+                </span>
               </span>
               <span className="text-slate-400">•</span>
               <span className="text-slate-500">
@@ -934,28 +1023,48 @@ export const MastersMaintenancePage: React.FC = () => {
             {Object.keys(crossModuleMatches).length > 0 && (
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-slate-400 text-[11px]">Also matched in:</span>
-                {LOGICAL_MODULES.filter(
-                  (mod) => mod.id !== activeLogicalGroup && crossModuleMatches[mod.id]
-                ).map((mod) => (
-                  <button
-                    key={mod.id}
-                    onClick={() => {
-                      setActiveLogicalGroup(mod.id);
-                      const firstMatch = masterConfigs.find(
-                        (m) => m.logicalGroup === mod.id && doesMasterMatchSearch(m, searchQuery)
-                      );
-                      if (firstMatch) {
-                        setSelectedMasterId(firstMatch.id);
-                      }
-                    }}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-[11px] border border-amber-200 transition-all cursor-pointer"
-                  >
-                    <span>{mod.title}</span>
-                    <span className="bg-amber-200 px-1 py-0.2 rounded font-mono text-[9px]">
-                      {crossModuleMatches[mod.id]}
-                    </span>
-                  </button>
-                ))}
+                {(alignmentMode === 'by_module'
+                  ? WORKSHOP_MODULES.filter((mod) => mod.code !== activeModuleCode && crossModuleMatches[mod.code])
+                  : LOGICAL_MODULES.filter((mod) => mod.id !== activeLogicalGroup && crossModuleMatches[mod.id])
+                ).map((mod: any) => {
+                  const key = mod.code || mod.id;
+                  const label = mod.title;
+                  const matchCount = crossModuleMatches[key];
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        if (alignmentMode === 'by_module') {
+                          setActiveModuleCode(mod.code);
+                          const firstMatch = masterConfigs.find(
+                            (m) =>
+                              (m.moduleCode === mod.code || (mod.code === 'dealer_network' && m.logicalGroup === 'Dealer Network')) &&
+                              doesMasterMatchSearch(m, searchQuery)
+                          );
+                          if (firstMatch) {
+                            setSelectedMasterId(firstMatch.id);
+                            setActiveLogicalGroup(firstMatch.logicalGroup);
+                          }
+                        } else {
+                          setActiveLogicalGroup(mod.id);
+                          const firstMatch = masterConfigs.find(
+                            (m) => m.logicalGroup === mod.id && doesMasterMatchSearch(m, searchQuery)
+                          );
+                          if (firstMatch) {
+                            setSelectedMasterId(firstMatch.id);
+                            setActiveModuleCode(firstMatch.moduleCode);
+                          }
+                        }
+                      }}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-[11px] border border-amber-200 transition-all cursor-pointer"
+                    >
+                      <span>{label}</span>
+                      <span className="bg-amber-200 px-1 py-0.2 rounded font-mono text-[9px]">
+                        {matchCount}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -963,189 +1072,308 @@ export const MastersMaintenancePage: React.FC = () => {
       </div>
 
       {/* ======================================================================= */}
-      {/* 3. PRIMARY TABBED INTERFACE: LOGICAL MODULES & CHANGE LOG                */}
+      {/* 3. PRIMARY TABBED INTERFACE: PROJECT MODULES & LOGICAL DOMAINS          */}
       {/* ======================================================================= */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-2 shadow-2xs">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-          {LOGICAL_MODULES.map((mod) => {
-            const isSelected = activeMainTab === 'catalogues' && activeLogicalGroup === mod.id;
-            const count = groupCounts[mod.id] || { masters: 0, records: 0 };
-            const matchCount = crossModuleMatches[mod.id];
-            return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-2xs space-y-3">
+        {/* Top Alignment Bar: Switch between 12 Project Modules and 6 Logical Domains */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-100">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Masters Alignment:</span>
+            <div className="inline-flex rounded-xl bg-slate-100 p-0.5 text-xs font-semibold" role="tablist">
               <button
-                key={mod.id}
+                role="tab"
+                aria-selected={alignmentMode === 'by_module'}
                 onClick={() => {
+                  setAlignmentMode('by_module');
                   setActiveMainTab('catalogues');
-                  setActiveLogicalGroup(mod.id);
-                  // Auto pick first master in this logical module
-                  const firstInMod = masterConfigs.find((m) => m.logicalGroup === mod.id);
-                  if (firstInMod) {
-                    setSelectedMasterId(firstInMod.id);
-                  }
                 }}
-                className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
-                  isSelected
-                    ? 'bg-blue-900 border-blue-950 text-white shadow-sm ring-2 ring-blue-600/30'
-                    : 'bg-slate-50/70 border-slate-200/80 text-slate-700 hover:bg-white hover:border-slate-300'
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  alignmentMode === 'by_module' && activeMainTab === 'catalogues'
+                    ? 'bg-blue-900 text-white shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <div
-                  className={`p-2 rounded-lg mt-0.5 ${
-                    isSelected ? 'bg-white/20 text-white' : 'bg-white border border-slate-200 text-blue-700 shadow-2xs'
+                <Grid className="h-3.5 w-3.5" />
+                <span>12 Project Modules</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${alignmentMode === 'by_module' ? 'bg-blue-800 text-blue-100' : 'bg-slate-200 text-slate-700'}`}>
+                  12
+                </span>
+              </button>
+              <button
+                role="tab"
+                aria-selected={alignmentMode === 'by_domain'}
+                onClick={() => {
+                  setAlignmentMode('by_domain');
+                  setActiveMainTab('catalogues');
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  alignmentMode === 'by_domain' && activeMainTab === 'catalogues'
+                    ? 'bg-blue-900 text-white shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Layers className="h-3.5 w-3.5" />
+                <span>6 Logical Domains</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${alignmentMode === 'by_domain' ? 'bg-blue-800 text-blue-100' : 'bg-slate-200 text-slate-700'}`}>
+                  6
+                </span>
+              </button>
+            </div>
+
+            {alignmentMode === 'by_module' && (
+              <div className="inline-flex rounded-xl bg-slate-100 p-0.5 text-xs font-semibold ml-1">
+                <button
+                  type="button"
+                  onClick={() => setModuleDisplayStyle('portal')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                    moduleDisplayStyle === 'portal'
+                      ? 'bg-white text-blue-900 shadow-2xs font-bold'
+                      : 'text-slate-500 hover:text-slate-800'
                   }`}
+                  title="Official 3x4 Transformation Portal Layout"
                 >
-                  {getGroupIcon(mod.iconName, 'h-4 w-4')}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <span className="font-bold text-xs truncate leading-snug">{mod.title}</span>
-                    <div className="flex items-center gap-1">
-                      {searchQuery && matchCount !== undefined && matchCount > 0 && (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-amber-400 text-slate-950 shadow-2xs animate-pulse">
-                          {matchCount} match{matchCount > 1 ? 'es' : ''}
-                        </span>
-                      )}
-                      <span
-                        className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${
-                          isSelected ? 'bg-blue-800 text-blue-100' : 'bg-slate-200/80 text-slate-600'
-                        }`}
-                      >
-                        {count.masters}
-                      </span>
-                    </div>
-                  </div>
-                  <div
-                    className={`text-[11px] truncate ${
-                      isSelected ? 'text-blue-200' : 'text-slate-400'
+                  <LayoutGrid className="h-3 w-3" />
+                  <span>3x4 Portal Cards</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModuleDisplayStyle('compact')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                    moduleDisplayStyle === 'compact'
+                      ? 'bg-white text-blue-900 shadow-2xs font-bold'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                  title="Compact Horizontal Tabs"
+                >
+                  <Grid className="h-3 w-3" />
+                  <span>Compact Tabs</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-400">Total System Masters:</span>
+            <span className="font-bold text-slate-800 font-mono bg-slate-100 px-2 py-0.5 rounded">
+              {masterConfigs.length} masters
+            </span>
+            <span className="text-slate-300">|</span>
+            <span className="font-bold text-slate-800 font-mono bg-slate-100 px-2 py-0.5 rounded">
+              {masterConfigs.reduce((acc, m) => acc + m.records.length, 0)} records
+            </span>
+          </div>
+        </div>
+
+        {/* Tab Cards Grid: Official 3x4 Transformation Cards vs Compact vs 6 Logical Domains */}
+        {alignmentMode === 'by_module' ? (
+          moduleDisplayStyle === 'portal' ? (
+            <ServiceTransformationPortal
+              modules={WORKSHOP_MODULES}
+              activeModuleCode={activeModuleCode}
+              moduleCounts={moduleCounts}
+              matches={crossModuleMatches}
+              searchQuery={searchQuery}
+              onSelectModule={(code) => {
+                setActiveMainTab('catalogues');
+                setActiveModuleCode(code as ModuleCode);
+                const firstInMod = masterConfigs.find(
+                  (m) =>
+                    m.moduleCode === code ||
+                    (code === 'customer_journey' && (m.moduleCode === 'dealer_network' || m.logicalGroup === 'Dealer Network'))
+                );
+                if (firstInMod) {
+                  setSelectedMasterId(firstInMod.id);
+                  setActiveLogicalGroup(firstInMod.logicalGroup);
+                }
+              }}
+            />
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {WORKSHOP_MODULES.map((mod) => {
+                const isSelected = activeMainTab === 'catalogues' && activeModuleCode === mod.code;
+                const count = moduleCounts[mod.code] || { masters: 0, records: 0 };
+                const matchCount = crossModuleMatches[mod.code];
+                return (
+                  <button
+                    key={mod.code}
+                    onClick={() => {
+                      setActiveMainTab('catalogues');
+                      setActiveModuleCode(mod.code);
+                      const firstInMod = masterConfigs.find(
+                        (m) =>
+                          m.moduleCode === mod.code ||
+                          (mod.code === 'customer_journey' && (m.moduleCode === 'dealer_network' || m.logicalGroup === 'Dealer Network'))
+                      );
+                      if (firstInMod) {
+                        setSelectedMasterId(firstInMod.id);
+                        setActiveLogicalGroup(firstInMod.logicalGroup);
+                      }
+                    }}
+                    className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all cursor-pointer relative ${
+                      isSelected
+                        ? 'bg-blue-900 border-blue-950 text-white shadow-sm ring-2 ring-blue-600/30'
+                        : 'bg-slate-50/70 border-slate-200/80 text-slate-700 hover:bg-white hover:border-slate-300'
                     }`}
                   >
-                    {count.records} configured records
+                    <div
+                      className={`p-2 rounded-lg mt-0.5 shrink-0 ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-white border border-slate-200 text-blue-700 shadow-2xs'
+                      }`}
+                    >
+                      {getGroupIcon(mod.iconName, 'h-4 w-4')}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                        <span className="font-bold text-xs truncate leading-snug" title={mod.title}>
+                          {mod.title}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {searchQuery && matchCount !== undefined && matchCount > 0 && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-amber-400 text-slate-950 shadow-2xs animate-pulse">
+                              {matchCount}
+                            </span>
+                          )}
+                          <span
+                            className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                              isSelected ? 'bg-blue-800 text-blue-100' : 'bg-slate-200/80 text-slate-600'
+                            }`}
+                          >
+                            {count.masters}
+                          </span>
+                        </div>
+                      </div>
+                      <div
+                        className={`text-[10px] truncate ${
+                          isSelected ? 'text-blue-200' : 'text-slate-400'
+                        }`}
+                      >
+                        {mod.categoryTag}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            {LOGICAL_MODULES.map((mod) => {
+              const isSelected = activeMainTab === 'catalogues' && activeLogicalGroup === mod.id;
+              const count = groupCounts[mod.id] || { masters: 0, records: 0 };
+              const matchCount = crossModuleMatches[mod.id];
+              return (
+                <button
+                  key={mod.id}
+                  onClick={() => {
+                    setActiveMainTab('catalogues');
+                    setActiveLogicalGroup(mod.id);
+                    const firstInMod = masterConfigs.find((m) => m.logicalGroup === mod.id);
+                    if (firstInMod) {
+                      setSelectedMasterId(firstInMod.id);
+                      setActiveModuleCode(firstInMod.moduleCode);
+                    }
+                  }}
+                  className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+                    isSelected
+                      ? 'bg-blue-900 border-blue-950 text-white shadow-sm ring-2 ring-blue-600/30'
+                      : 'bg-slate-50/70 border-slate-200/80 text-slate-700 hover:bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div
+                    className={`p-2 rounded-lg mt-0.5 ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-white border border-slate-200 text-blue-700 shadow-2xs'
+                    }`}
+                  >
+                    {getGroupIcon(mod.iconName, 'h-4 w-4')}
                   </div>
-                </div>
-              </button>
-            );
-          })}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <span className="font-bold text-xs truncate leading-snug">{mod.title}</span>
+                      <div className="flex items-center gap-1">
+                        {searchQuery && matchCount !== undefined && matchCount > 0 && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-amber-400 text-slate-950 shadow-2xs animate-pulse">
+                            {matchCount} match{matchCount > 1 ? 'es' : ''}
+                          </span>
+                        )}
+                        <span
+                          className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                            isSelected ? 'bg-blue-800 text-blue-100' : 'bg-slate-200/80 text-slate-600'
+                          }`}
+                        >
+                          {count.masters}
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      className={`text-[11px] truncate ${
+                        isSelected ? 'text-blue-200' : 'text-slate-400'
+                      }`}
+                    >
+                      {count.records} configured records
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-          {/* 5th Tab: Change Log */}
+        {/* Global Admin Tools Row: Change Log | Rules Engine Studio | Dealer App Preview */}
+        <div className="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {/* Change Log Button */}
           <button
             onClick={() => setActiveMainTab('changelog')}
-            className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition-all cursor-pointer ${
               activeMainTab === 'changelog'
-                ? 'bg-blue-900 border-blue-950 text-white shadow-sm ring-2 ring-blue-600/30'
-                : 'bg-slate-50/70 border-slate-200/80 text-slate-700 hover:bg-white hover:border-slate-300'
+                ? 'bg-blue-900 border-blue-950 text-white shadow-xs ring-2 ring-blue-600/30'
+                : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-white hover:border-slate-300'
             }`}
           >
-            <div
-              className={`p-2 rounded-lg mt-0.5 ${
-                activeMainTab === 'changelog'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-white border border-slate-200 text-indigo-700 shadow-2xs'
-              }`}
-            >
-              <History className="h-4 w-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-1 mb-0.5">
-                <span className="font-bold text-xs truncate leading-snug">Change Log</span>
-                <span
-                  className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${
-                    activeMainTab === 'changelog'
-                      ? 'bg-blue-800 text-blue-100'
-                      : 'bg-indigo-100 text-indigo-800'
-                  }`}
-                >
-                  Live Audit
-                </span>
+            <History className={`h-4 w-4 shrink-0 ${activeMainTab === 'changelog' ? 'text-white' : 'text-blue-600'}`} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-xs font-bold truncate">Audit Change Log</span>
+                <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${activeMainTab === 'changelog' ? 'bg-blue-800 text-blue-100' : 'bg-blue-100 text-blue-800'}`}>Live</span>
               </div>
-              <div
-                className={`text-[11px] truncate ${
-                  activeMainTab === 'changelog' ? 'text-blue-200' : 'text-slate-400'
-                }`}
-              >
-                Track modifications &amp; diffs
-              </div>
+              <div className={`text-[10px] truncate ${activeMainTab === 'changelog' ? 'text-blue-200' : 'text-slate-400'}`}>Track modifications &amp; diffs</div>
             </div>
           </button>
 
-          {/* 6th Tab: Rules Engine Studio */}
+          {/* Rules Engine Button */}
           <button
             onClick={() => setActiveMainTab('rules_engine')}
-            className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition-all cursor-pointer ${
               activeMainTab === 'rules_engine'
-                ? 'bg-indigo-900 border-indigo-950 text-white shadow-sm ring-2 ring-indigo-600/30'
-                : 'bg-slate-50/70 border-slate-200/80 text-slate-700 hover:bg-white hover:border-slate-300'
+                ? 'bg-indigo-900 border-indigo-950 text-white shadow-xs ring-2 ring-indigo-600/30'
+                : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-white hover:border-slate-300'
             }`}
           >
-            <div
-              className={`p-2 rounded-lg mt-0.5 ${
-                activeMainTab === 'rules_engine'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-white border border-slate-200 text-indigo-700 shadow-2xs'
-              }`}
-            >
-              <Zap className="h-4 w-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-1 mb-0.5">
-                <span className="font-bold text-xs truncate leading-snug">Rules Engine</span>
-                <span
-                  className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${
-                    activeMainTab === 'rules_engine'
-                      ? 'bg-indigo-800 text-indigo-100'
-                      : 'bg-indigo-100 text-indigo-800'
-                  }`}
-                >
-                  No-Code
-                </span>
+            <Zap className={`h-4 w-4 shrink-0 ${activeMainTab === 'rules_engine' ? 'text-white' : 'text-indigo-600'}`} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-xs font-bold truncate">Rules Engine Studio</span>
+                <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${activeMainTab === 'rules_engine' ? 'bg-indigo-800 text-indigo-100' : 'bg-indigo-100 text-indigo-800'}`}>No-Code</span>
               </div>
-              <div
-                className={`text-[11px] truncate ${
-                  activeMainTab === 'rules_engine' ? 'text-indigo-200' : 'text-slate-400'
-                }`}
-              >
-                Regex, ranges &amp; visibility
-              </div>
+              <div className={`text-[10px] truncate ${activeMainTab === 'rules_engine' ? 'text-indigo-200' : 'text-slate-400'}`}>Regex, ranges &amp; visibility</div>
             </div>
           </button>
 
-          {/* 7th Tab: Dealer App Preview Simulator */}
+          {/* Dealer Preview Simulator Button */}
           <button
             onClick={() => setActiveMainTab('dealer_preview')}
-            className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition-all cursor-pointer ${
               activeMainTab === 'dealer_preview'
-                ? 'bg-blue-900 border-blue-950 text-white shadow-sm ring-2 ring-blue-600/30'
-                : 'bg-slate-50/70 border-slate-200/80 text-slate-700 hover:bg-white hover:border-slate-300'
+                ? 'bg-blue-900 border-blue-950 text-white shadow-xs ring-2 ring-blue-600/30'
+                : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-white hover:border-slate-300'
             }`}
           >
-            <div
-              className={`p-2 rounded-lg mt-0.5 ${
-                activeMainTab === 'dealer_preview'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-white border border-slate-200 text-emerald-700 shadow-2xs'
-              }`}
-            >
-              <Smartphone className="h-4 w-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-1 mb-0.5">
-                <span className="font-bold text-xs truncate leading-snug">Dealer Preview</span>
-                <span
-                  className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${
-                    activeMainTab === 'dealer_preview'
-                      ? 'bg-blue-800 text-blue-100'
-                      : 'bg-emerald-100 text-emerald-800'
-                  }`}
-                >
-                  Simulator
-                </span>
+            <Smartphone className={`h-4 w-4 shrink-0 ${activeMainTab === 'dealer_preview' ? 'text-white' : 'text-emerald-600'}`} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-xs font-bold truncate">Dealer App Preview</span>
+                <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${activeMainTab === 'dealer_preview' ? 'bg-blue-800 text-blue-100' : 'bg-emerald-100 text-emerald-800'}`}>Simulator</span>
               </div>
-              <div
-                className={`text-[11px] truncate ${
-                  activeMainTab === 'dealer_preview' ? 'text-blue-200' : 'text-slate-400'
-                }`}
-              >
-                Test UI &amp; logic live
-              </div>
+              <div className={`text-[10px] truncate ${activeMainTab === 'dealer_preview' ? 'text-blue-200' : 'text-slate-400'}`}>Test UI &amp; logic live</div>
             </div>
           </button>
         </div>
@@ -1187,18 +1415,28 @@ export const MastersMaintenancePage: React.FC = () => {
       <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white rounded-2xl p-4 border border-blue-900/60 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-blue-800/80 border border-blue-400/30 flex items-center justify-center text-blue-200 shadow-inner">
-            {getGroupIcon(currentGroupMeta.iconName, 'h-5 w-5')}
+            {getGroupIcon(
+              alignmentMode === 'by_module' ? currentModuleMeta.iconName : currentGroupMeta.iconName,
+              'h-5 w-5'
+            )}
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-sm font-extrabold tracking-tight text-white">
-                {currentGroupMeta.title}
+                {alignmentMode === 'by_module' ? currentModuleMeta.title : currentGroupMeta.title}
               </h2>
               <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-700/60 text-blue-200 font-mono font-bold border border-blue-500/30">
-                {currentGroupMeta.badge}
+                {alignmentMode === 'by_module' ? currentModuleMeta.badge : currentGroupMeta.badge}
               </span>
+              {alignmentMode === 'by_module' && (
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-900/80 text-emerald-200 font-semibold border border-emerald-500/30">
+                  {currentModuleMeta.categoryTag}
+                </span>
+              )}
             </div>
-            <p className="text-xs text-blue-200/90 mt-0.5">{currentGroupMeta.shortDesc}</p>
+            <p className="text-xs text-blue-200/90 mt-0.5">
+              {alignmentMode === 'by_module' ? currentModuleMeta.subtitle : currentGroupMeta.shortDesc}
+            </p>
           </div>
         </div>
 
@@ -1268,8 +1506,8 @@ export const MastersMaintenancePage: React.FC = () => {
             className="bg-emerald-600 hover:bg-emerald-500 border-emerald-400/40"
             items={[
               { label: `This master (CSV)`, hint: currentMaster.name, icon: Download, onClick: handleDownloadCurrentMasterCSV },
-              { label: `Whole group (CSV)`, hint: currentGroupMeta.title, icon: Download, onClick: handleDownloadModuleCSV },
-              { label: `Whole group (Excel)`, hint: currentGroupMeta.title, icon: FileSpreadsheet, onClick: handleExportModuleExcel },
+              { label: `Whole group (CSV)`, hint: alignmentMode === 'by_module' ? currentModuleMeta.title : currentGroupMeta.title, icon: Download, onClick: handleDownloadModuleCSV },
+              { label: `Whole group (Excel)`, hint: alignmentMode === 'by_module' ? currentModuleMeta.title : currentGroupMeta.title, icon: FileSpreadsheet, onClick: handleExportModuleExcel },
             ]}
           />
 
@@ -1297,7 +1535,7 @@ export const MastersMaintenancePage: React.FC = () => {
                 ownerFilter === 'ALL' ? 'bg-white shadow-xs text-slate-900 font-bold' : 'text-slate-500'
               }`}
             >
-              All Masters ({masterConfigs.filter((m) => m.logicalGroup === activeLogicalGroup).length})
+              All Masters ({masterConfigs.filter(isMasterInActiveScope).length})
             </button>
             <button
               onClick={() => setOwnerFilter('TML_ADMIN')}
@@ -1305,7 +1543,7 @@ export const MastersMaintenancePage: React.FC = () => {
                 ownerFilter === 'TML_ADMIN' ? 'bg-blue-900 text-white shadow-xs font-bold' : 'text-slate-500'
               }`}
             >
-              OEM Central ({masterConfigs.filter((m) => m.logicalGroup === activeLogicalGroup && m.owner === 'TML_ADMIN').length})
+              OEM Central ({masterConfigs.filter((m) => isMasterInActiveScope(m) && m.owner === 'TML_ADMIN').length})
             </button>
             <button
               onClick={() => setOwnerFilter('DEALER_ADMIN')}
@@ -1313,7 +1551,7 @@ export const MastersMaintenancePage: React.FC = () => {
                 ownerFilter === 'DEALER_ADMIN' ? 'bg-emerald-800 text-white shadow-xs font-bold' : 'text-slate-500'
               }`}
             >
-              Dealership Floor ({masterConfigs.filter((m) => m.logicalGroup === activeLogicalGroup && m.owner === 'DEALER_ADMIN').length})
+              Dealership Floor ({masterConfigs.filter((m) => isMasterInActiveScope(m) && m.owner === 'DEALER_ADMIN').length})
             </button>
           </div>
         </div>
@@ -1323,7 +1561,7 @@ export const MastersMaintenancePage: React.FC = () => {
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
             <input
               type="text"
-              placeholder={`Filter in ${currentGroupMeta.title}...`}
+              placeholder={`Filter in ${alignmentMode === 'by_module' ? currentModuleMeta.title : currentGroupMeta.title}...`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-hidden focus:border-blue-400 transition-all"
@@ -1337,7 +1575,6 @@ export const MastersMaintenancePage: React.FC = () => {
               </button>
             )}
           </div>
-
         </div>
       </div>
 
@@ -1371,10 +1608,12 @@ export const MastersMaintenancePage: React.FC = () => {
 
                   {/* Title & Sub-category */}
                   <div>
-                    <div className="text-[11px] font-semibold text-blue-700 mb-0.5 flex items-center gap-1">
-                      <span>{m.category}</span>
+                    <div className="text-[11px] font-semibold text-blue-700 mb-0.5 flex items-center gap-1.5 flex-wrap">
+                      <span className="font-bold text-indigo-900 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200 text-[10px]">
+                        {m.moduleName}
+                      </span>
                       <span className="text-slate-300">•</span>
-                      <span className="text-slate-500 font-mono text-[10px]">{m.moduleCode}</span>
+                      <span>{m.category}</span>
                     </div>
                     <h3 className="font-bold text-sm text-slate-900 group-hover:text-blue-900 transition-colors">
                       {m.name}
@@ -1508,7 +1747,7 @@ export const MastersMaintenancePage: React.FC = () => {
             {/* Wrap instead of scrolling sideways, so every master in the group is visible */}
             <div className="flex flex-wrap gap-1.5">
               {masterConfigs
-                .filter((m) => m.logicalGroup === activeLogicalGroup)
+                .filter(isMasterInActiveScope)
                 .map((m) => {
                   // currentMaster falls back to the group's first master, so highlight what's actually shown
                   const isSelected = currentMaster.id === m.id;
@@ -1538,15 +1777,23 @@ export const MastersMaintenancePage: React.FC = () => {
 
           {/* Active Workspace Header Bar */}
           <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded-xl border border-slate-200 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-500">{currentGroupMeta.title}</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-slate-500">
+                {alignmentMode === 'by_module' ? currentModuleMeta.title : currentGroupMeta.title}
+              </span>
               <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
               <span className="font-extrabold text-blue-950 text-sm">{currentMaster.name}</span>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200">
+                Module: {currentMaster.moduleName}
+              </span>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                {currentMaster.category}
+              </span>
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded ${
                   currentMaster.owner === 'TML_ADMIN'
-                    ? 'bg-blue-100 text-blue-900'
-                    : 'bg-emerald-100 text-emerald-900'
+                    ? 'bg-blue-100 text-blue-900 border border-blue-200'
+                    : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
                 }`}
               >
                 {currentMaster.owner === 'TML_ADMIN' ? 'TML OEM Central' : 'Dealership Floor'}

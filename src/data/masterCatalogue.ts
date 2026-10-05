@@ -37,16 +37,18 @@ export interface MasterFieldDef {
 export type ModuleCode =
   | 'appointment'
   | 'reception'
+  | 'receptionist'
   | 'security'
   | 'jc_creation'
-  | 'jc_tracking'
-  | 'spd'
-  | 'thd'
-  | 'eqc'
-  | 'claim'
   | 'bodyshop'
-  | 'ira'
-  | 'dealer_network';
+  | 'jc_tracking'
+  | 'eqc'
+  | 'thd'
+  | 'spd'
+  | 'claim'
+  | 'customer_journey'
+  | 'dealer_network'
+  | 'ira';
 
 export type LogicalModuleGroup =
   | 'Vehicle Data'
@@ -73,6 +75,7 @@ export interface MasterModuleMeta {
   iconName: string;
   accentColor: string;
   categoryTag: string;
+  displayLines?: string[];
 }
 
 export interface MasterConfig {
@@ -169,113 +172,137 @@ const NOT_OK_FIELDS: MasterFieldDef[] = [
 ];
 
 export const WORKSHOP_MODULES: MasterModuleMeta[] = [
+  // 1. Appointment Reminder
   {
     code: 'appointment',
-    title: 'Appointment Scheduling',
-    subtitle: 'Service appointment bookings, slot intake allocation, emergency buffer caps',
+    title: 'Appointment Reminder',
+    subtitle: 'Service bookings, time slot intake quotas, holiday operating hours & customer reminders',
     badge: 'appointment',
     iconName: 'Calendar',
     accentColor: 'blue',
     categoryTag: 'Customer Inflow & Intake',
+    displayLines: ['Appointment', 'Reminder'],
   },
+  // 2. Pickup & Drop - Admin / Driver App
   {
     code: 'reception',
-    title: 'P&D and Reception',
-    subtitle: 'Pick & Drop transit queues, driver allocation, lounge customer greeting checklists',
-    badge: 'reception',
+    title: 'Pickup & Drop - Admin / Driver App',
+    subtitle: 'Pick & Drop transit queues, driver allocation roster, route geofences & chauffeur tracking',
+    badge: 'pnd_driver',
     iconName: 'Car',
     accentColor: 'indigo',
-    categoryTag: 'Customer Experience & Transit',
+    categoryTag: 'Transit & Driver App',
+    displayLines: ['Pickup & Drop - Admin', 'Driver App'],
   },
+  // 3. Receptionist
+  {
+    code: 'receptionist',
+    title: 'Receptionist',
+    subtitle: 'Customer reception desk check-in, lounge greeting checklist, digital welcome & waiting SLA',
+    badge: 'receptionist',
+    iconName: 'Users',
+    accentColor: 'sky',
+    categoryTag: 'Customer Experience & Lounge',
+    displayLines: ['Receptionist'],
+  },
+  // 4. Security Guard
   {
     code: 'security',
-    title: 'Security & Gate Operations',
-    subtitle: 'Physical inward/outward vehicle check-in, barrier automation, visitor & pass logs',
+    title: 'Security Guard',
+    subtitle: 'Physical vehicle gate inward/outward barrier verification, pass generation & denial logs',
     badge: 'security',
     iconName: 'ShieldCheck',
     accentColor: 'emerald',
     categoryTag: 'Perimeter & Asset Security',
+    displayLines: ['Security', 'Guard'],
   },
+  // 5. JC Creation- Mechanical
   {
     code: 'jc_creation',
-    title: 'JC Creation',
-    subtitle: 'Open repair orders, customer complaint capture, demanded work line codes, manual estimation',
-    badge: 'jc_creation',
+    title: 'JC Creation- Mechanical',
+    subtitle: 'Open repair orders, customer complaint capture, PPL line variants & mechanical labor codes',
+    badge: 'jc_mechanical',
     iconName: 'FileText',
     accentColor: 'violet',
-    categoryTag: 'Service Order & Scope',
+    categoryTag: 'Mechanical Service Orders',
+    displayLines: ['JC Creation-', 'Mechanical'],
   },
+  // 6. JC Creation- Bodyshop
+  {
+    code: 'bodyshop',
+    title: 'JC Creation- Bodyshop',
+    subtitle: 'Accident estimates, panel repair ops, heated spray booth schedules & paint material systems',
+    badge: 'jc_bodyshop',
+    iconName: 'Paintbrush',
+    accentColor: 'fuchsia',
+    categoryTag: 'Body Repairs & Refinishing',
+    displayLines: ['JC Creation-', 'Bodyshop'],
+  },
+  // 7. JC Tracking
   {
     code: 'jc_tracking',
-    title: 'JC Tracking & Bay Dispatch',
-    subtitle: 'Real-time bay occupancy, technician skill dispatch, stage transitions, bay transit',
+    title: 'JC Tracking',
+    subtitle: 'Real-time workshop bay occupancy, lift matrix, technician skill dispatch & delay tracking',
     badge: 'jc_tracking',
     iconName: 'Wrench',
     accentColor: 'sky',
-    categoryTag: 'Shop Floor & Execution',
+    categoryTag: 'Shop Floor & Bay Tracking',
+    displayLines: ['JC Tracking'],
   },
+  // 8. eQC / Washing
+  {
+    code: 'eqc',
+    title: 'eQC / Washing',
+    subtitle: 'Electronic quality check, EV high-voltage safety inspection, torque audits & wash bay sign-off',
+    badge: 'eqc_washing',
+    iconName: 'CheckSquare',
+    accentColor: 'teal',
+    categoryTag: 'Quality Assurance & Sign-off',
+    displayLines: ['eQC', 'Washing'],
+  },
+  // 9. THD
+  {
+    code: 'thd',
+    title: 'THD',
+    subtitle: 'Technical Help Desk, workshop diagnostic tools, calibration trackers & engineering tickets',
+    badge: 'thd',
+    iconName: 'HelpCircle',
+    accentColor: 'orange',
+    categoryTag: 'Technical Help Desk & Diagnostics',
+    displayLines: ['THD'],
+  },
+  // 10. SPD
   {
     code: 'spd',
-    title: 'SPD (Spare Parts Dispatch)',
-    subtitle: 'Spare parts requisition, stock bin checks, picking slip generation, counter issue',
+    title: 'SPD',
+    subtitle: 'Spare Parts Dispatch, fast-moving parts inventory, warehouse bin allocation & stockout shortage tracking',
     badge: 'spd',
     iconName: 'Package',
     accentColor: 'amber',
     categoryTag: 'Supply Chain & Inventory',
+    displayLines: ['SPD'],
   },
-  {
-    code: 'thd',
-    title: 'THD (Technical Help Desk)',
-    subtitle: 'Field technical issue tickets to Tata Motors plant, TIB bulletin advisories, diagnostics',
-    badge: 'thd',
-    iconName: 'HelpCircle',
-    accentColor: 'orange',
-    categoryTag: 'Plant Engineering & Diagnostics',
-  },
-  {
-    code: 'eqc',
-    title: 'EQC (Electronic Quality Check)',
-    subtitle: 'Quality inspection checklists, road test records, torque verifications, rework routing',
-    badge: 'eqc',
-    iconName: 'CheckSquare',
-    accentColor: 'teal',
-    categoryTag: 'Quality Assurance & Sign-off',
-  },
+  // 11. Auth. Request Approval - Mobile / Web & Service Claims
   {
     code: 'claim',
-    title: 'Claim & Warranty',
-    subtitle: 'Warranty defect submissions, causal part tagging, insurance surveyor claims, AMC schemes',
+    title: 'Auth. Request Approval & Service Claims',
+    subtitle: 'Auth. Request Approval - Mobile • Auth. Request - Web • Service Claims - Web',
     badge: 'claim',
     iconName: 'Award',
     accentColor: 'rose',
-    categoryTag: 'Warranty & Commercial Contracts',
+    categoryTag: 'Warranty & Commercial Claims',
+    displayLines: ['Auth. Request Approval - Mobile', 'Auth. Request - Web', 'Service Claims - Web'],
   },
+  // 12. Customer Journey
   {
-    code: 'bodyshop',
-    title: 'BodyShop & Paint Operations',
-    subtitle: 'Accident estimates, panel denting, heated spray booth schedules, paint formulation',
-    badge: 'bodyshop',
-    iconName: 'Paintbrush',
-    accentColor: 'fuchsia',
-    categoryTag: 'Body Repairs & Refinishing',
-  },
-  {
-    code: 'ira',
-    title: 'IRA Connected Vehicle & EV',
-    subtitle: 'Telematics alerts, high-voltage battery state-of-health, DTC fault codes, FOTA firmware',
-    badge: 'ira',
-    iconName: 'Zap',
-    accentColor: 'cyan',
-    categoryTag: 'EV & Connected Telematics',
-  },
-  {
-    code: 'dealer_network',
-    title: 'Dealership Network & Facility',
-    subtitle: 'Authorized dealer 3S/2S facility network, zone allocations, workshop capacity profiles',
-    badge: 'masters',
-    iconName: 'Building2',
+    code: 'customer_journey',
+    title: 'Customer Journey & Dealer Network',
+    subtitle: 'Digital customer journey transparency, live milestone tracking, mobile alerts & dealer network',
+    badge: 'journey',
+    iconName: 'TrendingUp',
     accentColor: 'slate',
-    categoryTag: 'Infrastructure & Governance',
+    categoryTag: 'Customer Journey & Dealer Network',
+    displayLines: ['Customer Journey', 'Dealer Network'],
   },
 ];
 
@@ -290,7 +317,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Vehicle Hierarchy',
     logicalGroup: 'Vehicle Data',
     moduleCode: 'jc_creation',
-    moduleName: 'JC Creation',
+    moduleName: 'JC Creation- Mechanical',
     description: 'Parent Product Line (PPL) and Product Line (PL) variants defining OEM parts and service eligibility.',
     fields: [
       { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], mandatory: true, isSystem: true },
@@ -398,7 +425,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Vehicle Inspection',
     logicalGroup: 'Vehicle Data',
     moduleCode: 'jc_tracking',
-    moduleName: 'JC Tracking & Bay Dispatch',
+    moduleName: 'JC Tracking',
     description: 'Mandatory technical quality inspection checklist items per vehicle Parent Product Line and Product Line.',
     fields: [
       { key: 'section', label: 'Section', type: 'text', mandatory: true },
@@ -430,7 +457,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Complaints & Diagnostics',
     logicalGroup: 'Vehicle Data',
     moduleCode: 'jc_creation',
-    moduleName: 'JC Creation',
+    moduleName: 'JC Creation- Mechanical',
     description: 'Hierarchical customer voice codes (Symptom, System, Sub-System) for standardization.',
     fields: [
       { key: 'categoryCode', label: 'Category Code', type: 'text', mandatory: true },
@@ -455,7 +482,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Labor & Billed Hours',
     logicalGroup: 'Vehicle Data',
     moduleCode: 'jc_creation',
-    moduleName: 'JC Creation',
+    moduleName: 'JC Creation- Mechanical',
     description: 'Tata Motors Flat Rate Time (FRT) standard labor operations and standard billed hours.',
     fields: [
       { key: 'jobCode', label: 'Labor Job Code', type: 'text', mandatory: true },
@@ -479,7 +506,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Labor Mapping',
     logicalGroup: 'Vehicle Data',
     moduleCode: 'jc_creation',
-    moduleName: 'JC Creation',
+    moduleName: 'JC Creation- Mechanical',
     description: 'AI-assisted routing mapping customer symptoms to standard labor job codes filtered by vehicle model.',
     fields: [
       { key: 'pplName', label: 'PPL Name', type: 'select', options: ['Nexon', 'Altroz', 'Harrier', 'Safari', 'Punch', 'Curvv', 'Tiago'], mandatory: true },
@@ -500,9 +527,9 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     name: 'EV High-Voltage Safety & Protocols',
     owner: 'TML_ADMIN',
     category: 'EV Protocols',
-    logicalGroup: 'Vehicle Data',
-    moduleCode: 'ira',
-    moduleName: 'IRA Connected Vehicle & EV',
+    logicalGroup: 'Electronic Quality Check',
+    moduleCode: 'eqc',
+    moduleName: 'eQC / Washing',
     description: 'Mandatory OEM safety gates before touching high-voltage (350V - 400V DC) EV components.',
     fields: [
       { key: 'protocolCode', label: 'Protocol ID', type: 'text', mandatory: true },
@@ -522,9 +549,9 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     name: 'DTC Fault Code Alert & Telematics',
     owner: 'TML_ADMIN',
     category: 'Telematics Codes',
-    logicalGroup: 'Vehicle Data',
-    moduleCode: 'ira',
-    moduleName: 'IRA Connected Vehicle & EV',
+    logicalGroup: 'Parts, Claims & Support',
+    moduleCode: 'thd',
+    moduleName: 'THD',
     description: 'Connected vehicle telemetry triggers from iRA modem triggering preemptive telecaller CRM outreach.',
     fields: [
       { key: 'dtcCode', label: 'OBD-II / CAN DTC Code', type: 'text', mandatory: true },
@@ -549,8 +576,8 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     owner: 'TML_ADMIN',
     category: 'Facility Registry',
     logicalGroup: 'Dealer Network',
-    moduleCode: 'dealer_network',
-    moduleName: 'Dealership Network & Facility',
+    moduleCode: 'customer_journey',
+    moduleName: 'Customer Journey',
     isInteractiveSpecial: true,
     interactiveTabTarget: 'dealers',
     description: 'PAN-India authorized dealer facility registry, 3S/2S workshop status, zone affiliations, and active bay counts.',
@@ -578,7 +605,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Bay Setup',
     logicalGroup: 'Dealer Network',
     moduleCode: 'jc_tracking',
-    moduleName: 'JC Tracking & Bay Dispatch',
+    moduleName: 'JC Tracking',
     isInteractiveSpecial: true,
     interactiveTabTarget: 'bays',
     description: 'Comprehensive physical bay infrastructure, floor levels, 2-post/4-post lift availability, special tooling, and approval states.',
@@ -605,7 +632,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Capacity Allocations',
     logicalGroup: 'Dealer Network',
     moduleCode: 'jc_tracking',
-    moduleName: 'JC Tracking & Bay Dispatch',
+    moduleName: 'JC Tracking',
     description: 'Dealership division bay capacities across Mechanical, Bodyshop, Wheel Alignment, Electrical, AC, Speedo, Fleet.',
     fields: [
       { key: 'divisionName', label: 'Division Name', type: 'text', mandatory: true },
@@ -632,7 +659,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'BodyShop Facilities',
     logicalGroup: 'Bodyshop',
     moduleCode: 'bodyshop',
-    moduleName: 'BodyShop & Paint Operations',
+    moduleName: 'JC Creation- Bodyshop',
     isInteractiveSpecial: true,
     interactiveTabTarget: 'bodyshop',
     description: 'Comprehensive Body Shop facility data, capacity, specialized tools calibration, and lead technician assignments.',
@@ -664,7 +691,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Operating Calendar',
     logicalGroup: 'Dealer Network',
     moduleCode: 'appointment',
-    moduleName: 'Appointment Scheduling',
+    moduleName: 'Appointment Reminder',
     isInteractiveSpecial: true,
     interactiveTabTarget: 'calendar',
     description: 'Weekly day-off operating patterns and date-specific festival / plant maintenance overrides.',
@@ -689,7 +716,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Intake Density',
     logicalGroup: 'Dealer Network',
     moduleCode: 'appointment',
-    moduleName: 'Appointment Scheduling',
+    moduleName: 'Appointment Reminder',
     isInteractiveSpecial: true,
     interactiveTabTarget: 'timeslots',
     description: 'Regulates hourly intake densities, dedicated lift allocations, and walk-in buffer reserves per workshop division.',
@@ -722,7 +749,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Manpower Allocation',
     logicalGroup: 'Service Operations',
     moduleCode: 'jc_tracking',
-    moduleName: 'JC Tracking & Bay Dispatch',
+    moduleName: 'JC Tracking',
     description: 'Assigns certified technicians and technical supervisors to designated workshop bays.',
     fields: [
       { key: 'dealer', label: 'Dealer', type: 'text', mandatory: true },
@@ -748,7 +775,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Bay Clocking Rules',
     logicalGroup: 'Service Operations',
     moduleCode: 'jc_tracking',
-    moduleName: 'JC Tracking & Bay Dispatch',
+    moduleName: 'JC Tracking',
     description: 'Governs bay clocking pauses. Configures mandatory dependent fields (SAP Part No, THD No, Ticket ID).',
     fields: [
       { key: 'bu', label: 'BU', type: 'select', options: ['PV + EV', 'PV', 'EV', 'CV'], mandatory: true },
@@ -776,7 +803,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Quality Root Causes',
     logicalGroup: 'Service Operations',
     moduleCode: 'jc_creation',
-    moduleName: 'JC Creation',
+    moduleName: 'JC Creation- Mechanical',
     description: 'Standardized root cause classifications for customer workshop revisits within 30 days.',
     fields: [
       { key: 'reasonCode', label: 'Reason Code', type: 'text', mandatory: true },
@@ -799,7 +826,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Appointment Flow',
     logicalGroup: 'Service Operations',
     moduleCode: 'appointment',
-    moduleName: 'Appointment Scheduling',
+    moduleName: 'Appointment Reminder',
     description: 'Standardized classifications for telecaller CRM reschedule and cancellation tracking.',
     fields: [
       { key: 'reasonCode', label: 'Reason Code', type: 'text', mandatory: true },
@@ -822,7 +849,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Quality Sign-off',
     logicalGroup: 'Electronic Quality Check',
     moduleCode: 'eqc',
-    moduleName: 'EQC (Electronic Quality Check)',
+    moduleName: 'eQC / Washing',
     description: 'Pre-delivery quality assurance checklists, OBD-II DTC error sweeps, and road test verifications.',
     fields: [
       { key: 'checkCode', label: 'QC Code', type: 'text', mandatory: true },
@@ -845,7 +872,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Torque Engineering',
     logicalGroup: 'Electronic Quality Check',
     moduleCode: 'eqc',
-    moduleName: 'EQC (Electronic Quality Check)',
+    moduleName: 'eQC / Washing',
     description: 'Factory-specified torque values (Nm) for wheel hubs, calipers, subframes, and steering links.',
     fields: [
       { key: 'fastenerCode', label: 'Fastener Part Code', type: 'text', mandatory: true },
@@ -872,7 +899,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'EQC Rules',
     logicalGroup: 'Electronic Quality Check',
     moduleCode: 'eqc',
-    moduleName: 'EQC (Electronic Quality Check)',
+    moduleName: 'eQC / Washing',
     description:
       'Decides per PPL + Complaint Code whether a Guided Check (GC) applies / is mandatory and whether a road test is mandatory. Blank PPL = all PPLs; a PPL-specific row overrides it.',
     fields: [
@@ -900,7 +927,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'EQC Rules',
     logicalGroup: 'Electronic Quality Check',
     moduleCode: 'eqc',
-    moduleName: 'EQC (Electronic Quality Check)',
+    moduleName: 'eQC / Washing',
     description:
       'Step-by-step Guided Check shown to the technician in the dealer app, per PPL + Complaint Code. PPL-specific steps replace the all-PPL steps for that PPL.',
     fields: [
@@ -931,7 +958,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'EQC Rules',
     logicalGroup: 'Electronic Quality Check',
     moduleCode: 'eqc',
-    moduleName: 'EQC (Electronic Quality Check)',
+    moduleName: 'eQC / Washing',
     description:
       'Highlights a job at risk of missing its Promised Time of Delivery (PTD). Time left ≤ Red threshold → Red; ≤ Orange threshold → Orange. Red must be lower than Orange.',
     fields: [
@@ -952,7 +979,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'EQC Rules',
     logicalGroup: 'Electronic Quality Check',
     moduleCode: 'eqc',
-    moduleName: 'EQC (Electronic Quality Check)',
+    moduleName: 'eQC / Washing',
     description:
       'Expected values for VCI / OBD DID auto-scan parameters. Formats: "11.8-14.5", ">=20", "<=4.2", ">0", or an exact value. Blank PPL = all PPLs; a PPL-specific row overrides it.',
     fields: [
@@ -978,7 +1005,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'EQC Checklists',
     logicalGroup: 'Electronic Quality Check',
     moduleCode: 'eqc',
-    moduleName: 'EQC (Electronic Quality Check)',
+    moduleName: 'eQC / Washing',
     description:
       'EQC checklist items by BU and type. Blank PPL or blank Km range = every vehicle. The Not-OK flags decide what the technician must capture when an item is marked Not OK.',
     fields: [
@@ -1008,7 +1035,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'EQC Checklists',
     logicalGroup: 'Electronic Quality Check',
     moduleCode: 'eqc',
-    moduleName: 'EQC (Electronic Quality Check)',
+    moduleName: 'eQC / Washing',
     description:
       'Service-schedule checklist grouped by Section and Sub-Section, filtered by BU, PPL and odometer Km. Blank PPL or Km range = every vehicle.',
     fields: [
@@ -1042,7 +1069,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Inventory Capture',
     logicalGroup: 'Bodyshop',
     moduleCode: 'bodyshop',
-    moduleName: 'BodyShop & Paint Operations',
+    moduleName: 'JC Creation- Bodyshop',
     description:
       'Sections of the vehicle inventory capture, per BU, in Sequence Priority order. Roles decide who sees the section; Service Type "Accident" shows it only for accident jobs.',
     fields: [
@@ -1082,7 +1109,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Inventory Capture',
     logicalGroup: 'Bodyshop',
     moduleCode: 'bodyshop',
-    moduleName: 'BodyShop & Paint Operations',
+    moduleName: 'JC Creation- Bodyshop',
     description:
       'Rows as given in the BA workbook; incomplete rows are kept and listed in the preview checklist. What is captured inside each section: Sub-Section (Level 1 / Level 2) and Checkpoint, who captures it, acceptable values and the photo / video evidence. A row without a Checkpoint is captured at Sub-Section level.',
     fields: [
@@ -1123,7 +1150,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Insurance Documents',
     logicalGroup: 'Bodyshop',
     moduleCode: 'bodyshop',
-    moduleName: 'BodyShop & Paint Operations',
+    moduleName: 'JC Creation- Bodyshop',
     description: 'Documents collected from the customer for insurance (accident) jobs, in Sequence order. Only active documents are asked for.',
     fields: [
       { key: 'documentCategory', label: 'Document Category', type: 'text', mandatory: true },
@@ -1145,7 +1172,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'BodyShop Workflow',
     logicalGroup: 'Bodyshop',
     moduleCode: 'bodyshop',
-    moduleName: 'BodyShop & Paint Operations',
+    moduleName: 'JC Creation- Bodyshop',
     description: 'Sequenced bodyshop workflow stages from accident survey to bake oven finish.',
     fields: [
       { key: 'stageCode', label: 'Stage Code', type: 'text', mandatory: true },
@@ -1166,9 +1193,9 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     name: 'Heated Spray Booth & Oven Slot Master',
     owner: 'DEALER_ADMIN',
     category: 'Paint Facilities',
-    logicalGroup: 'Service Operations',
+    logicalGroup: 'Bodyshop',
     moduleCode: 'bodyshop',
-    moduleName: 'BodyShop & Paint Operations',
+    moduleName: 'JC Creation- Bodyshop',
     description: 'Spray booth slotting, color batching, and energy consumption metrics.',
     fields: [
       { key: 'boothName', label: 'Spray Booth Identification', type: 'text', mandatory: true },
@@ -1193,7 +1220,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Commercial Contracts',
     logicalGroup: 'Parts, Claims & Support',
     moduleCode: 'claim',
-    moduleName: 'Claim & Warranty',
+    moduleName: 'Auth. Request Approval & Service Claims',
     description: 'Tata Motors Value Care AMC packages, tenure, coverage limits, and national price schedules.',
     fields: [
       { key: 'amcCode', label: 'AMC Plan Code', type: 'text', mandatory: true },
@@ -1217,7 +1244,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Warranty Tagging',
     logicalGroup: 'Parts, Claims & Support',
     moduleCode: 'claim',
-    moduleName: 'Claim & Warranty',
+    moduleName: 'Auth. Request Approval & Service Claims',
     description: 'Defect classifications for processing OEM claims to Tata Motors and vendor chargebacks.',
     fields: [
       { key: 'defectCode', label: 'Defect Code', type: 'text', mandatory: true },
@@ -1239,7 +1266,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Approval Authorities',
     logicalGroup: 'Parts, Claims & Support',
     moduleCode: 'claim',
-    moduleName: 'Claim & Warranty',
+    moduleName: 'Auth. Request Approval & Service Claims',
     description: 'Financial approval thresholds for out-of-warranty customer goodwill concessions.',
     fields: [
       { key: 'authorityTier', label: 'Approving Authority', type: 'select', options: ['Works Manager (WM)', 'Area Service Manager (ASM - TML)', 'Regional Customer Care Head (RCCH)', 'DGM Service Central'] },
@@ -1262,7 +1289,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Inventory Picking',
     logicalGroup: 'Parts, Claims & Support',
     moduleCode: 'spd',
-    moduleName: 'SPD (Spare Parts Dispatch)',
+    moduleName: 'SPD',
     description: 'Prioritizes store counter picking slips by vehicle state: VOR (Vehicle Off Road), Warranty, Running Repair.',
     fields: [
       { key: 'priorityCode', label: 'Priority Code', type: 'text', mandatory: true },
@@ -1285,7 +1312,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Stockout Categories',
     logicalGroup: 'Parts, Claims & Support',
     moduleCode: 'spd',
-    moduleName: 'SPD (Spare Parts Dispatch)',
+    moduleName: 'SPD',
     description: 'Stockroom delay categorization for auto-generating SAP parts backorders and customer notifications.',
     fields: [
       { key: 'delayCode', label: 'Delay Code', type: 'text', mandatory: true },
@@ -1307,7 +1334,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Engineering Escalations',
     logicalGroup: 'Parts, Claims & Support',
     moduleCode: 'thd',
-    moduleName: 'THD (Technical Help Desk)',
+    moduleName: 'THD',
     description: 'Field technical issue tickets to Tata Motors plant engineering, crash diagnostics, and high-voltage defects.',
     fields: [
       { key: 'categoryCode', label: 'Escalation Category', type: 'text', mandatory: true },
@@ -1330,7 +1357,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Plant Bulletins',
     logicalGroup: 'Parts, Claims & Support',
     moduleCode: 'thd',
-    moduleName: 'THD (Technical Help Desk)',
+    moduleName: 'THD',
     description: 'Tata Motors factory service technical bulletins, software flash versions, and campaign advisories.',
     fields: [
       { key: 'tibNumber', label: 'TIB Bulletin Reference', type: 'text', mandatory: true },
@@ -1352,7 +1379,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Transit Chauffeurs',
     logicalGroup: 'Parts, Claims & Support',
     moduleCode: 'reception',
-    moduleName: 'P&D and Reception',
+    moduleName: 'Pickup & Drop - Admin / Driver App',
     description: 'Driver certifications, assigned zone geofences, and vehicle transit speed monitoring.',
     fields: [
       { key: 'driverCode', label: 'Driver Code', type: 'text', mandatory: true },
@@ -1374,8 +1401,8 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     owner: 'TML_ADMIN',
     category: 'Customer Welcome',
     logicalGroup: 'Parts, Claims & Support',
-    moduleCode: 'reception',
-    moduleName: 'P&D and Reception',
+    moduleCode: 'receptionist',
+    moduleName: 'Receptionist',
     description: 'Standard OEM lounge customer greeting and advisor electronic tablet handover checklist.',
     fields: [
       { key: 'checkpointCode', label: 'Checkpoint Code', type: 'text', mandatory: true },
@@ -1397,7 +1424,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Perimeter Security',
     logicalGroup: 'Parts, Claims & Support',
     moduleCode: 'security',
-    moduleName: 'Security & Gate Operations',
+    moduleName: 'Security Guard',
     description: 'Mandatory perimeter verification rules for automatic ANPR barrier opening and vehicle passes.',
     fields: [
       { key: 'ruleId', label: 'Gate Rule Code', type: 'text', mandatory: true },
@@ -1420,7 +1447,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     category: 'Perimeter Security',
     logicalGroup: 'Parts, Claims & Support',
     moduleCode: 'security',
-    moduleName: 'Security & Gate Operations',
+    moduleName: 'Security Guard',
     description: 'Security gate vehicle hold classifications and escalation protocol for police or insurance hold.',
     fields: [
       { key: 'denialCode', label: 'Denial Code', type: 'text', mandatory: true },
