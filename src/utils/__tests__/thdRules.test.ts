@@ -3,6 +3,7 @@ import { MASTER_COLLECTIONS } from '../../data/masterCatalogue';
 import {
   THD_MASTER_IDS,
   criticalComplaint,
+  criticalWithoutPpl,
   dropdownValues,
   evaluateAutoThd,
   findThdConflict,
@@ -19,6 +20,7 @@ const all = () => Object.fromEntries(Object.values(THD_MASTER_IDS).map((id) => [
 const triggers = rows(THD_MASTER_IDS.triggers);
 const critical = rows(THD_MASTER_IDS.critical);
 const fired = (e: Parameters<typeof evaluateAutoThd>[2]) => evaluateAutoThd(triggers, critical, e).fired.map((f) => f.rule.ruleNo);
+const nexonE32 = [{ id: 'C1', ppl: 'Nexon', complaintCode: 'E32', aggregate: 'Electricals', critical: 'Y', status: 'Active' }];
 
 describe('THD masters match the BA workbook "THD Masters List"', () => {
   it.each([
@@ -47,7 +49,9 @@ describe('THD masters match the BA workbook "THD Masters List"', () => {
   });
 
   it('has the critical complaint, the filter ranges and one user per BA user sheet', () => {
-    expect(criticalComplaint(critical, { ppl: 'Altroz', complaintCode: 'e32' })?.aggregate).toBe('Electricals');
+    // The BA sheet has no PPL yet: E32 is kept but cannot raise a case until its PPL is mapped from the CRM master
+    expect(criticalWithoutPpl(critical).map((c) => c.complaintCode)).toEqual(['E32']);
+    expect(criticalComplaint(critical, { ppl: 'Altroz', complaintCode: 'E32' })).toBeNull();
     expect(rangesContaining(rows(THD_MASTER_IDS.kmsRange), 5000, 'fromKm', 'toKm')).toEqual(['1,001 - 10,000']);
     expect(rangesContaining(rows(THD_MASTER_IDS.vehicleAge), 1, 'fromYears', 'toYears')).toEqual(['0 - 1', '0 - 5']);
     expect(rows(THD_MASTER_IDS.users).map((u) => u.role)).toEqual(['Tech Executive L1', 'RTSM', 'COC L2', 'Plant', 'Product Reliability']);
@@ -66,12 +70,17 @@ describe('THD masters match the BA workbook "THD Masters List"', () => {
 });
 
 describe('auto-THD triggers', () => {
-  it('raises rule 2 for a critical complaint at JC creation', () => {
-    expect(fired({ ppl: 'Nexon', complaintCodes: ['E32'] })).toEqual([2]);
-    expect(fired({ ppl: 'Nexon', complaintCodes: ['X99'] })).toEqual([]);
+  it('raises rule 2 for a critical complaint of the vehicle PPL at JC creation', () => {
+    const run = (ppl: string, code: string) => evaluateAutoThd(triggers, nexonE32, { ppl, complaintCodes: [code] }).fired.map((f) => f.rule.ruleNo);
+    expect(run('Nexon', 'e32')).toEqual([2]);
+    expect(run('Nexon', 'X99')).toEqual([]);
   });
 
-  it('a PPL-specific critical row only applies to that PPL', () => {
+  it('a critical complaint without a PPL never raises a case', () => {
+    expect(fired({ ppl: 'Nexon', complaintCodes: ['E32'] })).toEqual([]);
+  });
+
+  it('a critical row only applies to its PPL', () => {
     const rows = [{ id: 'C1', ppl: 'Harrier', complaintCode: 'H1', aggregate: 'Brakes', critical: 'Y', status: 'Active' }];
     expect(evaluateAutoThd(triggers, rows, { ppl: 'Harrier', complaintCodes: ['H1'] }).fired).toHaveLength(1);
     expect(evaluateAutoThd(triggers, rows, { ppl: 'Nexon', complaintCodes: ['H1'] }).fired).toHaveLength(0);
@@ -85,7 +94,7 @@ describe('auto-THD triggers', () => {
   });
 
   it('rules 3 and 4 are reported as pending until business gives X and Y', () => {
-    const later = evaluateAutoThd(triggers, critical, { ppl: 'Nexon', complaintCodes: ['E32'], hoursSinceCriticalAddedLater: 5 });
+    const later = evaluateAutoThd(triggers, nexonE32, { ppl: 'Nexon', complaintCodes: ['E32'], hoursSinceCriticalAddedLater: 5 });
     expect(later.fired).toEqual([]);
     expect(later.pending.map((p) => p.rule.ruleNo)).toEqual([3]);
     const delay = evaluateAutoThd(triggers, critical, { ppl: 'Nexon', complaintCodes: [], jobCardOpenHours: 50, delayReason: 'under investigation' });

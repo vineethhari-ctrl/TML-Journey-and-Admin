@@ -2,7 +2,8 @@
  * THD (Technical Help Desk) rules — pure functions over the THD master records.
  *
  *  - Only rows with Status = Active are used.
- *  - Blank PPL on a critical complaint = every PPL.
+ *  - A critical complaint applies to its PPL only (BA: mapped per PPL as in the CRM master). A row without a PPL
+ *    never raises a case; it is reported as pending until its PPL is mapped.
  *  - An auto-trigger rule whose Time Window is blank (X / Y still pending from business) never fires;
  *    it is reported as pending instead.
  */
@@ -38,11 +39,17 @@ export const dropdownValues = (rows: Rec[], key = 'value'): string[] => rows.fil
 export const subStatusesFor = (rows: Rec[], progress: string): string[] =>
   dropdownValues(rows.filter((r) => norm(r.progress) === norm(progress)), 'subStatus');
 
-/** The active critical-complaint row for a code and PPL (a PPL-specific row wins), or null. */
+/** The active critical-complaint row for this PPL + code, or null. */
 export function criticalComplaint(rows: Rec[], q: { ppl: string; complaintCode: string }): Rec | null {
-  const hits = rows.filter((r) => isActive(r) && norm(r.critical) === 'y' && norm(r.complaintCode) === norm(q.complaintCode));
-  return hits.find((r) => !blank(r.ppl) && norm(r.ppl) === norm(q.ppl)) ?? hits.find((r) => blank(r.ppl)) ?? null;
+  return (
+    rows.find(
+      (r) => isActive(r) && norm(r.critical) === 'y' && !blank(r.ppl) && norm(r.ppl) === norm(q.ppl) && norm(r.complaintCode) === norm(q.complaintCode),
+    ) ?? null
+  );
 }
+
+/** Active critical complaints that cannot fire yet because no PPL is mapped. */
+export const criticalWithoutPpl = (rows: Rec[]): Rec[] => rows.filter((r) => isActive(r) && norm(r.critical) === 'y' && blank(r.ppl));
 
 /** Labels of the active filter ranges that contain `value` (e.g. km or vehicle age). */
 export const rangesContaining = (rows: Rec[], value: number, from: string, to: string): string[] =>

@@ -31,12 +31,13 @@ The older demo masters in the THD card (*DTC Fault Code Alert & Telematics*, *TH
 
 ## How the system uses them
 
-1. **Auto-THD** — when a job card is created or updated, the rules engine checks every active rule in *THD Auto-Trigger Rules*:
+1. **Auto-THD** — when a job card is created or updated, the rules engine checks every active rule in *THD Auto-Trigger Rules*
+   (critical complaints match on **PPL + Complaint Code**):
 
    | Rule | Raises a case when | Window | Assigned to |
    | --- | --- | --- | --- |
    | 1 Repeat Complaint | vehicle returns within the window and a complaint has the same Aggregate as the previous job card | 30 days | DET |
-   | 2 Critical | a complaint in the *Critical Complaints* master (for the PPL or all PPLs) is in the job card at creation | — | DET |
+   | 2 Critical | a complaint in the *Critical Complaints* master for the vehicle's PPL is in the job card at creation | — | DET |
    | 3 Critical (added later) | a critical complaint is added after creation and **X** hours have passed | **X pending** | DET |
    | 4 Delayed | job card open longer than **Y** hours with delay reason *Delayed Diagnosis* or *Under Investigation* | **Y pending** | DET |
    | 5 Quality Inspection | the Quality Inspector marks *THD Required* | — | DET |
@@ -53,17 +54,15 @@ Checks on save and on Excel import: duplicate values, To ≥ From, Plant Name fo
 and rule 4 needs its delay reasons. The health check also finds sub-statuses whose Progress no longer exists, and a rule
 assigned to Tech Executive L1 when no such user is active.
 
-## Questions for the BA
+## BA answers (5 Oct 2026) and what is still open
 
-1. **X (rule 3) and Y (rule 4)** — the hours are still pending (*Master Required* rows 8–9).
-2. **Critical Complaints by PPL** — *Conditions 4* says "PPL-CC list", but the sheet has no PPL column. An optional PPL
-   column was added (blank = all PPLs). Should critical complaints be per PPL?
-3. **Vehicle Age 0–1 and 0–5 overlap.** Fine for a search filter, but if these are buckets the second should be 1–5.
-4. **Kms Range stops at 10,000 km.** Vehicles above that have no range. Add more ranges?
-5. **Trigger points** — rule 4 says the job card *remains Open* but its Trigger Point is *Job Card Closure*. Rule 5 (Quality
-   Inspection) has Trigger Point *Job Card Creation*. Please confirm.
-6. **Rule 8 Assigned To** says "Tech Executive/CC". It is set up as Tech Executive L1. What is "CC"?
-7. **Rule 4 delay reasons** (*Delayed Diagnosis*, *Under Investigation*) are job card delay reasons, not values of the THD
-   *Reason for Delay* list. Which master holds the job card delay reasons?
-8. **Not in the workbook yet**: the DET performance formula, and the graph parameters marked *Received* in *Master Required*
-   (Current Status, Reason for Delay, Performance, Individual Performance, User-wise Status).
+| # | Question | BA answer | Status |
+| --- | --- | --- | --- |
+| 1 | X (rule 3) and Y (rule 4) hours | Asked business to share | **Pending** — rules 3 and 4 cannot fire until filled |
+| 2 | Critical Complaints by PPL? | Map complaint codes per PPL, as in the CRM complaint master | **Done** — a critical complaint applies to its PPL only. E32 has no PPL in the sheet, so it is listed as pending until mapped |
+| 3 | Vehicle Age 0–1 and 0–5 overlap | Ranges are as business wants; more will be shared | **Kept as is** — overlapping ranges are allowed |
+| 4 | Kms Range stops at 10,000 km | Will be set as per business | **Pending** from business |
+| 5 | Trigger points of rules 4 and 5 | BA will investigate and confirm | **Open** |
+| 6 | "Tech Executive/CC" in rule 8 | CC = Command Centre; consider Tech Executive L1 only | **Done** — rule 8 assigns to Tech Executive L1 |
+| 7 | Which master holds the job card delay reasons of rule 4? | — | **Open** (not answered) |
+| 8 | Performance formula and graph parameters | Graph parameters received separately and used directly in the graphs; *Master Required* is the BA's tracker | Graphs are not masters. The DET performance formula is still **pending** (*Master Required* row 7) |

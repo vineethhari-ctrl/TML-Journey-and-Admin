@@ -8,10 +8,10 @@ test('THD masters: rule tester raises cases from the BA rules and cascades progr
   const tester = page.getByTestId('thd-rule-tester');
   await expect(tester).toBeVisible();
   await expect(tester.getByTestId('thd-health')).toHaveText('Configuration OK');
-  await expect(tester.getByTestId('thd-pending')).toHaveText('2 value(s) pending from business');
-
-  // Default: critical complaint E32 at job card creation → rule 2
-  await expect(tester.getByTestId('thd-fired')).toContainText('Rule 2');
+  // X, Y and the PPL of critical complaint E32 are pending from business
+  await expect(tester.getByTestId('thd-pending')).toHaveText('3 item(s) pending from business');
+  await expect(tester).toContainText('E32 is in the Critical Complaints master but has no PPL yet');
+  await expect(tester.getByTestId('thd-fired')).toContainText('No THD case is raised.');
 
   // Unattended for more than 24 h → rule 8 goes to Tech Executive L1
   await tester.getByLabel('THD unattended for (hours)').fill('25');
