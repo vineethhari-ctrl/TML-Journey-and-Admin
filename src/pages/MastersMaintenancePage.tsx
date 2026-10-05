@@ -291,9 +291,16 @@ export const MastersMaintenancePage: React.FC = () => {
     }
   }, [currentRoute]);
 
+  /** Point both views at a master; masters outside the 12 app modules are shown by domain. */
+  const focusMasterScope = (m: MasterConfig) => {
+    setActiveLogicalGroup(m.logicalGroup);
+    if (WORKSHOP_MODULES.some((mod) => mod.code === m.moduleCode)) setActiveModuleCode(m.moduleCode);
+    else setAlignmentMode('by_domain');
+  };
+
   const openMasterInWorkspace = (m: MasterConfig) => {
     setActiveMainTab('catalogues');
-    setActiveLogicalGroup(m.logicalGroup);
+    focusMasterScope(m);
     setSelectedMasterId(m.id);
     setActiveLayout('workspace');
     setSearchQuery('');
@@ -1399,9 +1406,7 @@ export const MastersMaintenancePage: React.FC = () => {
               setSelectedMasterId(mId);
               setActiveLayout('workspace');
               const targetMaster = masterConfigs.find((m) => m.id === mId);
-              if (targetMaster) {
-                setActiveLogicalGroup(targetMaster.logicalGroup);
-              }
+              if (targetMaster) focusMasterScope(targetMaster);
               showToast(`Jumped to master: ${mId}`, 'info');
             }}
           />

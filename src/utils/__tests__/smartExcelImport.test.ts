@@ -123,3 +123,16 @@ describe('Smart Excel Template (public/downloads)', () => {
     }
   });
 });
+
+describe('guessPlacement uses the 12 app modules', () => {
+  it.each([
+    ['Lounge Receptionist.xlsx', 'receptionist'],
+    ['Driver Roster.xlsx', 'reception'],
+    ['Bay Setup.xlsx', 'jc_tracking'],
+    ['Holiday List.xlsx', 'appointment'],
+    ['Dealer Details.xlsx', 'customer_journey'],
+    ['DTC Telematics.xlsx', 'thd'],
+  ])('%s → %s', (file, code) => {
+    expect(guessPlacement(file, 'Sheet1').moduleCode).toBe(code);
+  });
+});
