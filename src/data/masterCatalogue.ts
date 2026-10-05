@@ -1,4 +1,5 @@
 import { buildThdMasters } from './thdMasters';
+import { buildClaimMasters } from './claimMasters';
 
 export type DealerTargetModule =
   | 'vehicle_journey'
@@ -1284,6 +1285,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
       { id: 'GW-04', authorityTier: 'DGM Service Central', maxLaborConcession: 100, maxPartsConcession: 100, maxAmountInr: 300000, active: 'Y' },
     ],
   },
+  ...buildClaimMasters(),
   {
     id: 'spd_issuance_priority',
     name: 'Spare Parts Requisition & Issuance Priority',
