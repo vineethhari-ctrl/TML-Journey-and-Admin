@@ -1,3 +1,5 @@
+import { buildThdMasters } from './thdMasters';
+
 export type DealerTargetModule =
   | 'vehicle_journey'
   | 'job_card'
@@ -1372,6 +1374,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
       { id: 'TIB-03', tibNumber: 'TIB-2026-PV-134', title: 'Steering Column Earth Strap Resistance Check', affectedPpl: 'Altroz', reworkType: 'Torque Audit', active: 'Y' },
     ],
   },
+  ...buildThdMasters(EQC_PPLS),
   {
     id: 'driver_transit_roster',
     name: 'Chauffeur & Pick-and-Drop Transit Roster',

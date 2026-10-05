@@ -46,7 +46,15 @@ Inventory Capture (Sections + Checkpoints) and Insurance Document Collection, tr
 [`docs/BODYSHOP_MASTERS.md`](docs/BODYSHOP_MASTERS.md). Rules: `src/utils/bodyshopRules.ts`; cross-field rules for all
 masters are registered in `src/utils/recordRules.ts`.
 
-**Note for AI Studio / other tools:** never delete `package-lock.json` — CI (`npm ci`) and the Pages deploy fail without it.
+## THD masters
+
+13 masters from the BA workbooks *THD Masters List* and *Conditions 4*: the auto-THD trigger rules, critical complaints,
+closure dropdowns, Progress → Sub-Status, search filters and assignment users. They come with a **THD Rule Tester** and a
+list of questions for the BA — see [`docs/THD_MASTERS.md`](docs/THD_MASTERS.md). Data: `src/data/thdMasters.ts`;
+rules: `src/utils/thdRules.ts`.
+
+**Note for AI Studio / other tools:** never delete or regenerate `package-lock.json` — CI (`npm ci`) and the Pages deploy
+depend on it.
 
 ## Smart Excel Import (BA's own Excel → masters)
 
