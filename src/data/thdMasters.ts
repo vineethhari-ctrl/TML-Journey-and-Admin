@@ -85,7 +85,7 @@ export function buildThdMasters(ppls: string[]): MasterConfig[] {
         { id: 'THDR-05', ruleNo: 5, scenarioCode: 'QI_THD_REQUIRED', businessCondition: 'Quality Inspector marks "THD Required" in Pre-Quality Inspection while the Job Card is Open.', triggerPoint: 'Job Card Creation', windowValue: null, windowUnit: '', triggerValues: '', escalationComplaint: 'No', thdTag: 'Quality Inspection', assignedTo: 'DET', status: 'Active' },
         { id: 'THDR-06', ruleNo: 6, scenarioCode: 'OPEN_ESCALATION', businessCondition: 'An open escalated complaint exists against the chassis at Job Card creation.', triggerPoint: 'Job Card Creation', windowValue: null, windowUnit: '', triggerValues: '', escalationComplaint: 'Yes', thdTag: 'Escalated', assignedTo: 'DET', status: 'Active' },
         { id: 'THDR-07', ruleNo: 7, scenarioCode: 'CRITICAL_DTC', businessCondition: 'A critical DTC is received from the Connected Cloud platform for the vehicle.', triggerPoint: 'Job Card Creation', windowValue: null, windowUnit: '', triggerValues: '', escalationComplaint: 'NA', thdTag: 'DTC', assignedTo: 'DET', status: 'Active' },
-        { id: 'THDR-08', ruleNo: 8, scenarioCode: 'THD_UNATTENDED', businessCondition: 'A THD case stays unattended by DET for more than 24 hours from creation; an auto request goes to Tech Executive L1.', triggerPoint: 'THD Age', windowValue: 24, windowUnit: 'Hours', triggerValues: '', escalationComplaint: 'Yes/No', thdTag: 'Any tag', assignedTo: 'Tech Executive L1', status: 'Active' },
+        { id: 'THDR-08', ruleNo: 8, scenarioCode: 'THD_UNATTENDED', businessCondition: 'A THD case stays unattended by DET for more than 24 hours from creation; an auto request goes to Tech Executive L1 (Excel "Tech Executive/CC"; CC = Command Centre, handled as Tech Executive L1).', triggerPoint: 'THD Age', windowValue: 24, windowUnit: 'Hours', triggerValues: '', escalationComplaint: 'Yes/No', thdTag: 'Any tag', assignedTo: 'Tech Executive L1', status: 'Active' },
       ],
     },
     {
@@ -93,9 +93,10 @@ export function buildThdMasters(ppls: string[]): MasterConfig[] {
       id: 'thd_critical_complaints',
       name: 'THD Critical Complaints Master',
       category: 'THD Rules',
-      description: 'Complaint codes that automatically raise a THD case when added to a Job Card. Blank PPL = every PPL.',
+      description:
+        'Complaint codes that automatically raise a THD case when added to a Job Card, mapped per PPL as in the CRM complaint master. A row without a PPL does not raise a case until its PPL is filled.',
       fields: [
-        { key: 'ppl', label: 'PPL', type: 'select', options: ppls, defaultValue: '', blankLabel: '(All PPLs)', description: 'Leave blank to apply to all PPLs.' },
+        { key: 'ppl', label: 'PPL', type: 'select', options: ppls, defaultValue: '', description: 'One row per PPL + Complaint Code, as in the CRM complaint master. Needed to raise a case; a row without a PPL is listed as pending.' },
         { key: 'complaintCode', label: 'Complaint Code', type: 'text', mandatory: true },
         { key: 'complaintDescription', label: 'Complaint Description', type: 'text', mandatory: true },
         { key: 'aggregate', label: 'Aggregate', type: 'text', mandatory: true },

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock, FlaskConical, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { EQC_PPLS } from '../../data/masterCatalogue';
-import { THD_MASTER_IDS, dropdownValues, evaluateAutoThd, pendingTriggerRules, subStatusesFor, thdHealthCheck } from '../../utils/thdRules';
+import { THD_MASTER_IDS, criticalComplaint, criticalWithoutPpl, dropdownValues, evaluateAutoThd, pendingTriggerRules, subStatusesFor, thdHealthCheck } from '../../utils/thdRules';
 
 const input = 'w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs focus:border-orange-500 focus:outline-hidden';
 const num = (v: string) => (v.trim() === '' ? undefined : Number(v));
@@ -37,8 +37,10 @@ export const ThdRuleTester: React.FC = () => {
   const [progress, setProgress] = useState('');
 
   const triggers = rows[THD_MASTER_IDS.triggers];
-  const critical = rows[THD_MASTER_IDS.critical].find((r) => String(r.complaintCode).toLowerCase() === code.trim().toLowerCase());
-  const aggregate = critical?.aggregate ? [String(critical.aggregate)] : [];
+  const critical = criticalComplaint(rows[THD_MASTER_IDS.critical], { ppl, complaintCode: code.trim() });
+  const listed = rows[THD_MASTER_IDS.critical].filter((r) => String(r.complaintCode).toLowerCase() === code.trim().toLowerCase());
+  const known = critical ?? listed[0];
+  const aggregate = known?.aggregate ? [String(known.aggregate)] : [];
   const result = evaluateAutoThd(triggers, rows[THD_MASTER_IDS.critical], {
     ppl,
     complaintCodes: code.trim() ? [code.trim()] : [],
@@ -53,6 +55,8 @@ export const ThdRuleTester: React.FC = () => {
     thdUnattendedHours: num(unattended),
   });
   const pendingRules = pendingTriggerRules(triggers);
+  const unmapped = criticalWithoutPpl(rows[THD_MASTER_IDS.critical]);
+  const pendingCount = pendingRules.length + unmapped.length;
   const issues = thdHealthCheck(rows);
   const delayReasons = [...new Set(triggers.flatMap((t) => String(t.triggerValues ?? '').split(',').map((s) => s.trim()).filter(Boolean)))];
   const progressValues = dropdownValues(rows[THD_MASTER_IDS.progress]);
@@ -73,9 +77,9 @@ export const ThdRuleTester: React.FC = () => {
           <span className="text-[11px] text-slate-500 hidden sm:inline">Try a job card and see which THD cases are raised — uses the masters as they are now.</span>
         </span>
         <span className="flex items-center gap-2">
-          {pendingRules.length > 0 && (
+          {pendingCount > 0 && (
             <span data-testid="thd-pending" className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-900">
-              {pendingRules.length} value(s) pending from business
+              {pendingCount} item(s) pending from business
             </span>
           )}
           <span data-testid="thd-health" className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${issues.length ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-800'}`}>
@@ -126,7 +130,13 @@ export const ThdRuleTester: React.FC = () => {
                 ))}
               </div>
               <div className="text-[11px] text-slate-500">
-                {critical ? `${critical.complaintCode} is a critical complaint (${critical.aggregate}).` : `${code || 'This code'} is not in the Critical Complaints master.`}
+                {critical
+                  ? `${critical.complaintCode} is a critical complaint for ${critical.ppl} (${critical.aggregate}).`
+                  : listed.some((r) => r.ppl)
+                    ? `${code} is a critical complaint for ${listed.filter((r) => r.ppl).map((r) => r.ppl).join(', ')} — not for ${ppl}.`
+                    : listed.length
+                      ? `${code} is in the Critical Complaints master but has no PPL yet — it raises a THD only after its PPL is mapped.`
+                    : `${code || 'This code'} is not in the Critical Complaints master.`}
               </div>
 
               <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 pt-1">2 · THD cases raised</div>
@@ -174,11 +184,16 @@ export const ThdRuleTester: React.FC = () => {
             </div>
           </div>
 
-          {(pendingRules.length > 0 || issues.length > 0) && (
+          {(pendingCount > 0 || issues.length > 0) && (
             <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-1">
               {pendingRules.map((r) => (
                 <div key={r.id} className="flex items-start gap-1.5 text-sky-900">
                   <Clock className="h-3.5 w-3.5 mt-0.5 shrink-0" /> Rule {r.ruleNo} ({r.thdTag}): Time Window not given yet — ask business for the value.
+                </div>
+              ))}
+              {unmapped.map((r) => (
+                <div key={r.id} className="flex items-start gap-1.5 text-sky-900">
+                  <Clock className="h-3.5 w-3.5 mt-0.5 shrink-0" /> Critical complaint {r.complaintCode} has no PPL yet — map it from the CRM complaint master.
                 </div>
               ))}
               {issues.map((i) => (
