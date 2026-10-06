@@ -59,8 +59,7 @@ const SUB_STATUS: Array<[string, string[]]> = [
 
 /** Lists transcribed from the BA workbooks (THD Masters List, Claims Masters List) plus shared lists. */
 export const LOV_DEFINITIONS: LovDefinition[] = [
-  { code: 'COMMON_BU', module: 'COMMON', fieldName: 'BU', usedIn: 'Every single-BU field of every module', values: ['PV', 'EV', 'CV'] },
-  { code: 'COMMON_BU_SCOPE', module: 'COMMON', fieldName: 'Applicable BU', usedIn: 'Every "applies to BU" field that allows PV + EV', values: ['PV + EV', 'PV', 'EV', 'CV'] },
+  { code: 'COMMON_BU', module: 'COMMON', fieldName: 'BU', usedIn: 'Every BU field of every module (PV and EV are separate values; a row for both BUs is entered once per BU)', values: ['PV', 'EV', 'CV'] },
   {
     code: 'THD_PROGRESS',
     module: 'THD',
