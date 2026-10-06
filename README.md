@@ -32,6 +32,12 @@ Allocation-driven bay governance with approvals (TML Network Manager / TML Admin
 policy switches — see [`docs/BAY_MANAGEMENT.md`](docs/BAY_MANAGEMENT.md). Rules: `src/utils/bayGovernance.ts` (pure, unit-tested);
 state: `src/context/BayContext.tsx`; UI: `BayManagementConsole.tsx`, `pages/BayApprovalsPage.tsx`.
 
+## No AI at runtime
+
+The portal runs entirely in the browser with plain, tested code: Excel reading (SheetJS), validation, duplicate checks and
+rules are ordinary functions. There are **no AI / LLM calls**, no API keys and no server calls when a user uploads an
+Excel file; AI was used only to write the code, not when it runs.
+
 ## Upload a Master (business users)
 
 Drop any Excel on **Administration → Upload a Master**: an existing master's own template is imported (any column
