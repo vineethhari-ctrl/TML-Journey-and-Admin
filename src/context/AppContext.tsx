@@ -464,6 +464,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (route === '/admin/workshop-policy') {
         return false;
       }
+      // Fleet Register: admins view it; uploading needs the fleet-upload privilege (checked on the page)
+      if (route === '/admin/fleet') {
+        return ['superAdmin', 'dealerAdmin', 'dgm'].includes(activeRoleId);
+      }
       if (route === '/admin/audit') {
         return ['superAdmin', 'dgm'].includes(activeRoleId);
       }

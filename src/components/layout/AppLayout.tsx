@@ -46,6 +46,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         { label: 'Bay Approvals', path: '/admin/bay-approvals' },
       ];
     }
+    if (path === '/admin/fleet') {
+      return [
+        { label: 'Administration', path: '/admin/users' },
+        { label: 'Fleet Register', path: '/admin/fleet' },
+      ];
+    }
     if (path === '/admin/masters-guide') {
       return [
         { label: 'Administration', path: '/admin/masters' },

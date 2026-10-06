@@ -1,6 +1,8 @@
 import { ServiceCase, JourneyStage, ModuleType } from '../types';
+import { LINKED_ID_RE } from '../utils/jcIdChain';
 
-export type JourneySearchBy = 'auto' | 'registration' | 'vin' | 'jc' | 'phone' | 'name';
+/** 'linked' = any ID in the chain under a JC (Appointment, Visit, SR, Pre-JC, MR). */
+export type JourneySearchBy = 'auto' | 'registration' | 'vin' | 'jc' | 'phone' | 'name' | 'linked';
 
 export interface JourneySearchFilters {
   query?: string;
@@ -15,6 +17,8 @@ export interface JourneySearchFilters {
   dateTo?: string;
   inWorkshopOnly?: boolean;
   hasPendingActionsOnly?: boolean;
+  /** IDs under each JC (from the ID chain), so an Appointment / SR / MR number finds its JC. */
+  linkedIdsByJc?: Record<string, string[]>;
 }
 
 /**
@@ -26,6 +30,7 @@ export function detectSearchType(raw: string): JourneySearchBy {
   const q = raw.trim().toUpperCase().replace(/\s+/g, '');
   if (!q) return 'auto';
   if (/^JC\d{4,}$/.test(q)) return 'jc';
+  if (LINKED_ID_RE.test(q)) return 'linked';
   if (/^[A-HJ-NPR-Z0-9]{17}$/.test(q) && /\d/.test(q) && /[A-Z]/.test(q)) return 'vin';
   if (/^\+?[\d-]{7,}$/.test(q)) return 'phone';
   if (/^[A-Z]{2}\d{1,2}[A-Z]{0,3}\d{0,4}$/.test(q)) return 'registration';
@@ -47,6 +52,7 @@ export const journeyService = {
           jc: normalize(c.jcNumber).includes(q),
           phone: normalize(c.customerMobile).includes(q),
           name: normalize(c.customerName).includes(q),
+          linked: (filters.linkedIdsByJc?.[c.jcNumber] ?? []).some((id) => normalize(id).includes(q)),
         };
         const ok = searchBy === 'auto' ? Object.values(matches).some(Boolean) : matches[searchBy];
         if (!ok) return false;

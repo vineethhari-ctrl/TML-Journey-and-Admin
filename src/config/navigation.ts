@@ -22,6 +22,7 @@ export const NAV_PAGES: NavPage[] = [
   { route: '/admin/masters?open=eqc', label: 'EQC Masters (Electronic Quality Check)', group: 'Administration', keywords: 'eqc quality check guided gc road test ptd risk did threshold checklist schedule' },
   { route: '/admin/masters?open=bodyshop', label: 'Bodyshop Masters', group: 'Administration', keywords: 'bodyshop inventory capture checkpoint section insurance document facility tools technician paint denting' },
   { route: '/admin/workshop-policy', label: 'Default Views (tabs, cards, fields per role)', group: 'Administration', keywords: 'default views tabs columns fields cards worklist role landing visible personalise preference policy' },
+  { route: '/admin/fleet', label: 'Fleet Register (Fleet / Individual flag)', group: 'Administration', keywords: 'fleet individual chassis vin upload flag badge customer type corporate account' },
   { route: '/admin/audit?module=DPDP', label: 'DPDP Access Log', group: 'Administration', keywords: 'dpdp privacy pii unmask reveal who saw customer data phone audit' },
   { route: '/admin/users', label: 'Employee / Users', group: 'Administration', keywords: 'user employee staff create' },
   { route: '/admin/roles', label: 'Roles & Access', group: 'Administration', keywords: 'permission rbac matrix' },
