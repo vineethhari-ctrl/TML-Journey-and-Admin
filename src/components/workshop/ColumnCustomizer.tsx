@@ -23,16 +23,17 @@ export const ColumnCustomizer: React.FC<{ prefs: ColumnPrefs }> = ({ prefs }) =>
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        aria-label="Choose columns"
-        title="Choose columns"
-        className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-xs hover:bg-slate-50 cursor-pointer"
+        aria-label="Columns displayed"
+        title="Columns displayed: choose the fields shown in this list"
+        className="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] font-semibold text-slate-700 shadow-xs hover:bg-slate-50 cursor-pointer"
       >
         <SlidersHorizontal className="h-4 w-4" />
+        <span className="hidden sm:inline">Columns displayed</span>
       </button>
       {open && (
-        <div role="dialog" aria-label="Choose columns" className="absolute right-0 z-40 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl" data-testid="column-customizer">
+        <div role="dialog" aria-label="Columns displayed" className="absolute right-0 z-40 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl" data-testid="column-customizer">
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-bold text-slate-900">Columns</span>
+            <span className="font-bold text-slate-900">Columns displayed</span>
             <button type="button" onClick={prefs.reset} className="flex items-center gap-1 rounded-md px-2 py-1 text-blue-700 hover:bg-blue-50 cursor-pointer">
               <RotateCcw className="h-3.5 w-3.5" /> Reset to Default
             </button>

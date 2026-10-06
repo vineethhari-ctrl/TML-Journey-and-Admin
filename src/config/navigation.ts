@@ -7,7 +7,8 @@ export interface NavPage {
 }
 
 export const NAV_PAGES: NavPage[] = [
-  { route: '/dashboard', label: 'Dashboard', group: 'Overview', keywords: 'home kpi overview metrics' },
+  { route: '/home', label: 'Home (module cards)', group: 'Overview', keywords: 'home landing cards modules personalise start' },
+  { route: '/dashboard', label: 'Dashboard', group: 'Overview', keywords: 'kpi overview metrics' },
   { route: '/journey', label: 'Journey Search', group: 'TML Journey', keywords: 'vehicle jc vin search track' },
   { route: '/journey/JC20260930001234', label: 'Vehicle Journey (Demo EV)', group: 'TML Journey', keywords: 'timeline demo mh01ab1234' },
   { route: '/journey?filter=delayed', label: 'Delayed Journeys', group: 'TML Journey', keywords: 'sla breach late' },

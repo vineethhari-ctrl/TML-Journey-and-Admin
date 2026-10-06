@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Lock, RotateCcw, Save, Star } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { DEFAULT_COLUMNS, GRID_COLUMNS, RoleWorkshopPolicy, WORKSHOP_TABS, policyForRole, useWorkshopPolicy } from '../data/workshopPolicy';
+import { DEFAULT_COLUMNS, GRID_COLUMNS, LANDING_CARDS, RoleWorkshopPolicy, WORKSHOP_TABS, policyForRole, useWorkshopPolicy } from '../data/workshopPolicy';
+import { usePersonalisationSettings } from '../utils/personalisationSettings';
 import { moveItem, normalizeColumnPreference, normalizeTabPreference, setColumnVisible, MIN_VISIBLE_TABS } from '../utils/viewPreferences';
 
 const ROLES: Array<[string, string]> = [
@@ -21,7 +22,9 @@ const GRID_LABEL: Record<string, string> = { gate_in: "Today's Total Gate-In", m
 function tidy(p: RoleWorkshopPolicy): RoleWorkshopPolicy {
   const allowed = WORKSHOP_TABS.map((t) => t.id).filter((id) => p.allowedTabs.includes(id));
   const tabs = normalizeTabPreference({ ...p.tabs, hiddenTabs: p.tabs.hiddenTabs.filter((h) => allowed.includes(h)) }, allowed, p.tabs);
-  return { ...p, allowedTabs: allowed, tabs };
+  const cardsAllowed = LANDING_CARDS.map((c) => c.id).filter((id) => p.cards!.allowed.includes(id));
+  const layout = normalizeTabPreference({ ...p.cards!.layout, hiddenTabs: p.cards!.layout.hiddenTabs.filter((h) => cardsAllowed.includes(h)) }, cardsAllowed, p.cards!.layout);
+  return { ...p, allowedTabs: allowed, tabs, cards: { allowed: cardsAllowed, layout } };
 }
 
 /**
@@ -62,6 +65,24 @@ export const WorkshopPolicyPage: React.FC = () => {
     if (next) setDraft({ ...draft, columns: { ...draft.columns, [grid]: next } });
   };
 
+  const cards = draft.cards!;
+  const cardLabel = (id: string) => LANDING_CARDS.find((c) => c.id === id)?.label ?? id;
+  const visibleCards = cards.layout.tabOrder.filter((c) => !cards.layout.hiddenTabs.includes(c)).length;
+  const setCards = (next: Partial<typeof cards>) => update({ ...draft, cards: { ...cards, ...next } });
+  const toggleCardAllowed = (id: string, on: boolean) => {
+    const allowed = on ? [...cards.allowed, id] : cards.allowed.filter((a) => a !== id);
+    if (allowed.length < MIN_VISIBLE_TABS) return setMessage(`A role needs at least ${MIN_VISIBLE_TABS} cards.`);
+    setMessage('');
+    setCards({ allowed, layout: { ...cards.layout, tabOrder: on ? [...cards.layout.tabOrder, id] : cards.layout.tabOrder } });
+  };
+  const toggleCardVisible = (id: string, on: boolean) => {
+    if (!on && visibleCards <= MIN_VISIBLE_TABS) return setMessage(`At least ${MIN_VISIBLE_TABS} cards must be shown by default.`);
+    setMessage('');
+    const hiddenTabs = on ? cards.layout.hiddenTabs.filter((h) => h !== id) : [...cards.layout.hiddenTabs, id];
+    setCards({ layout: { ...cards.layout, hiddenTabs } });
+  };
+  const { settings, save: saveSettings } = usePersonalisationSettings();
+
   const save = () => {
     const before = policyForRole(policy, roleId);
     saveRole(roleId, draft);
@@ -79,6 +100,7 @@ export const WorkshopPolicyPage: React.FC = () => {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Workshop Tabs &amp; Columns</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Personalisation defaults per role: landing cards, tabs, columns</p>
           <p className="text-xs text-slate-500">
             Which workflow tabs each role sees, the default layout, and the default columns. Users can personalise within this; users who already did keep
             their layout, but a tab you disallow disappears for them.
@@ -91,6 +113,60 @@ export const WorkshopPolicyPage: React.FC = () => {
           </select>
         </div>
       </div>
+
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 text-xs" data-testid="personalisation-setting">
+        <div>
+          <h2 className="text-sm font-bold text-slate-900">Personal layouts after logout</h2>
+          <p className="text-slate-500">
+            {settings.keepAfterLogout
+              ? 'Kept: each user sees their own cards, tabs and columns again at the next login.'
+              : 'Reset (BU rule): every user is back on the default view after logging out. Changes last only for the session.'}
+          </p>
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 font-semibold text-slate-700">
+          <input
+            type="checkbox"
+            checked={settings.keepAfterLogout}
+            onChange={(e) => {
+              saveSettings({ keepAfterLogout: e.target.checked });
+              logAudit('Personalisation Setting Updated', 'Administration', 'Keep personal layouts after logout', String(!e.target.checked), String(e.target.checked));
+            }}
+          />
+          Keep personal layouts after logout
+        </label>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 text-xs" data-testid="card-policy">
+        <h2 className="mb-1 text-sm font-bold text-slate-900">Landing page cards</h2>
+        <p className="mb-2 text-slate-500">Cards this role may see on Home, which are shown by default and in what order. Users can hide or reorder their own.</p>
+        <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2 xl:grid-cols-3">
+          {[...cards.layout.tabOrder, ...LANDING_CARDS.map((c) => c.id).filter((id) => !cards.allowed.includes(id))].map((id, i) => {
+            const allowed = cards.allowed.includes(id);
+            const shown = allowed && !cards.layout.hiddenTabs.includes(id);
+            return (
+              <div key={id} className="flex items-center gap-2 border-t border-slate-100 py-1.5">
+                <span className={`flex-1 ${allowed ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{cardLabel(id)}</span>
+                <label className="flex items-center gap-1 text-[11px] text-slate-500">
+                  <input type="checkbox" aria-label={`Allow card ${cardLabel(id)}`} checked={allowed} onChange={(e) => toggleCardAllowed(id, e.target.checked)} /> allowed
+                </label>
+                <label className="flex items-center gap-1 text-[11px] text-slate-500">
+                  <input type="checkbox" aria-label={`Show card ${cardLabel(id)} by default`} disabled={!allowed} checked={shown} onChange={(e) => toggleCardVisible(id, e.target.checked)} /> shown
+                </label>
+                {allowed && (
+                  <span className="whitespace-nowrap">
+                    <button type="button" disabled={i === 0} aria-label={`Move card ${cardLabel(id)} up`} onClick={() => setCards({ layout: { ...cards.layout, tabOrder: moveItem(cards.layout.tabOrder, id, -1) } })} className="text-slate-400 hover:text-slate-800 disabled:opacity-30 cursor-pointer">
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" disabled={i === cards.layout.tabOrder.length - 1} aria-label={`Move card ${cardLabel(id)} down`} onClick={() => setCards({ layout: { ...cards.layout, tabOrder: moveItem(cards.layout.tabOrder, id, 1) } })} className="text-slate-400 hover:text-slate-800 disabled:opacity-30 cursor-pointer">
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <section className="rounded-xl border border-slate-200 bg-white p-4 text-xs">

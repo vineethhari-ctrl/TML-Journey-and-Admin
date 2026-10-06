@@ -3,6 +3,7 @@ import { PreferenceRemote, scopedKey, usePreferenceStore } from './usePreference
 import { MIN_VISIBLE_TABS, TabPreference, moveItem, normalizeTabPreference, setTabVisible, splitTabs } from '../utils/viewPreferences';
 
 export const TAB_PREF_STORAGE_KEY = 'user_pref_tabs';
+export const CARD_PREF_STORAGE_KEY = 'user_pref_cards';
 
 export interface TabDef {
   id: string;
@@ -22,11 +23,13 @@ interface Options {
   /** How many visible tabs fit inline before the rest collapse into "More (n)". */
   maxInline?: number;
   remote?: PreferenceRemote<TabPreference>;
+  /** Storage base key; landing-page cards use "user_pref_cards". */
+  storageKey?: string;
 }
 
 /** Tab visibility, order and default landing tab, saved per user + role (local first, then backend). */
-export function useTabPreferences({ userId, roleId, tabs, roleDefault, maxInline = 6, remote }: Options) {
-  const store = usePreferenceStore<TabPreference>(scopedKey(TAB_PREF_STORAGE_KEY, userId, roleId), remote);
+export function useTabPreferences({ userId, roleId, tabs, roleDefault, maxInline = 6, remote, storageKey = TAB_PREF_STORAGE_KEY }: Options) {
+  const store = usePreferenceStore<TabPreference>(scopedKey(storageKey, userId, roleId), remote);
   const tabIds = useMemo(() => tabs.map((t) => t.id), [tabs]);
   const pref = useMemo(() => normalizeTabPreference(store.value, tabIds, roleDefault), [store.value, tabIds, roleDefault]);
   const byId = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs]);

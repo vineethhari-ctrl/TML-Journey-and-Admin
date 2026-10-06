@@ -111,7 +111,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           {/* Breadcrumb strip */}
           <div className="border-b border-slate-200/80 bg-white/70 px-6 py-2.5 flex items-center text-xs text-slate-500">
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/home')}
               className="flex items-center gap-1 hover:text-blue-700 transition-colors"
             >
               <Home className="h-3.5 w-3.5" />
