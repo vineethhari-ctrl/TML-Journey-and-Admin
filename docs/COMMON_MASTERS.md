@@ -78,13 +78,14 @@ Common LOV Master the same way.
 Code: `src/data/commonLov.ts` (list definitions), `src/utils/commonLov.ts` (lookups, rules, health check),
 `CommonLovPanel.tsx` (catalogue).
 
-## Shortcut for every master: Ctrl+B
+## Shortcuts for every master: Ctrl+B and Ctrl+S
 
-In any master table (not only the LOV screen) the TML Admin can press **Ctrl+B** to duplicate a row: click in a row (or
-tick one row, or have a record open) and press Ctrl+B — the Add form opens filled with a copy, so only the values that
-differ need typing. The row's copy icon does the same. **Ctrl+S** saves (on the List of Values screen and in the record form). A row identical to an existing row (every field the same, only
-the id differs) cannot be saved: **"Duplicate record cannot exist"**.
+Every master behaves like the List of Values screen:
 
-Duplicates are caught early: on the List of Values screen a copied row turns red as soon as it exists, clicking anywhere
-else shows the error, and **Ctrl+S / Save refuses to save** until the copy is changed. Ctrl+S with nothing changed
-also shows "Duplicate record cannot exist" — nothing is saved.
+- **Ctrl+B** — click in a row (or tick one row) and press it: a copy of the row appears right below, editable in place
+  (amber "COPY" row), cursor in the first field. Type over what differs; press Ctrl+B again for more copies.
+- **Ctrl+S** — saves all copied rows (the green "Save copy" button does the same); in the Add / Edit form it saves the
+  record.
+- **Duplicate record cannot exist** — a copy identical to an existing row (every field the same) turns red at once,
+  clicking away shows the error, and Ctrl+S / Save refuse until it is changed. Editing a record without changing any
+  value is refused the same way. Nothing is saved while any copy has a problem.
