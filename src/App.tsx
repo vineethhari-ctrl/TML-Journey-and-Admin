@@ -21,6 +21,7 @@ import { MasterGuidePage } from './pages/MasterGuidePage';
 import { BayApprovalsPage } from './pages/BayApprovalsPage';
 import { WorkshopWorklistPage } from './pages/WorkshopWorklistPage';
 import { WorkshopPolicyPage } from './pages/WorkshopPolicyPage';
+import { HomePage } from './pages/HomePage';
 
 const AppRouter: React.FC = () => {
   const { currentRoute } = useApp();
@@ -37,6 +38,9 @@ const AppRouter: React.FC = () => {
     if (path.startsWith('/journey/')) {
       const jcNumber = decodeURIComponent(path.split('/')[2] || '') || 'JC20260930001234';
       return <JourneyDetailPage jcNumber={jcNumber} />;
+    }
+    if (path === '/home') {
+      return <HomePage />;
     }
     if (path === '/workshop') {
       return <WorkshopWorklistPage />;

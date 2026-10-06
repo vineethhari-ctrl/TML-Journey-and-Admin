@@ -42,7 +42,8 @@ describe('App routing', () => {
     await userEvent.selectOptions(screen.getByDisplayValue('Super Administrator'), 'driver');
     await goTo('/admin/audit');
     expect(await screen.findByText('Access Restricted')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Go to Journey Search/ })).toBeInTheDocument();
+    // Home (module cards) is open to every role, so it is the first permitted page offered
+    expect(screen.getByRole('button', { name: /Go to Home/ })).toBeInTheDocument();
     // role choice survives a reload
     expect(localStorage.getItem('tml_active_role_v1')).toBe('driver');
   });

@@ -18,11 +18,22 @@ import {
   FileText,
   X,
 } from 'lucide-react';
-import { ModuleType } from '../types';
+import { ModuleType, ServiceCase } from '../types';
+import { ColumnDef, useColumnPreferences } from '../hooks/useColumnPreferences';
+import { ColumnCustomizer } from '../components/workshop/ColumnCustomizer';
+import { ColumnPreference } from '../utils/viewPreferences';
+
+/** Journey Search default columns: the minimum to find a journey; Dealer & Workshop and Last Updated on demand. */
+const JOURNEY_RESULT_COLUMNS: ColumnPreference = {
+  pinnedLeft: ['vehicle'],
+  pinnedRight: ['action'],
+  visibleColumns: ['vehicle', 'customer', 'jcNumber', 'stage', 'status', 'action'],
+  hiddenColumns: ['dealer', 'updated'],
+};
 import { MaskedName, MaskedPhone } from '../components/dpdp/MaskedPii';
 
 export const JourneySearchPage: React.FC = () => {
-  const { serviceCases, vehicles, navigate, currentRoute } = useApp();
+  const { serviceCases, vehicles, navigate, currentRoute, currentUser, activeRoleId } = useApp();
 
   const [searchBy, setSearchBy] = useState<JourneySearchBy>('auto');
   const [queryInput, setQueryInput] = useState('MH01AB1234');
@@ -221,6 +232,120 @@ export const JourneySearchPage: React.FC = () => {
       navigate(`/journey?filter=${type}`);
     }
   };
+
+
+  // "Columns displayed": lean default, the rest in each user's "More columns" pool
+  const resultColumns: ColumnDef<ServiceCase>[] = useMemo(
+    () => [
+      {
+        key: 'vehicle',
+        label: 'Vehicle',
+        render: (c) => (
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono font-bold text-slate-900">{c.vehicleRegistration}</span>
+              {c.vehicleRegistration === 'MH01AB1234' && (
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800">DEMO</span>
+              )}
+            </div>
+            <span className="text-[11px] text-slate-500 font-mono">{c.vin}</span>
+          </div>
+        ),
+      },
+      {
+        key: 'customer',
+        label: 'Customer',
+        pii: 'name',
+        render: (c) => (
+          <div>
+            <p className="font-semibold text-slate-900">
+              <MaskedName name={c.customerName} vehicleRegNo={c.vehicleRegistration} assignedSa={{ name: c.serviceAdvisor }} />
+            </p>
+            <MaskedPhone phone={c.customerMobile} vehicleRegNo={c.vehicleRegistration} />
+          </div>
+        ),
+      },
+      { key: 'jcNumber', label: 'JC Number', render: (c) => <span className="font-mono font-bold text-blue-900">{c.jcNumber}</span> },
+      {
+        key: 'dealer',
+        label: 'Dealer & Workshop',
+        render: (c) => (
+          <div>
+            <p className="font-medium text-slate-800">{c.dealerName}</p>
+            <p className="text-[11px] text-slate-400">
+              {c.zone} Zone • {c.region}
+            </p>
+          </div>
+        ),
+      },
+      {
+        key: 'stage',
+        label: 'Current Stage',
+        render: (c) => (
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block px-2 py-0.5 rounded font-bold text-[10px] bg-slate-100 text-slate-800 border border-slate-200">{c.currentStage}</span>
+            {c.pendingActionsCount > 0 && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                <Clock className="h-2.5 w-2.5" />
+                {c.pendingActionsCount} pending
+              </span>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'status',
+        label: 'Status',
+        render: (c) => (
+          <span
+            className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+              c.overallStatus === 'COMPLETED'
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                : c.overallStatus === 'DELAYED'
+                ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                : c.overallStatus === 'BLOCKED'
+                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                : 'bg-blue-100 text-blue-800 border border-blue-300'
+            }`}
+          >
+            {c.overallStatus}
+          </span>
+        ),
+      },
+      {
+        key: 'updated',
+        label: 'Last Updated',
+        render: (c) => (
+          <div className="text-slate-500 text-[11px]">
+            <span>{c.createdAt.split(' ')[1]}</span>
+            <p className="text-[10px] text-slate-400">{c.elapsedTimeFormatted} elapsed</p>
+          </div>
+        ),
+      },
+      {
+        key: 'action',
+        label: 'Action',
+        align: 'right',
+        render: (c) => (
+          <button
+            onClick={() => navigate(`/journey/${c.jcNumber}`)}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+          >
+            <span>View Journey</span>
+            <ArrowRight className="h-3 w-3" />
+          </button>
+        ),
+      },
+    ],
+    [navigate]
+  );
+  const resultCols = useColumnPreferences<ServiceCase>({
+    userId: currentUser.userId,
+    roleId: activeRoleId,
+    tabId: 'journey_search',
+    columns: resultColumns,
+    preset: JOURNEY_RESULT_COLUMNS,
+  });
 
   return (
     <div className="space-y-6">
@@ -606,28 +731,26 @@ export const JourneySearchPage: React.FC = () => {
             Click &quot;View Journey&quot; to inspect full cross-module progression and chronological events
           </p>
         </div>
+        <ColumnCustomizer prefs={resultCols as never} />
       </div>
 
       {/* Result Table */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs" data-testid="journey-results">
             <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200">
               <tr>
-                <th className="py-3 px-4">Vehicle</th>
-                <th className="py-3 px-4">Customer</th>
-                <th className="py-3 px-4">JC Number</th>
-                <th className="py-3 px-4">Dealer & Workshop</th>
-                <th className="py-3 px-4">Current Stage</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Last Updated</th>
-                <th className="py-3 px-4 text-right">Action</th>
+                {resultCols.visibleColumns.map((col) => (
+                  <th key={col.key} className={`py-3 px-4 ${col.align === 'right' ? 'text-right' : ''}`}>
+                    {col.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedCases.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500">
+                  <td colSpan={resultCols.visibleColumns.length} className="py-12 text-center text-slate-500">
                     <Car className="h-10 w-10 text-slate-300 mx-auto mb-3" />
                     <p className="font-semibold text-slate-700">No matching journey records found</p>
                     <p className="text-xs text-slate-400 mt-1">
@@ -642,106 +765,18 @@ export const JourneySearchPage: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                paginatedCases.map((c) => {
-                  const isDemo = c.vehicleRegistration === 'MH01AB1234';
-                  return (
-                    <tr
-                      key={c.jcNumber}
-                      className={`hover:bg-slate-50/80 transition-colors ${
-                        isDemo ? 'bg-blue-50/30' : ''
-                      }`}
-                    >
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2">
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-mono font-bold text-slate-900">
-                                {c.vehicleRegistration}
-                              </span>
-                              {isDemo && (
-                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800">
-                                  DEMO
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-[11px] text-slate-500 font-mono">
-                              {c.vin}
-                            </span>
-                          </div>
-                        </div>
+                paginatedCases.map((c) => (
+                  <tr
+                    key={c.jcNumber}
+                    className={`hover:bg-slate-50/80 transition-colors ${c.vehicleRegistration === 'MH01AB1234' ? 'bg-blue-50/30' : ''}`}
+                  >
+                    {resultCols.visibleColumns.map((col) => (
+                      <td key={col.key} className={`py-3.5 px-4 ${col.align === 'right' ? 'text-right' : ''}`}>
+                        {col.render?.(c)}
                       </td>
-
-                      <td className="py-3.5 px-4">
-                        <div>
-                          <p className="font-semibold text-slate-900">
-                            <MaskedName name={c.customerName} vehicleRegNo={c.vehicleRegistration} assignedSa={{ name: c.serviceAdvisor }} />
-                          </p>
-                          <MaskedPhone phone={c.customerMobile} vehicleRegNo={c.vehicleRegistration} />
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4 font-mono font-bold text-blue-900">
-                        {c.jcNumber}
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <div>
-                          <p className="font-medium text-slate-800">{c.dealerName}</p>
-                          <p className="text-[11px] text-slate-400">
-                            {c.zone} Zone • {c.region}
-                          </p>
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-1.5">
-                          <span className="inline-block px-2 py-0.5 rounded font-bold text-[10px] bg-slate-100 text-slate-800 border border-slate-200">
-                            {c.currentStage}
-                          </span>
-                          {c.pendingActionsCount > 0 && (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                              <Clock className="h-2.5 w-2.5" />
-                              {c.pendingActionsCount} pending
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            c.overallStatus === 'COMPLETED'
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                              : c.overallStatus === 'DELAYED'
-                              ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                              : c.overallStatus === 'BLOCKED'
-                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                              : 'bg-blue-100 text-blue-800 border border-blue-300'
-                          }`}
-                        >
-                          {c.overallStatus}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-4 text-slate-500 text-[11px]">
-                        <div>
-                          <span>{c.createdAt.split(' ')[1]}</span>
-                          <p className="text-[10px] text-slate-400">{c.elapsedTimeFormatted} elapsed</p>
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right">
-                        <button
-                          onClick={() => navigate(`/journey/${c.jcNumber}`)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
-                        >
-                          <span>View Journey</span>
-                          <ArrowRight className="h-3 w-3" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
+                    ))}
+                  </tr>
+                ))
               )}
             </tbody>
           </table>

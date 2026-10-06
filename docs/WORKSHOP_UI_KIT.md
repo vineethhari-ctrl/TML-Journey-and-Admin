@@ -54,9 +54,42 @@ every `EXPORT_WORKLIST`, with whether the export was masked.
 - Users show / hide and reorder the other columns. **Reset to Default** restores the lean preset.
 - Columns added later default to visible unless the preset puts them in the hidden pool.
 
+## Landing page cards (`#/home`)
+
+**Home** shows the BU landing page with the module cards the role may use. Each user can hide and reorder cards with
+**Customise cards**, and **Default view** puts them back. Admins choose the allowed cards and the default order per
+role in *Workshop Tabs & Columns*. Built-in defaults:
+
+| Role | Cards |
+| --- | --- |
+| Service Advisor | 11 cards (Security Guard hidden) |
+| Receptionist | Receptionist, Appointment, Pickup & Drop, Customer Journey |
+| Security Guard | Security Guard, Customer Journey |
+| Driver | Pickup & Drop, Customer Journey |
+| All other roles | all 12 cards |
+
+Cards are saved under `user_pref_cards:{userId}:{roleId}` and reuse `useTabPreferences` with
+`storageKey: CARD_PREF_STORAGE_KEY`.
+
+## "Columns displayed" (every list)
+
+Each list opens with the minimum fields from the BU screenshots. The **Columns displayed** button lets users pick and
+order the fields; pinned fields stay. It is on the workshop worklists and on **TML Journey Search**. Journey Search
+shows Vehicle, Customer, JC Number, Current Stage, Status and Action by default; Dealer & Workshop and Last Updated are
+on demand.
+
+## Back to the default view after logout (BU rule, 6 Oct 2026)
+
+By default, personal layouts (cards, tabs, columns) last only for the session. They are kept in `sessionStorage` and
+cleared at logout (`clearPersonalisation`), so every user starts from the default view at the next login.
+
+The walkthrough notes asked for the opposite ("remember even after logout"). Admins can switch that on with **Keep
+personal layouts after logout** in *Workshop Tabs & Columns*. Layouts then go to `localStorage` and the optional
+backend adapter. The setting is in `src/utils/personalisationSettings.ts`.
+
 ## Saving preferences (local first, then backend)
 
-`usePreferenceStore` writes to `localStorage` immediately and calls an optional `remote` adapter after 600 ms. On load,
+`usePreferenceStore` writes to browser storage (session by default, see above) immediately and calls an optional `remote` adapter after 600 ms. On load,
 the server copy replaces the local one when it is newer (`updatedAt`). Suggested backend endpoints:
 `GET /me/preferences/{key}` and `PUT /me/preferences/{key}` with body `{ value, updatedAt }`.
 

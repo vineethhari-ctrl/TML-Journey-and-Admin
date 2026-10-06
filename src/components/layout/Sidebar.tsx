@@ -4,6 +4,7 @@ import {
   Compass,
   Search,
   ClipboardList,
+  LayoutGrid,
   LayoutList,
   Users,
   Shield,
@@ -55,6 +56,17 @@ export const Sidebar: React.FC = () => {
     <aside className="w-64 shrink-0 bg-white border-r border-slate-200 flex flex-col h-full overflow-hidden select-none">
       {/* Scrollable navigation list - enables full scrolling with visible scrollbar */}
       <div className="flex-1 overflow-y-auto p-3 space-y-4">
+        {/* Home: personalised module cards (BU landing page) */}
+        <div>
+          <button
+            onClick={() => navigate('/home')}
+            className={`w-full cursor-pointer ${navItemClass(currentRoute.split('?')[0] === '/home')}`}
+          >
+            <LayoutGrid className="h-4 w-4" />
+            <span className="flex-1 text-left">Home</span>
+          </button>
+        </div>
+
         {/* Main Dashboard */}
         {canAccessRoute('/dashboard') && (
           <div>

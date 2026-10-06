@@ -9,6 +9,10 @@ interface ServiceTransformationPortalProps {
   matches?: Record<string, number>;
   searchQuery?: string;
   compact?: boolean;
+  /** Home page: no master counts on the cards. */
+  hideCounts?: boolean;
+  /** Extra controls under the banner, e.g. "Customise cards". */
+  toolbar?: React.ReactNode;
 }
 
 // Custom high-fidelity illustrations matching the 12 official transformation cards
@@ -376,6 +380,8 @@ export const ServiceTransformationPortal: React.FC<ServiceTransformationPortalPr
   matches = {},
   searchQuery = '',
   compact = false,
+  hideCounts = false,
+  toolbar,
 }) => {
   return (
     <div className="bg-slate-50/80 rounded-2xl border border-slate-200/90 p-4 sm:p-6 space-y-6 shadow-xs">
@@ -419,6 +425,8 @@ export const ServiceTransformationPortal: React.FC<ServiceTransformationPortalPr
         </div>
       </div>
 
+      {toolbar}
+
       {/* The 12 Official Cards Arranged in 3 Rows x 4 Columns */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {modules.map((mod) => {
@@ -432,6 +440,7 @@ export const ServiceTransformationPortal: React.FC<ServiceTransformationPortalPr
               key={mod.code}
               type="button"
               onClick={() => onSelectModule(mod.code)}
+              data-testid={`portal-card-${mod.code}`}
               className={`group text-left p-4 rounded-2xl border transition-all duration-200 cursor-pointer relative flex flex-col justify-between h-40 shadow-xs hover:shadow-md ${
                 isSelected
                   ? 'bg-gradient-to-b from-white to-blue-50/60 border-blue-600 ring-2 ring-blue-500/30 shadow-md'
@@ -480,6 +489,7 @@ export const ServiceTransformationPortal: React.FC<ServiceTransformationPortalPr
                       {matchCount} match{matchCount > 1 ? 'es' : ''}
                     </span>
                   )}
+                  {!hideCounts && (
                   <span
                     className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold font-mono ${
                       isSelected
@@ -489,6 +499,7 @@ export const ServiceTransformationPortal: React.FC<ServiceTransformationPortalPr
                   >
                     {count.masters} {count.masters === 1 ? 'Master' : 'Masters'}
                   </span>
+                  )}
                 </div>
               </div>
             </button>

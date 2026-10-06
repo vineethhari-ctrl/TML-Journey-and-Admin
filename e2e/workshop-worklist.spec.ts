@@ -36,7 +36,7 @@ test('Service Advisor: landing tab, More (n), tab and column preferences persist
   // TASK-03: lean gate-in columns; Phone No. comes from the hidden pool and the choice persists
   const grid = page.getByTestId('worklist-grid');
   await expect(grid.locator('thead th')).toHaveText(['Vehicle No.', 'Model', 'Assigned SA', 'Status', 'Waiting Time (HH:MM)', 'Action']);
-  await page.getByRole('button', { name: 'Choose columns' }).click();
+  await page.getByRole('button', { name: 'Columns displayed' }).click();
   await page.getByTestId('column-customizer').getByLabel('Phone No.', { exact: true }).check();
   await page.reload();
   await expect(grid.locator('thead th')).toHaveText(['Vehicle No.', 'Model', 'Assigned SA', 'Status', 'Waiting Time (HH:MM)', 'Phone No.', 'Action']);
@@ -63,7 +63,7 @@ test('Service Advisor: landing tab, More (n), tab and column preferences persist
   await page.getByRole('button', { name: 'Appointments' }).click();
 
   // Reset to Default restores the lean preset
-  await page.getByRole('button', { name: 'Choose columns' }).click();
+  await page.getByRole('button', { name: 'Columns displayed' }).click();
   await page.getByTestId('column-customizer').getByRole('button', { name: 'Reset to Default' }).click();
   await expect(grid.locator('thead th')).toHaveCount(6);
 
@@ -105,7 +105,7 @@ test('Receptionist: only allowed tabs, names masked, no reveal, masked export; s
   await expect(tabs.getByRole('button', { name: /More/ })).toHaveCount(0);
 
   const grid = page.getByTestId('worklist-grid');
-  await page.getByRole('button', { name: 'Choose columns' }).click();
+  await page.getByRole('button', { name: 'Columns displayed' }).click();
   await page.getByTestId('column-customizer').getByLabel('Customer Name', { exact: true }).check();
   await page.mouse.click(5, 5);
   await expect(grid.getByTestId('masked-name').first()).toHaveText('T*** C*** A***');
@@ -119,7 +119,7 @@ test('Receptionist: only allowed tabs, names masked, no reveal, masked export; s
 
   // Super admin reveals → UNMASK_PII in the DPDP access log, without the value
   await page.locator('header select').selectOption('superAdmin');
-  await page.getByRole('button', { name: 'Choose columns' }).click();
+  await page.getByRole('button', { name: 'Columns displayed' }).click();
   await page.getByTestId('column-customizer').getByLabel('Customer Name', { exact: true }).check();
   await page.mouse.click(5, 5);
   await grid.getByRole('button', { name: 'Show customer name' }).first().click();

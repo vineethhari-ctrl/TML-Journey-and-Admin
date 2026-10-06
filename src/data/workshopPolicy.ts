@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { TabPreference, ColumnPreference } from '../utils/viewPreferences';
+import { WORKSHOP_MODULES } from './masterCatalogue';
 
 /**
  * Admin-controlled workshop worklist policy (Admin Portal → Workshop Tabs & Columns).
@@ -79,7 +80,25 @@ export const GRID_COLUMNS: Record<string, GridColumn[]> = {
   ],
 };
 
+/** Landing-page cards: the 12 module cards of the BU home page, in BU order. */
+export const LANDING_CARDS: Array<{ id: string; label: string }> = WORKSHOP_MODULES.map((m) => ({ id: m.code, label: m.title }));
+const ALL_CARDS = LANDING_CARDS.map((c) => c.id);
+
+export interface CardPolicy {
+  /** Cards this role may see at all. */
+  allowed: string[];
+  /** Default card order and hidden cards until a user personalises. */
+  layout: TabPreference;
+}
+
+const cardPolicy = (allowed: string[], hidden: string[] = []): CardPolicy => ({
+  allowed,
+  layout: { defaultLandingTab: allowed[0], tabOrder: allowed, hiddenTabs: hidden },
+});
+
 export interface RoleWorkshopPolicy {
+  /** Landing-page cards (optional in saved policies from before cards existed). */
+  cards?: CardPolicy;
   /** Tabs this role may use at all. */
   allowedTabs: string[];
   /** Default layout used until a user saves their own. */
@@ -115,6 +134,7 @@ export const DEFAULT_COLUMNS: Record<string, ColumnPreference> = {
 };
 
 const generic: RoleWorkshopPolicy = {
+  cards: cardPolicy(ALL_CARDS),
   allowedTabs: ALL_TABS,
   tabs: { defaultLandingTab: 'gate_in', tabOrder: ALL_TABS, hiddenTabs: [] },
   columns: DEFAULT_COLUMNS,
@@ -123,6 +143,10 @@ const generic: RoleWorkshopPolicy = {
 /** Built-in policy; the SA preset is the spec example. Roles not listed use `default`. */
 export const DEFAULT_WORKSHOP_POLICY: WorkshopPolicy = {
   serviceAdvisor: {
+    cards: cardPolicy(
+      ['jc_creation', 'jc_tracking', 'appointment', 'receptionist', 'reception', 'bodyshop', 'eqc', 'thd', 'spd', 'claim', 'customer_journey', 'security'],
+      ['security'],
+    ),
     allowedTabs: ALL_TABS,
     tabs: {
       defaultLandingTab: 'my_assignment',
@@ -132,17 +156,23 @@ export const DEFAULT_WORKSHOP_POLICY: WorkshopPolicy = {
     columns: DEFAULT_COLUMNS,
   },
   receptionist: {
+    cards: cardPolicy(['receptionist', 'appointment', 'reception', 'customer_journey']),
     allowedTabs: ['gate_in', 'my_assignment', 'pre_inspection'],
     tabs: { defaultLandingTab: 'gate_in', tabOrder: ['gate_in', 'my_assignment', 'pre_inspection'], hiddenTabs: [] },
     columns: DEFAULT_COLUMNS,
   },
+  securityGuard: { ...generic, cards: cardPolicy(['security', 'customer_journey']) },
+  driver: { ...generic, cards: cardPolicy(['reception', 'customer_journey']) },
   default: generic,
 };
 
 export const WORKSHOP_POLICY_STORAGE_KEY = 'tml_workshop_policy_v1';
 const CHANGE_EVENT = 'tml:workshop-policy';
 
-export const policyForRole = (policy: WorkshopPolicy, roleId: string): RoleWorkshopPolicy => policy[roleId] ?? policy.default ?? generic;
+export const policyForRole = (policy: WorkshopPolicy, roleId: string): RoleWorkshopPolicy => {
+  const p = policy[roleId] ?? policy.default ?? generic;
+  return p.cards ? p : { ...p, cards: (DEFAULT_WORKSHOP_POLICY[roleId] ?? generic).cards };
+};
 
 function readPolicy(): WorkshopPolicy {
   try {
