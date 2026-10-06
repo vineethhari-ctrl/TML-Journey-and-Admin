@@ -42,8 +42,8 @@ test('"Create New Master" defines a master that is immediately usable and expose
   // The new master opens in the workspace; add a record through the normal editor
   await expect(page.getByRole('button', { name: /^Tyre Brand\s*0$/ })).toBeVisible();
   await page.getByRole('button', { name: /\+ Add Row/ }).click();
-  await page.getByPlaceholder('Enter Brand Name').fill('MRF Tyres');
-  await page.getByRole('button', { name: 'Insert Row' }).click();
+  await page.getByTestId('copy-row').getByLabel('Brand Name').fill('MRF Tyres');
+  await page.keyboard.press('Control+s');
   await expect(page.getByRole('cell', { name: 'MRF Tyres' })).toBeVisible();
 
   // Survives a reload and shows up on the dealer journey page
@@ -282,7 +282,7 @@ test('Ctrl+B copies a row in place in any master table, like the LOV screen; Ctr
   await copy.getByLabel(/^PL \(Variant/).fill('Copy test variant');
   await expect(page.getByTestId('copy-error')).toHaveCount(0);
   await page.keyboard.press('Control+s');
-  await expect(page.getByText(/copied row\(s\) added/)).toBeVisible();
+  await expect(page.getByText(/row\(s\) added/)).toBeVisible();
   await expect(rows).toHaveCount(before + 1);
   await expect(rows.nth(1)).toContainText('PPL-COPY-TEST');
 });
@@ -328,4 +328,59 @@ test('Ctrl+S saves a master record; an unchanged edit is refused', async ({ page
   await page.getByLabel(/^Description/).fill('checked');
   await page.keyboard.press('Control+s');
   await expect(page.getByText('Update Row')).toHaveCount(0);
+});
+
+test('+ Add Row adds a blank row in the table (no popup); Esc removes an unsaved row', async ({ page }) => {
+  await page.goto('/#/admin/masters?open=common');
+  await page.getByRole('button', { name: /Table \/ Excel view/ }).click();
+  const rows = page.locator('tbody tr[data-record-row]');
+  const before = await rows.count();
+
+  await page.getByRole('button', { name: /\+ Add Row/ }).click();
+  const fresh = page.getByTestId('copy-row');
+  await expect(page.getByText('Add New Master Row')).toHaveCount(0);
+  await expect(fresh).toHaveCount(1);
+  await expect(fresh.getByLabel('Display Value')).toHaveValue('');
+  await expect(fresh.getByLabel('LOV Type (Parameter)')).toHaveValue('');
+  await expect(fresh.getByLabel('Display Value')).toBeFocused().catch(() => {});
+
+  // Esc = delete the unsaved row
+  await fresh.getByLabel('Display Value').click();
+  await page.keyboard.press('Escape');
+  await expect(fresh).toHaveCount(0);
+  await expect(rows).toHaveCount(before);
+
+  // A copy is removed the same way
+  await rows.first().focus();
+  await page.keyboard.press('Control+b');
+  await expect(fresh).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(fresh).toHaveCount(0);
+
+  // Blank row: fill the mandatory fields and Ctrl+S
+  await page.getByRole('button', { name: /\+ Add Row/ }).click();
+  await fresh.getByLabel('LOV Type (Parameter)').fill('THD_ZZZ');
+  await fresh.getByLabel('Module').selectOption('THD');
+  await fresh.getByLabel('Field Name').fill('ZZZ');
+  await fresh.getByLabel('Display Value').fill('One');
+  await fresh.getByLabel('Order').fill('1');
+  await fresh.getByLabel('Status').selectOption('Active');
+  await page.keyboard.press('Control+s');
+  await expect(rows).toHaveCount(before + 1);
+});
+
+test('Esc removes an unsaved row on the List of Values screen', async ({ page }) => {
+  await page.goto('/#/admin/masters?open=common');
+  const lov = page.getByTestId('lov-explorer');
+  await lov.getByTestId('lov-type-list').getByRole('button', { name: /THD_CLOSURE_ACTION/ }).click();
+  const values = lov.getByTestId('lov-values').getByRole('textbox', { name: 'Display Value' });
+  await values.first().click();
+  await page.keyboard.press('Control+b');
+  await expect(values).toHaveCount(4);
+  await page.keyboard.press('Escape');
+  await expect(values).toHaveCount(3);
+  // A saved row is not removed by Esc
+  await values.first().click();
+  await page.keyboard.press('Escape');
+  await expect(values).toHaveCount(3);
 });

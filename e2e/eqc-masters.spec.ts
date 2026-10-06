@@ -51,22 +51,27 @@ test('EQC rule tester resolves GC mandate, steps, PTD risk, DID and checklists f
 
 test('BA adds a PPL-specific GC rule; duplicates and invalid combinations are blocked', async ({ page }) => {
   await page.goto('/#/admin/masters?open=eqc');
-  const addRule = async (values: Record<string, string>) => {
-    await page.getByRole('button', { name: '+ Add Row' }).click();
+  // "+ Add Row" adds a blank row in the table; fields are filled in place and Ctrl+S saves
+  const fill = async (values: Record<string, string>) => {
+    const row = page.getByTestId('copy-row');
     for (const [label, value] of Object.entries(values)) {
-      const field = page.locator(`#rec-field-${label}`);
+      const field = row.getByLabel(label, { exact: true });
       if ((await field.evaluate((el) => el.tagName)) === 'SELECT') await field.selectOption(value);
       else await field.fill(value);
     }
-    await page.getByRole('button', { name: 'Insert Row' }).click();
+  };
+  const addRule = async (values: Record<string, string>) => {
+    await page.getByRole('button', { name: '+ Add Row' }).click();
+    await fill(values);
+    await page.keyboard.press('Control+s');
   };
 
   // GC Mandatory without GC Applicable is rejected
-  await addRule({ ppl: 'Harrier', complaintCode: 'AC-COOL-04', gcApplicable: 'N', gcMandatory: 'Y', roadTestMandatory: 'Y', active: 'Y' });
+  await addRule({ PPL: 'Harrier', 'Complaint Code': 'AC-COOL-04', 'GC Applicable': 'N', 'GC Mandatory': 'Y', 'Road Test Mandatory': 'Y', Active: 'Y' });
   await expect(page.getByText('GC can only be mandatory when GC Applicable is Y.')).toBeVisible();
-  await page.locator('#rec-field-gcApplicable').selectOption('Y');
-  await page.getByRole('button', { name: 'Insert Row' }).click();
-  await expect(page.getByRole('button', { name: 'Insert Row' })).toHaveCount(0);
+  await fill({ 'GC Applicable': 'Y' });
+  await page.keyboard.press('Control+s');
+  await expect(page.getByTestId('copy-row')).toHaveCount(0);
 
   const tester = page.getByTestId('eqc-rule-tester');
   await tester.getByLabel('PPL').selectOption('Harrier');
@@ -76,7 +81,7 @@ test('BA adds a PPL-specific GC rule; duplicates and invalid combinations are bl
   await expect(page.getByTestId('eqc-result-steps')).toContainText('vent outlet temperature'); // all-PPL steps
 
   // The same PPL + complaint again is a duplicate
-  await addRule({ ppl: 'Harrier', complaintCode: 'AC-COOL-04', gcApplicable: 'Y', gcMandatory: 'N', roadTestMandatory: 'N', active: 'Y' });
+  await addRule({ PPL: 'Harrier', 'Complaint Code': 'AC-COOL-04', 'GC Applicable': 'Y', 'GC Mandatory': 'N', 'Road Test Mandatory': 'N', Active: 'Y' });
   await expect(page.getByText(/A rule for Harrier \+ AC-COOL-04 already exists/)).toBeVisible();
 });
 
