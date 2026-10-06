@@ -56,6 +56,27 @@ SELECT pg_temp.expect_error('master id format',
 SELECT pg_temp.expect_error('record data must be an object',
   $q$INSERT INTO master_record (master_id, record_id, data, changed_in_version, created_by, updated_by) VALUES ('eqc_gc_mandate','X','[1]',0,'u','u')$q$);
 
+-- 1b. No-code master rules
+DO $$
+DECLARE v_before integer; v_after integer;
+BEGIN
+  SELECT version INTO v_before FROM master_definition WHERE master_id = 'eqc_gc_mandate';
+  INSERT INTO master_rule (master_id, rule_id, rule_type, params, severity, created_by, updated_by) VALUES
+    ('eqc_gc_mandate', 'RULE-1', 'unique', '{"fields":["ppl","complaintCode"]}', 'error', 'admin', 'admin'),
+    ('eqc_gc_mandate', 'RULE-2', 'required_if', '{"field":"ppl","whenField":"complaintCode","whenValues":["BRK-VIB-02"]}', 'warning', 'admin', 'admin');
+  SELECT version INTO v_after FROM master_definition WHERE master_id = 'eqc_gc_mandate';
+  ASSERT v_after = v_before + 2, format('adding 2 rules should bump the master version by 2; %s -> %s', v_before, v_after);
+END $$;
+
+SELECT pg_temp.expect_error('unknown rule type',
+  $q$INSERT INTO master_rule (master_id, rule_id, rule_type, params, created_by, updated_by) VALUES ('eqc_gc_mandate','R-X','magic','{"field":"ppl"}','u','u')$q$);
+SELECT pg_temp.expect_error('"No duplicates" needs at least one field',
+  $q$INSERT INTO master_rule (master_id, rule_id, rule_type, params, created_by, updated_by) VALUES ('eqc_gc_mandate','R-Y','unique','{"fields":[]}','u','u')$q$);
+SELECT pg_temp.expect_error('other rule types name their field',
+  $q$INSERT INTO master_rule (master_id, rule_id, rule_type, params, created_by, updated_by) VALUES ('eqc_gc_mandate','R-Z','range','{"max":5}','u','u')$q$);
+SELECT pg_temp.expect_error('severity is error or warning',
+  $q$INSERT INTO master_rule (master_id, rule_id, rule_type, params, severity, created_by, updated_by) VALUES ('eqc_gc_mandate','R-W','range','{"field":"ppl"}','fatal','u','u')$q$);
+
 -- 2. Bays and approvals
 INSERT INTO bay (bay_no, dealer_code, division_id, bu, bay_name, bay_type, bay_status, approval_status, created_by, updated_by)
 SELECT 1, 'DLR1001', division_id, 'PV', 'Mechanical Bay 01', 'Mechanical', 'Active', 'Approved', 'dlr', 'dlr' FROM division WHERE dealer_code = 'DLR1001';

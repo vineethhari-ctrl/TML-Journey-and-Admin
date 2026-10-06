@@ -18,4 +18,4 @@ List of Values: use the Common LOV Master template (columns LOV Type (Parameter)
 Code (LIC), Order, Parent LOV Code, Parent Value, Description, Status). Several lists can be in one sheet.
 
 Code: `src/utils/masterUpload.ts` (checks, pure and unit-tested), `src/pages/UploadMasterPage.tsx` (page).
-Not covered yet: business rules for new masters defined on screen (planned: a no-code Rules tab).
+Business rules: each master's Rules tab ([MASTER_RULES.md](MASTER_RULES.md)) is applied to the uploaded rows; a BA workbook can bring its own rules in a "Rules" sheet.

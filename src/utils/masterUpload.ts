@@ -13,7 +13,7 @@ import * as XLSX from 'xlsx';
 import type { MasterConfig, MasterFieldDef } from '../data/masterCatalogue';
 import { FIELDS_SHEET, MASTERS_SHEET, parseMasterWorkbook, type ParsedMasterWorkbook } from './masterWorkbook';
 import { GUIDE_SHEET, detectMasters, type DetectedMaster } from './smartExcelImport';
-import { masterValidationSchema } from './masterValidationSchema';
+import { checkRecord } from './masterRules';
 import { checkCopies } from './recordCopies';
 import { nextRecordId } from './recordDuplicates';
 
@@ -39,6 +39,8 @@ export interface SheetOutcome {
   unchanged: number;
   /** The master with the rows applied (only when there are no problems). */
   updated?: MasterConfig;
+  /** Rule warnings (do not block the import). */
+  warnings: UploadIssue[];
   /** New master detected from the columns. */
   detected?: DetectedMaster;
   note?: string;
@@ -104,8 +106,9 @@ const sheetGrid = (wb: XLSX.WorkBook, name: string): string[][] =>
     .map((r) => r.map(str));
 
 /** Applies the rows of one sheet to an existing master. Pure: returns the result, never mutates. */
-function applyRows(master: MasterConfig, headers: string[], rows: string[][], cmp: HeaderComparison): Pick<SheetOutcome, 'issues' | 'add' | 'update' | 'unchanged' | 'updated'> {
+function applyRows(master: MasterConfig, headers: string[], rows: string[][], cmp: HeaderComparison, masters: MasterConfig[]): Pick<SheetOutcome, 'issues' | 'warnings' | 'add' | 'update' | 'unchanged' | 'updated'> {
   const issues: UploadIssue[] = [];
+  const warnings: UploadIssue[] = [];
   const records = master.records.map((r) => ({ ...r }));
   const byId = new Map(records.map((r, i) => [String(r.id).toLowerCase(), i]));
   const seenIds = new Set<string>();
@@ -131,8 +134,9 @@ function applyRows(master: MasterConfig, headers: string[], rows: string[][], cm
       // Existing record: blank cells mean "leave as is"
       const base = records[at];
       const patch = Object.fromEntries(Object.entries(raw).filter(([k, v]) => k !== 'id' && v !== ''));
-      const res = masterValidationSchema.validateRecord(master.fields, { ...base, ...patch }, master.id);
+      const res = checkRecord(master, { ...base, ...patch }, { others: records.filter((_, k) => k !== at), masters });
       if (!res.isValid) return void Object.values(res.errors).forEach((m) => issues.push({ row, message: String(m) }));
+      res.warnings.forEach((message) => warnings.push({ row, message }));
       const next = { ...base, ...Object.fromEntries(Object.keys(patch).map((k) => [k, res.sanitizedRecord[k]])) };
       if (master.fields.every((f) => str(next[f.key]) === str(base[f.key]))) unchanged++;
       else {
@@ -153,12 +157,13 @@ function applyRows(master: MasterConfig, headers: string[], rows: string[][], cm
     return copy;
   });
   const rowOf = new Map(copies.map((c, i) => [c.id, fresh[i].row]));
-  const check = copies.length ? checkCopies({ ...master, records }, copies) : { sanitized: [], errors: {}, duplicates: {} };
+  const check = copies.length ? checkCopies({ ...master, records }, copies, masters) : { sanitized: [], errors: {}, duplicates: {}, warnings: {} };
   Object.entries(check.errors).forEach(([id, msgs]) => msgs.forEach((message) => issues.push({ row: rowOf.get(id), message })));
+  Object.entries(check.warnings).forEach(([id, msgs]) => msgs.forEach((message) => warnings.push({ row: rowOf.get(id), message })));
 
   issues.sort((a, b) => (a.row ?? 0) - (b.row ?? 0));
   const updated = issues.length ? undefined : { ...master, records: [...records, ...check.sanitized] };
-  return { issues, add: copies.length, update, unchanged, updated };
+  return { issues, warnings, add: copies.length, update, unchanged, updated };
 }
 
 export function analyseUpload(wb: XLSX.WorkBook, masters: MasterConfig[]): UploadAnalysis {
@@ -171,7 +176,7 @@ export function analyseUpload(wb: XLSX.WorkBook, masters: MasterConfig[]): Uploa
   // 2. Otherwise every sheet is matched to an existing master (strictly), or detected as a new master
   const sheets: SheetOutcome[] = [];
   const unmatched: string[] = [];
-  const base = { headerProblems: [], issues: [], add: 0, update: 0, unchanged: 0 };
+  const base = { headerProblems: [], issues: [], warnings: [], add: 0, update: 0, unchanged: 0 };
 
   wb.SheetNames.forEach((sheet) => {
     if (GUIDE_SHEET.test(sheet.trim())) return void sheets.push({ ...base, sheet, kind: 'skipped', note: 'Guide sheet — skipped.', ok: true });
@@ -223,7 +228,7 @@ export function analyseUpload(wb: XLSX.WorkBook, masters: MasterConfig[]): Uploa
     if (headerProblems.length) {
       return void sheets.push({ ...base, sheet, kind: 'existing', master, matchedBy, headerProblems, ok: false });
     }
-    const applied = applyRows(master, headers, rows, cmp);
+    const applied = applyRows(master, headers, rows, cmp, masters);
     sheets.push({
       ...base,
       ...applied,

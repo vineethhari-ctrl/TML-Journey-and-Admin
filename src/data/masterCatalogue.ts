@@ -1,3 +1,4 @@
+import type { MasterRule } from '../utils/masterRules';
 import { buildThdMasters } from './thdMasters';
 import { buildClaimMasters } from './claimMasters';
 import { COMMON_PLACEMENT, buildCommonLovMaster } from './commonLov';
@@ -100,6 +101,8 @@ export interface MasterConfig {
   records: Array<Record<string, any>>;
   isInteractiveSpecial?: boolean;
   interactiveTabTarget?: 'bays' | 'calendar' | 'dealers' | 'timeslots' | 'bodyshop';
+  /** No-code business rules set in the Rules tab or the BA workbook "Rules" sheet (see utils/masterRules.ts). */
+  rules?: MasterRule[];
 }
 
 export const LOGICAL_MODULES: LogicalModuleDef[] = [

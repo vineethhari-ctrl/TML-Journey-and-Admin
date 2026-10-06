@@ -32,9 +32,14 @@ const fieldRow = (masterId: string, key: string, label: string, type: string, ex
   FIELD_COLUMNS.map((c) => (c === 'Master ID' ? masterId : c === 'Field Key' ? key : c === 'Field Label' ? label : c === 'Type' ? type : extra[c] ?? ''));
 
 describe('template workbook', () => {
-  it('contains README, Masters, Fields and an example records sheet', () => {
+  it('contains README, Masters, Fields, Rules and an example records sheet', () => {
     const wb = buildTemplateWorkbook();
-    expect(wb.SheetNames).toEqual(['README', 'Masters', 'Fields', 'tyre_brand_master']);
+    expect(wb.SheetNames).toEqual(['README', 'Masters', 'Fields', 'Rules', 'tyre_brand_master']);
+  });
+
+  it('carries its example rules into the imported master', () => {
+    const parsed = parseMasterWorkbook(roundTrip(buildTemplateWorkbook()), MASTER_COLLECTIONS);
+    expect(parsed.masters[0].rules?.map((r) => r.type)).toEqual(['unique', 'required_if', 'range']);
   });
 
   it('imports cleanly as-is (the example is valid)', () => {

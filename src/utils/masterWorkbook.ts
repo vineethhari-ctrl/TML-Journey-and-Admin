@@ -24,6 +24,7 @@ import {
 } from '../data/masterCatalogue';
 import { masterValidationSchema } from './masterValidationSchema';
 import { mergeImportedRecords } from './recordMerge';
+import { RULES_SHEET, RULE_COLUMNS, RULE_TYPES, evaluateRules, ruleFromRow, ruleToRow, sameRule } from './masterRules';
 
 export const MASTERS_SHEET = 'Masters';
 export const FIELDS_SHEET = 'Fields';
@@ -274,6 +275,14 @@ const README_LINES = [
   ['  Dealer Label   Optional label shown to dealers'],
   ['  Value Mapping  Optional "CODE=Dealer text; CODE2=Other text"'],
   [''],
+  ['SHEET "Rules" (optional) — business rules, one row per rule; checked on every save and upload, no coding'],
+  [`  Rule Type      ${RULE_TYPES.map((t) => t.type).join(' | ')}`],
+  ...RULE_TYPES.map((t) => [`    ${t.type.padEnd(12)} ${t.hint} e.g. ${t.example}`]),
+  ['  Field / When Field / Other Field   field key or label; Fields (No duplicates) and value lists are comma separated'],
+  ['  When Values    condition values (blank = "is filled"); Allowed Values: values allowed while the condition holds'],
+  ['  Min / Max      for "range"; Format: a pattern for "pattern"; Other Master / Other Master Field: for "exists_in"'],
+  ['  Severity       error (row refused) or warning (saved, user warned); Message: optional own wording; Enabled: Y / N'],
+  [''],
   ['RECORDS — one sheet per master, named exactly as its Master ID'],
   ['  Row 1 = column headers: "id" plus each Field Key (the Field Label also works).'],
   ['  "id" is optional; blank ids are generated. Booleans: Y/N. Dates: YYYY-MM-DD.'],
@@ -314,6 +323,9 @@ export function buildMasterWorkbook(masters: MasterConfig[]): XLSX.WorkBook {
   );
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[...FIELD_COLUMNS], ...fieldRows]), FIELDS_SHEET);
 
+  const ruleRows = masters.flatMap((m) => (m.rules ?? []).map((r) => ruleToRow(m.id, r)));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[...RULE_COLUMNS], ...ruleRows]), RULES_SHEET);
+
   masters.forEach((m) => {
     const header = ['id', ...m.fields.map((f) => f.key)];
     const rows = m.records.map((r) =>
@@ -353,6 +365,11 @@ export function buildTemplateWorkbook(): XLSX.WorkBook {
       { id: 'TYR-002', brand_code: 'APL', brand_name: 'Apollo Tyres', segment: 'EV', warranty_months: 48, effective_from: '2026-04-01', active: true },
     ]
   );
+  example.rules = [
+    { id: 'RULE-EX1', type: 'unique', enabled: true, severity: 'error', fields: ['brand_code'] },
+    { id: 'RULE-EX2', type: 'required_if', enabled: true, severity: 'error', field: 'effective_from', whenField: 'active', whenValues: ['Y'] },
+    { id: 'RULE-EX3', type: 'range', enabled: true, severity: 'warning', field: 'warranty_months', min: 12, max: 72, message: 'Warranty is usually 12 to 72 months — please double-check.' },
+  ];
   return buildMasterWorkbook([example]);
 }
 
@@ -508,6 +525,8 @@ export function parseMasterWorkbook(
   const masters: MasterConfig[] = [];
   const summary: MasterImportSummary[] = [];
   const seenIds = new Set<string>();
+  /** Ids of the rows that come from this workbook (rules are checked on these, not on rows saved earlier). */
+  const fromFile = new Map<string, Set<string>>();
 
   masterRows.forEach((r, i) => {
     if (isBlankRow(r)) return;
@@ -545,6 +564,7 @@ export function parseMasterWorkbook(
         return filled;
       });
       masters.push({ ...current, fields: allFields, records: mergeImportedRecords(withDefaults, records, 'upsert') });
+      fromFile.set(id, new Set(records.map((rec) => String(rec.id))));
       summary.push({ id, name: current.name, action: 'update', fieldCount: allFields.length, newFieldCount: newFields.length, recordCount: records.length });
       return;
     }
@@ -564,6 +584,7 @@ export function parseMasterWorkbook(
     if (fields.length === 0) err(FIELDS_SHEET, `${id}: no fields defined. Add at least one row for it in the "${FIELDS_SHEET}" sheet.`);
     const records = readRecords(wb, id, fields, issues);
     masters.push(createMasterConfig(def, records));
+    fromFile.set(id, new Set(records.map((rec) => String(rec.id))));
     summary.push({ id, name, action: 'create', fieldCount: fields.length, newFieldCount: fields.length, recordCount: records.length });
   });
 
@@ -571,6 +592,33 @@ export function parseMasterWorkbook(
     if (!seenIds.has(id)) err(FIELDS_SHEET, `Fields reference "${id}", which is not listed in the "${MASTERS_SHEET}" sheet.`);
   });
   if (seenIds.size === 0) err(MASTERS_SHEET, 'No masters found in the "Masters" sheet.');
+
+  // 3. Rules (optional sheet): attached to the masters above, then checked against their rows
+  const ruleRows = sheetRows(wb, Object.keys(wb.Sheets).find((n) => n.toLowerCase() === RULES_SHEET.toLowerCase()) ?? RULES_SHEET) ?? [];
+  const allMasters = [...existing.filter((m) => !masters.some((x) => x.id === m.id)), ...masters];
+  ruleRows.forEach((r, i) => {
+    if (isBlankRow(r)) return;
+    const row = i + 2;
+    const id = str(r['Master ID']).toLowerCase();
+    const at = masters.findIndex((m) => m.id === id);
+    if (at < 0) {
+      if (existingById.has(id) && mode === 'skip') return;
+      return err(RULES_SHEET, `Master "${id}" is not in the "${MASTERS_SHEET}" sheet${existingById.has(id) ? ' (or was skipped)' : ''}.`, row);
+    }
+    const { rule, errors } = ruleFromRow(r, masters[at], allMasters);
+    if (!rule) return errors.forEach((e) => err(RULES_SHEET, `${id}: ${e}`, row));
+    const current = masters[at].rules ?? [];
+    if (current.some((x) => sameRule(x, rule))) return warn(RULES_SHEET, `${id}: this rule already exists — left as it is.`, row);
+    masters[at] = { ...masters[at], rules: [...current, rule] };
+  });
+  masters.forEach((m) => {
+    if (!m.rules?.length) return;
+    m.records.filter((rec) => fromFile.get(m.id)?.has(String(rec.id))).forEach((rec) =>
+      evaluateRules(m, rec, { others: m.records, masters: allMasters }).forEach((v) =>
+        (v.severity === 'error' ? err : warn)(m.id, `Row ${rec.id}: ${v.message}`)
+      )
+    );
+  });
 
   const hasErrors = issues.some((i) => i.severity === 'error');
   return { masters: hasErrors ? [] : masters, summary, issues, hasErrors };

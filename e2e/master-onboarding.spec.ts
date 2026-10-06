@@ -442,3 +442,105 @@ test.describe('Upload a Master page', () => {
     expect(download.suggestedFilename()).toBe('TML_Master_Definition_Template.xlsx');
   });
 });
+
+test('Rules tab: the admin adds a "No duplicates" rule without coding; it is enforced on new rows and can be switched off', async ({ page }) => {
+  await page.goto('/#/admin/masters?open=common');
+  await page.getByRole('button', { name: /^PPL & PL \(Product Line\) Master/ }).click();
+  await page.getByRole('button', { name: /^Rules \(0\)/ }).click();
+  const panel = page.getByTestId('rules-panel');
+  await panel.getByRole('button', { name: 'Add rule' }).click();
+  const form = panel.getByTestId('rule-form');
+  await form.getByRole('radio', { name: /No duplicates/ }).check();
+  await form.getByRole('checkbox', { name: 'PPL Code' }).check();
+  await expect(form.getByTestId('rule-preview')).toContainText('PPL Code must be unique among active rows.');
+  await form.getByRole('button', { name: 'Save rule' }).click();
+  const item = panel.getByTestId('rule-item');
+  await expect(item).toContainText('PPL Code must be unique among active rows.');
+  await expect(item).toContainText('All rows follow it');
+  await expect(page.getByRole('button', { name: /^Rules \(1\)/ })).toBeVisible();
+
+  // A copy with a different variant but the same PPL Code is refused by the rule
+  const rows = page.locator('tbody tr[data-record-row]');
+  const before = await rows.count();
+  await rows.first().focus();
+  await page.keyboard.press('Control+b');
+  const copy = page.getByTestId('copy-row');
+  await copy.getByLabel(/^PL \(Variant/).fill('Rule test variant');
+  await page.keyboard.press('Control+s');
+  await expect(page.getByTestId('copy-error')).toContainText('PPL Code must be unique');
+  await expect(rows).toHaveCount(before);
+
+  // Switch the rule off → the same row saves
+  await item.getByRole('checkbox', { name: /Rule on/ }).uncheck();
+  await copy.getByLabel(/^PL \(Variant/).click();
+  await page.keyboard.press('Control+s');
+  await expect(rows).toHaveCount(before + 1);
+  await expect(item).not.toContainText('All rows follow it');
+});
+
+test('Rules tab: "Required when" with a warning-only rule, and invalid rules are explained', async ({ page }) => {
+  await page.goto('/#/admin/masters?open=common');
+  await page.getByRole('button', { name: /^PPL & PL \(Product Line\) Master/ }).click();
+  await page.getByRole('button', { name: /^Rules \(/ }).click();
+  const panel = page.getByTestId('rules-panel');
+  await panel.getByRole('button', { name: 'Add rule' }).click();
+  const form = panel.getByTestId('rule-form');
+  await form.getByRole('radio', { name: /Required when/ }).check();
+  await form.getByRole('button', { name: 'Save rule' }).click();
+  await expect(form).toContainText('Choose the field that becomes required.');
+  await form.getByLabel('This field is required').selectOption({ label: 'PL (Variant / Sub-Line)' });
+  await form.getByLabel('when this field').selectOption({ label: 'BU' });
+  await form.getByRole('checkbox', { name: 'EV' }).check();
+  await form.getByLabel('If broken').selectOption('warning');
+  await expect(form.getByTestId('rule-preview')).toContainText('PL (Variant / Sub-Line) is required when BU is "EV".');
+  await form.getByRole('button', { name: 'Save rule' }).click();
+  await expect(panel.getByTestId('rule-item')).toContainText('Warning');
+});
+
+test('Upload a Master applies the rules of the master to the uploaded rows', async ({ page }) => {
+  // Rule: PPL Code must be unique
+  await page.goto('/#/admin/masters?open=common');
+  await page.getByRole('button', { name: /^PPL & PL \(Product Line\) Master/ }).click();
+  await page.getByRole('button', { name: /^Rules \(/ }).click();
+  await page.getByRole('button', { name: 'Add rule' }).click();
+  const form = page.getByTestId('rule-form');
+  await form.getByRole('radio', { name: /No duplicates/ }).check();
+  await form.getByRole('checkbox', { name: 'PPL Code' }).check();
+  await form.getByRole('button', { name: 'Save rule' }).click();
+
+  // An upload of a row with an existing PPL Code (other fields different) is refused
+  await page.goto('/#/admin/upload-master');
+  const header = ['BU', 'PPL Code', 'PPL (Parent Line)', 'PL (Variant / Sub-Line)', 'Powertrain', 'Active', 'Extended Warranty Tier', 'Telematics Diagnostic Tier'];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ['PV', 'PPL-NEXON-ICE', 'Nexon', 'Rule upload variant', 'Petrol', 'Y', 'GOLD', 'OTA_ACTIVE']]), 'ppl_master');
+  await page.getByLabel('Master Excel file').setInputFiles({ name: 'ppl.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }) as Buffer });
+  await expect(page.getByTestId('row-issues')).toContainText('PPL Code must be unique');
+  await expect(page.getByRole('button', { name: 'Import', exact: true })).toBeDisabled();
+});
+
+test('Rules also apply on the List of Values screen', async ({ page }) => {
+  await page.goto('/#/admin/masters?open=common');
+  await page.getByRole('button', { name: /Table \/ Excel view/ }).click();
+  await page.getByRole('button', { name: /^Rules \(/ }).click();
+  const panel = page.getByTestId('rules-panel');
+  await panel.getByRole('button', { name: 'Add rule' }).click();
+  const form = panel.getByTestId('rule-form');
+  await form.getByRole('radio', { name: /Format/ }).check();
+  await form.getByLabel('This field').selectOption({ label: 'Display Value' });
+  await form.getByLabel('Format', { exact: true }).selectOption({ label: 'Own pattern (for IT)…' });
+  await form.getByLabel('Own pattern').fill('^[A-Z].*');
+  await form.getByLabel('Message to users').fill('Start the value with a capital letter.');
+  await form.getByRole('button', { name: 'Save rule' }).click();
+  await page.getByRole('button', { name: /Back to the List of Values screen/ }).click();
+
+  const lov = page.getByTestId('lov-explorer');
+  await lov.getByTestId('lov-type-list').getByRole('button', { name: /THD_CLOSURE_ACTION/ }).click();
+  await lov.getByRole('button', { name: 'New Value' }).click();
+  const values = lov.getByTestId('lov-values').getByRole('textbox', { name: 'Display Value' });
+  await values.last().fill('closed late');
+  await page.keyboard.press('Control+s');
+  await expect(page.getByText('"closed late": Start the value with a capital letter.')).toBeVisible();
+  await values.last().fill('Closed late');
+  await page.keyboard.press('Control+s');
+  await expect(page.getByText('THD_CLOSURE_ACTION saved (4 values).')).toBeVisible();
+});

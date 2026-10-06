@@ -52,6 +52,8 @@ import { findClaimConflict } from '../../utils/claimRules';
 import { findCommonLovConflict } from '../../utils/commonLov';
 import { DUPLICATE_RECORD_MESSAGE, duplicateMessage, findIdenticalRecord, nextRecordId } from '../../utils/recordDuplicates';
 import { checkCopies, insertCopies } from '../../utils/recordCopies';
+import { checkRecord } from '../../utils/masterRules';
+import { MasterRulesPanel } from './MasterRulesPanel';
 import { masterValidationSchema } from '../../utils/masterValidationSchema';
 import { MasterDataImportModal } from './MasterDataImportModal';
 import { BatchUndoModal, MasterChangeSnapshot } from './BatchUndoModal';
@@ -75,7 +77,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
   onOpenChangeLog,
   onOpenDealerPreview,
 }) => {
-  const { showToast, currentUser, logAudit, auditLogs } = useApp();
+  const { showToast, currentUser, logAudit, auditLogs, masterConfigs } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchColumnScope, setSearchColumnScope] = useState<string>('ALL');
@@ -493,10 +495,11 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
   };
 
   // Ctrl+B: a copy of the row appears right below it, editable in place (same on every screen); Ctrl+S saves the copies
+  const [showRules, setShowRules] = useState(false);
   const [copies, setCopies] = useState<Array<Record<string, any>>>([]);
   const [copyErrors, setCopyErrors] = useState<Record<string, string[]>>({});
   const [focusCopyId, setFocusCopyId] = useState<string | null>(null);
-  const liveCopy = useMemo(() => (copies.length ? checkCopies(master, copies) : null), [copies, master]);
+  const liveCopy = useMemo(() => (copies.length ? checkCopies(master, copies, masterConfigs) : null), [copies, master]);
 
   const handleDuplicateRecord = (rec: Record<string, any>) => {
     if (!canEdit) return;
@@ -535,7 +538,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
 
   const handleSaveCopies = () => {
     if (!copies.length) return;
-    const check = checkCopies(master, copies);
+    const check = checkCopies(master, copies, masterConfigs);
     if (Object.keys(check.errors).length) {
       setCopyErrors(check.errors);
       const dup = Object.values(check.duplicates).flat()[0];
@@ -556,7 +559,8 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     onUpdateMaster(newMaster);
     setCopies([]);
     setCopyErrors({});
-    showToast(`${copies.length} row(s) added to ${master.name}.`, 'success');
+    const warn = Object.values(check.warnings).flat()[0];
+    showToast(warn ? `${copies.length} row(s) added, with a warning: ${warn}` : `${copies.length} row(s) added to ${master.name}.`, warn ? 'info' : 'success');
   };
 
   // Ctrl+B anywhere in the editor: copy the open record, else the single ticked row. Ctrl+S saves the open record.
@@ -778,14 +782,19 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
   const handleSaveRecord = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Rigorous Schema Validation across all fields (Date, Number, Dropdown, Boolean, Text)
-    const validationResult = masterValidationSchema.validateRecord(master.fields, formData, master.id);
+    // Field types / mandatory values, the master's built-in rules, then its own Rules-tab rules
+    const validationResult = checkRecord(master, formData, {
+      others: master.records.filter((r) => r.id !== editingRecordId),
+      masters: masterConfigs,
+    });
 
     if (!validationResult.isValid) {
       setFormErrors(validationResult.errors);
-      showToast('Validation failed: Please correct the invalid field values highlighted below.', 'error');
+      const ruleMsg = Object.entries(validationResult.errors).find(([k]) => k.includes('__') || !master.fields.some((f) => f.key === k))?.[1];
+      showToast(ruleMsg ?? 'Validation failed: Please correct the invalid field values highlighted below.', 'error');
       return;
     }
+    const ruleWarning = validationResult.warnings[0];
 
     const sanitizedData = validationResult.sanitizedRecord;
 
@@ -846,7 +855,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
       });
 
       onUpdateMaster(newMaster);
-      showToast(`Record ${editingRecordId} validated & updated successfully.`, 'success');
+      showToast(ruleWarning ? `Saved, with a warning: ${ruleWarning}` : `Record ${editingRecordId} validated & updated successfully.`, ruleWarning ? 'info' : 'success');
     } else {
       updatedRecords = [sanitizedData, ...master.records];
       const newMaster = { ...master, records: updatedRecords };
@@ -869,7 +878,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
       });
 
       onUpdateMaster(newMaster);
-      showToast(`New record validated & added to ${master.name}.`, 'success');
+      showToast(ruleWarning ? `Saved, with a warning: ${ruleWarning}` : `New record validated & added to ${master.name}.`, ruleWarning ? 'info' : 'success');
     }
 
     setIsRecordModalOpen(false);
@@ -1375,6 +1384,17 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
               </button>
             )}
 
+            <button
+              type="button"
+              onClick={() => setShowRules((v) => !v)}
+              aria-expanded={showRules}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-colors ${showRules ? 'border-indigo-400 bg-indigo-50 text-indigo-900' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
+              title="Business rules of this master (no coding)"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span>Rules ({(master.rules ?? []).length})</span>
+            </button>
+
             {canEdit ? (
               <button
                 onClick={handleAddBlankRow}
@@ -1390,6 +1410,13 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
             )}
           </div>
         </div>
+        {showRules && (
+          <MasterRulesPanel
+            master={master}
+            canEdit={!readOnly && isAdminTml}
+            onSave={(rules) => onUpdateMaster({ ...master, rules })}
+          />
+        )}
 
         {/* Bulk Import Notification & Quick Undo Banner */}
         {recentlyBulkImported && (
