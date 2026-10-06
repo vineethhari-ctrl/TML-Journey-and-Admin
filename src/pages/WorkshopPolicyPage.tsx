@@ -32,7 +32,7 @@ function tidy(p: RoleWorkshopPolicy): RoleWorkshopPolicy {
 }
 
 /**
- * Admin Portal → Workshop Tabs & Columns: which workflow tabs each role may use, the default tab layout, and the lean
+ * Admin Portal → Default Views (TML admin): which cards and workflow tabs each role may use, the default layout, and the lean
  * default columns per worklist. Users personalise within this; tabs not allowed here never appear for the role.
  */
 export const WorkshopPolicyPage: React.FC = () => {

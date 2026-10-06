@@ -19,7 +19,7 @@ const CARD_ROUTES: Record<string, string> = {
 
 /**
  * Landing page (BU design): the module cards a role may use, in the user's own order and with the user's hidden
- * cards removed. Admins set the allowed cards and default layout per role (Workshop Tabs & Columns).
+ * cards removed. Admins set the allowed cards and default layout per role (TML admin, Default Views).
  */
 export const HomePage: React.FC = () => {
   const { currentUser, activeRoleId, navigate, showToast } = useApp();
