@@ -44,7 +44,7 @@ export interface BodyshopFacility {
   dealerId: string;
   dealerName: string;
   divisionName: string;
-  bu: 'PV' | 'EV' | 'CV';
+  bu: 'PV' | 'EV';
   totalBays: number;
   dentingStalls: number;
   paintBooths: number;
@@ -1112,7 +1112,6 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
                     >
                       <option value="PV">PV (Passenger Vehicles)</option>
                       <option value="EV">EV (Electric Vehicles)</option>
-                      <option value="CV">CV (Commercial Vehicles)</option>
                     </select>
                   </div>
                 </div>

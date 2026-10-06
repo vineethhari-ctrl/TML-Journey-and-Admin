@@ -47,10 +47,10 @@ describe('template workbook', () => {
     expect(m.moduleName).toBe(moduleNameFor('bodyshop'));
     expect(m.records[0]).toMatchObject({ id: 'TYR-001', brand_code: 'MRF', warranty_months: 60, active: true, effective_from: '2026-04-01' });
     expect(m.fields.find((f) => f.key === 'segment')).toMatchObject({
-      options: ['PV', 'EV', 'CV'],
+      options: ['PV', 'EV'],
       displayInDealerApp: true,
       dealerTargetModule: 'job_card',
-      valueMapping: { PV: 'Passenger Vehicle', EV: 'Electric Vehicle', CV: 'Commercial Vehicle' },
+      valueMapping: { PV: 'Passenger Vehicle', EV: 'Electric Vehicle' },
     });
   });
 

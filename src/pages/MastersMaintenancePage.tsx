@@ -21,7 +21,7 @@ import { EqcRuleTester } from '../components/administration/EqcRuleTester';
 import { BodyshopCapturePreview } from '../components/administration/BodyshopCapturePreview';
 import { ThdRuleTester } from '../components/administration/ThdRuleTester';
 import { ClaimRuleTester } from '../components/administration/ClaimRuleTester';
-import { CommonLovPanel } from '../components/administration/CommonLovPanel';
+import { LovExplorer } from '../components/administration/LovExplorer';
 import { COMMON_LOV_ID } from '../data/commonLov';
 import { HolidayCalendarConsole } from '../components/administration/HolidayCalendarConsole';
 import { BodyshopMaster } from '../components/administration/BodyshopMaster';
@@ -199,6 +199,8 @@ export const MastersMaintenancePage: React.FC = () => {
 
   // Dual Admin Role Context: [Dealer Admin] vs [TML Admin] - default to TML Admin to enable full enterprise schema customization
   // A platform Dealer Admin always works in the Dealer Admin context; others default to TML Admin
+  // Common LOV Master: Siebel-style List of Values screen, or the generic table (Excel import / export)
+  const [lovTableView, setLovTableView] = useState(false);
   const [adminRole, setAdminRole] = useState<'Dealer Admin' | 'TML Admin'>(activeRoleId === 'dealerAdmin' ? 'Dealer Admin' : 'TML Admin');
   useEffect(() => {
     if (activeRoleId === 'dealerAdmin') setAdminRole('Dealer Admin');
@@ -352,7 +354,7 @@ export const MastersMaintenancePage: React.FC = () => {
       fields: [
         { key: 'dealerCode', label: 'Dealer Code', type: 'select', options: ['DLR1001', 'DLR1002', 'DLR1003', 'DLR1004', 'DLR1005'], mandatory: true },
         { key: 'division', label: 'Division', type: 'text', mandatory: true },
-        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], mandatory: true },
+        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], mandatory: true },
         { key: 'bayName', label: 'Bay Name', type: 'text', mandatory: true },
         { key: 'bayType', label: 'Bay Type', type: 'select', options: ['Mechanical', 'Electrical', 'EV', 'Fleet', 'Speedo', 'AC', 'BodyShop'], mandatory: true },
         { key: 'floor', label: 'Floor', type: 'select', options: ['Ground', 'Floor 1', 'Floor 2', 'Basement'], mandatory: true },
@@ -2042,8 +2044,24 @@ export const MastersMaintenancePage: React.FC = () => {
                 {currentMaster.logicalGroup === 'Bodyshop' && <BodyshopCapturePreview />}
                 {currentMaster.moduleCode === 'thd' && <ThdRuleTester />}
                 {currentMaster.moduleCode === 'claim' && <ClaimRuleTester />}
-                {currentMaster.id === COMMON_LOV_ID && <CommonLovPanel />}
-                <MasterTableEditor
+                {currentMaster.id === COMMON_LOV_ID && !lovTableView && (
+                  <LovExplorer
+                    master={currentMaster}
+                    canEdit={adminRole === 'TML Admin'}
+                    onSave={updateMasterConfig}
+                    onTableView={() => setLovTableView(true)}
+                  />
+                )}
+                {currentMaster.id === COMMON_LOV_ID && lovTableView && (
+                  <button
+                    type="button"
+                    onClick={() => setLovTableView(false)}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    ← Back to the List of Values screen
+                  </button>
+                )}
+                {(currentMaster.id !== COMMON_LOV_ID || lovTableView) && <MasterTableEditor
                   master={currentMaster}
                   isAdminTml={adminRole === 'TML Admin'}
                   onUpdateMaster={(updated) => {
@@ -2051,7 +2069,7 @@ export const MastersMaintenancePage: React.FC = () => {
                   }}
                   onOpenChangeLog={() => setActiveMainTab('changelog')}
                   onOpenDealerPreview={() => setActiveMainTab('dealer_preview')}
-                />
+                />}
               </div>
             );
           })()}

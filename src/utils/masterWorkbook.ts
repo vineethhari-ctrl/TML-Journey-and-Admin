@@ -342,7 +342,7 @@ export function buildTemplateWorkbook(): XLSX.WorkBook {
       fields: [
         { key: 'brand_code', label: 'Brand Code', type: 'text', mandatory: true, validation: { pattern: '^[A-Z]{3}$', customErrorMessage: 'Use a 3-letter code, e.g. MRF' } },
         { key: 'brand_name', label: 'Brand Name', type: 'text', mandatory: true },
-        { key: 'segment', label: 'Segment', type: 'select', mandatory: true, options: ['PV', 'EV', 'CV'], displayInDealerApp: true, dealerTargetModule: 'job_card', dealerDisplayLabel: 'Vehicle Segment', valueMapping: { PV: 'Passenger Vehicle', EV: 'Electric Vehicle', CV: 'Commercial Vehicle' } },
+        { key: 'segment', label: 'Segment', type: 'select', mandatory: true, options: ['PV', 'EV'], displayInDealerApp: true, dealerTargetModule: 'job_card', dealerDisplayLabel: 'Vehicle Segment', valueMapping: { PV: 'Passenger Vehicle', EV: 'Electric Vehicle' } },
         { key: 'warranty_months', label: 'Warranty (Months)', type: 'number', validation: { min: 0, max: 120 } },
         { key: 'effective_from', label: 'Effective From', type: 'date' },
         { key: 'active', label: 'Active', type: 'boolean' },

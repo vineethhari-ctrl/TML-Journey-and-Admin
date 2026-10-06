@@ -271,7 +271,6 @@ export const ConfigurableMasterView: React.FC<ConfigurableMasterViewProps> = ({
                 <option value="All">All Business Units</option>
                 <option value="PV">Passenger Vehicles (PV)</option>
                 <option value="EV">Electric Vehicles (EV)</option>
-                <option value="CV">Commercial Vehicles (CV)</option>
               </select>
             </div>
 

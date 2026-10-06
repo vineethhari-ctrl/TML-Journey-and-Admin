@@ -25,11 +25,11 @@ test('additional bay beyond allocation: dealer request → email link → Networ
   await page.getByRole('button', { name: /New Bay/ }).click();
   const form = page.getByRole('form', { name: 'Add bay' });
   await form.getByLabel(/Bay Name/).fill('Fleet Service Bay 03');
-  await form.getByLabel('BU').selectOption('CV');
-  await form.getByLabel('Bay Type').selectOption('Fleet');
-  // Allocation CV/Fleet = 2, 1 used → first one is within allocation
-  await expect(form.getByTestId('allocation-check')).toContainText('1 of 2 used');
   await form.getByLabel('BU').selectOption('PV');
+  await form.getByLabel('Bay Type').selectOption('Fleet');
+  // Allocation PV/Fleet = 2, 1 used → first one is within allocation
+  await expect(form.getByTestId('allocation-check')).toContainText('1 of 2 used');
+  await form.getByLabel('BU').selectOption('EV');
   await expect(form.getByTestId('allocation-check')).toContainText('0 of 0 used');
   await form.getByLabel(/Justification/).fill('Second shift for corporate fleet contract');
   await form.getByRole('button', { name: 'Send for Approval' }).click();

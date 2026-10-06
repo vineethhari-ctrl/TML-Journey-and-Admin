@@ -32,7 +32,7 @@ test('"Create New Master" defines a master that is immediately usable and expose
   const f2 = page.getByTestId('cm-field-1');
   await f2.getByLabel('Field Label').fill('Tyre Segment');
   await f2.getByLabel('Type').selectOption('select');
-  await f2.getByLabel('Options (comma separated)').fill('PV, EV, CV');
+  await f2.getByLabel('Options (comma separated)').fill('PV, EV');
   await f2.getByRole('checkbox', { name: 'Show in Dealer App' }).check();
   await f2.getByLabel('Dealer screen').selectOption('vehicle_journey');
 
@@ -178,18 +178,59 @@ test('BA workbook with mistakes is rejected with row-level errors and nothing is
   await expect(page.getByRole('button', { name: /^Import \d+ Master/ })).toBeDisabled();
 });
 
-test('Common Masters hold every dropdown list in one LOV master, named <MODULE>_<FIELD>', async ({ page }) => {
+test('List of Values screen (Siebel style): pick a type, add / reorder / retire values, create a new type', async ({ page }) => {
   await page.goto('/#/admin/masters?open=common');
-  const panel = page.getByTestId('common-lov-panel');
-  await expect(panel).toBeVisible();
-  await expect(panel.getByText('All lists OK')).toBeVisible();
-  const catalogue = page.getByTestId('common-lov-catalogue');
-  await expect(catalogue.getByRole('cell', { name: 'THD_COMPLAINT_TYPE', exact: true })).toBeVisible();
-  await expect(catalogue.getByRole('cell', { name: 'CLAIM_ISSUE_DESCRIPTION', exact: true })).toBeVisible();
-  await expect(catalogue.getByRole('cell', { name: 'COMMON_BU', exact: true })).toBeVisible();
+  const lov = page.getByTestId('lov-explorer');
+  await expect(lov.getByRole('button', { name: 'All lists OK' })).toBeVisible();
+  const types = lov.getByTestId('lov-type-list');
 
-  // Filter to one module
-  await panel.getByLabel('Module').selectOption('CLAIM');
-  await expect(catalogue.getByRole('cell', { name: 'THD_COMPLAINT_TYPE', exact: true })).toHaveCount(0);
-  await expect(catalogue.getByRole('cell', { name: 'CLAIM_SPECIAL_GOODWILL', exact: true })).toBeVisible();
+  // Find a type and open it
+  await lov.getByPlaceholder('Find type, field or value').fill('closure');
+  await types.getByRole('button', { name: /THD_CLOSURE_ACTION/ }).click();
+  const grid = lov.getByTestId('lov-values');
+  await expect(grid.getByRole('textbox', { name: 'Display Value' })).toHaveCount(3);
+
+  // New value, code proposed from the display value; move it to the top; retire another
+  await lov.getByRole('button', { name: 'New Value' }).click();
+  await grid.getByRole('textbox', { name: 'Display Value' }).last().fill('Closed by Plant');
+  await grid.getByRole('button', { name: 'Move Closed by Plant up' }).click();
+  await grid.getByRole('checkbox', { name: 'Closed With Early Warning active' }).uncheck();
+  await lov.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('THD_CLOSURE_ACTION saved (4 values).')).toBeVisible();
+  const values = grid.getByRole('textbox', { name: 'Display Value' });
+  await expect(values.nth(2)).toHaveValue('Closed by Plant');
+  await expect(grid.getByRole('textbox', { name: 'Code (LIC)' }).nth(2)).toHaveValue('CLOSED_BY_PLANT');
+
+  // A duplicate is refused with the cell highlighted
+  await lov.getByRole('button', { name: 'New Value' }).click();
+  await values.last().fill('closed');
+  await lov.getByRole('button', { name: 'Save' }).click();
+  await expect(grid.getByText(/"closed" is already in THD_CLOSURE_ACTION/)).toBeVisible();
+  await lov.getByRole('button', { name: 'Undo changes' }).click();
+
+  // New LOV Type: Parameter proposed as <MODULE>_<FIELD>, values pasted one per line
+  await lov.getByPlaceholder('Find type, field or value').fill('');
+  page.once('dialog', (d) => d.accept());
+  await lov.getByRole('button', { name: 'New LOV Type' }).click();
+  const head = lov.getByTestId('lov-type-header');
+  await head.getByLabel('Module').selectOption('THD');
+  await head.getByLabel('Field Name (on screen)').fill('ABC');
+  await expect(head.getByLabel('LOV Type (Parameter)')).toHaveValue('THD_ABC');
+  await grid.getByRole('button', { name: 'Remove value' }).click();
+  await lov.getByRole('button', { name: 'Add several' }).click();
+  await lov.getByLabel(/one per line/).fill('1\n2\n3');
+  await lov.getByRole('button', { name: 'Add to list' }).click();
+  await lov.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('THD_ABC saved (3 values).')).toBeVisible();
+  await expect(types.getByRole('button', { name: /THD_ABC/ })).toBeVisible();
+
+  // Dependent list: filter by parent value
+  await types.getByRole('button', { name: /THD_PROGRESS_SUB_STATUS/ }).click();
+  await lov.getByLabel('Show values for').selectOption('Pending for parts');
+  await expect(grid.getByRole('textbox', { name: 'Display Value' })).toHaveCount(2);
+
+  // The generic table stays available for Excel import / export
+  await lov.getByRole('button', { name: /Table \/ Excel view/ }).click();
+  await page.getByRole('button', { name: /Back to the List of Values screen/ }).click();
+  await expect(lov).toBeVisible();
 });

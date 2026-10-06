@@ -622,7 +622,7 @@ export const DEFAULT_API_VERSION_RELEASES: ApiVersionRelease[] = [
     status: 'ACTIVE',
     releaseName: 'Fleet Telematics & FASTag RFID Extension',
     releaseDate: '2026-09-15',
-    publishedBy: 'TML Commercial Vehicles & PV Services',
+    publishedBy: 'TML PV & EV Services',
     releaseNotes:
       'Added high-voltage battery pack serial regex validation and FASTag 16-digit RFID windshield transponder parameter.',
     minClientAppVersion: '>= 4.1.0',
