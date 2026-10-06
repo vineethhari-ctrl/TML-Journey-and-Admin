@@ -2,6 +2,7 @@
  * Reading and checking the Common LOV Master (src/data/commonLov.ts). Only Active rows are offered in dropdowns.
  */
 import type { MasterConfig, MasterFieldDef } from '../data/masterCatalogue';
+import { DUPLICATE_RECORD_MESSAGE } from './recordDuplicates';
 import { COMMON_LOV_ID, LIC_PATTERN, LOV_CODE_PATTERN, LOV_DEFINITIONS, licFor } from '../data/commonLov';
 
 type Rec = Record<string, any>;
@@ -95,9 +96,9 @@ export function findCommonLovConflict(masterId: string, record: Rec, others: Rec
   const peers = others.filter((o) => o.id !== record.id && isActive(o) && scope(o) === scope(record));
   const under = blank(record.parentValue) ? '' : ` under "${record.parentValue}"`;
   const sameValue = peers.find((o) => norm(o.value) === norm(record.value));
-  if (sameValue) return `"${record.value}" is already in ${code(record.lovCode)}${under} (${sameValue.id}).`;
+  if (sameValue) return `${DUPLICATE_RECORD_MESSAGE}: "${record.value}" is already in ${code(record.lovCode)}${under} (${sameValue.id}).`;
   const sameLic = blank(record.lic) ? undefined : peers.find((o) => code(o.lic) === code(record.lic));
-  return sameLic ? `Code ${code(record.lic)} is already used in ${code(record.lovCode)}${under} (${sameLic.id}).` : null;
+  return sameLic ? `${DUPLICATE_RECORD_MESSAGE}: Code ${code(record.lic)} is already used in ${code(record.lovCode)}${under} (${sameLic.id}).` : null;
 }
 
 /** Problems across the whole Common LOV Master. */
@@ -207,7 +208,7 @@ export function applyLovTypeDraft(
     delete e.lovCode;
     if (parentCode && isActive(r) && !parentValues.includes(norm(r.parentValue))) e.parentValue = `Choose an active value of ${parentCode}.`;
     const clash = !blank(r.value) && findCommonLovConflict(COMMON_LOV_ID, r, rows.slice(0, i));
-    if (clash) e[clash.startsWith('Code') ? 'lic' : 'value'] = clash.replace(/ \([^)]*\)\.$/, '.');
+    if (clash) e[clash.includes(': Code ') ? 'lic' : 'value'] = clash.replace(/ \([^)]*\)\.$/, '.');
     if (Object.keys(e).length) errors[r._key] = e;
   });
   return { records: [...kept, ...rows.map(({ _key, ...r }) => r)], errors };

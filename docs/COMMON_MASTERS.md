@@ -47,7 +47,7 @@ Example from the request: field **ABC** of the **THD** module with values 1, 2, 
   1. Left: find the LOV Type by typing part of its name, field or a value, or filter by module.
   2. Right: the type's values in a grid — Order (arrows to move), Display Value, Code (LIC), Parent Value (dependent
      lists), Active tick box, Description. **New Value** adds a row, **Add several** takes values pasted one per line
-     (e.g. from Excel), the copy icon duplicates a row. Untick **Active** to retire a value.
+     (e.g. from Excel), **Ctrl+B** (or the copy icon) duplicates the row you are in; the cursor lands in the copy's Display Value, type over it. Untick **Active** to retire a value. Saving a copy without changing it is refused: "Duplicate record cannot exist".
   3. **Save**. Mistakes (duplicate value or code, missing parent value, bad name) are highlighted on the cell and
      nothing is saved until fixed. **Undo changes** goes back to the saved list.
   4. **New LOV Type**: choose the Module and type the Field Name — the Parameter is proposed (`THD` + "ABC" →
@@ -77,3 +77,10 @@ Common LOV Master the same way.
 
 Code: `src/data/commonLov.ts` (list definitions), `src/utils/commonLov.ts` (lookups, rules, health check),
 `CommonLovPanel.tsx` (catalogue).
+
+## Shortcut for every master: Ctrl+B
+
+In any master table (not only the LOV screen) the TML Admin can press **Ctrl+B** to duplicate a row: click in a row (or
+tick one row, or have a record open) and press Ctrl+B — the Add form opens filled with a copy, so only the values that
+differ need typing. The row's copy icon does the same. A row identical to an existing row (every field the same, only
+the id differs) cannot be saved: **"Duplicate record cannot exist"**.

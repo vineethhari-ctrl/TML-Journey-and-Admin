@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Copy, ListPlus, Plus, RotateCcw, Save, Search, Table2, Trash2, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import type { MasterConfig } from '../../data/masterCatalogue';
+import { DUPLICATE_RECORD_MESSAGE } from '../../utils/recordDuplicates';
 import { LOV_MODULES, licFor } from '../../data/commonLov';
 import { LOV_TYPE_ERRORS, applyLovTypeDraft, commonLovHealthCheck, lovCatalogue, lovRows, lovValues, type LovTypeHeader } from '../../utils/commonLov';
 
@@ -45,6 +46,16 @@ export const LovExplorer: React.FC<Props> = ({ master, canEdit, onSave, onTableV
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulk, setBulk] = useState('');
   const [showIssues, setShowIssues] = useState(false);
+  const [focusId, setFocusId] = useState<string | null>(null);
+
+  // After Ctrl+B, put the cursor in the copy's Display Value, ready to type over it
+  useEffect(() => {
+    if (!focusId) return;
+    const el = document.querySelector<HTMLInputElement>(`[data-lov-row="${focusId}"] input[aria-label="Display Value"]`);
+    el?.focus();
+    el?.select();
+    setFocusId(null);
+  }, [focusId, draft]);
 
   // Load the chosen type into the grid
   const load = (code: string | null) => {
@@ -97,9 +108,21 @@ export const LovExplorer: React.FC<Props> = ({ master, canEdit, onSave, onTableV
     status: 'Active',
   });
   const addRow = () => change([...draft, newRow()]);
+  // Duplicate keeps every value (replace what differs); the Code (LIC) is blank so it follows the new Display Value
   const copyRow = (r: Rec) => {
     const i = draft.indexOf(r);
-    change([...draft.slice(0, i + 1), { ...r, id: tempId(), _new: true, value: `${r.value} (copy)`, lic: '' }, ...draft.slice(i + 1)]);
+    const copy = { ...r, id: tempId(), _new: true, lic: '' };
+    change([...draft.slice(0, i + 1), copy, ...draft.slice(i + 1)]);
+    setFocusId(copy.id);
+  };
+  const onGridKeyDown = (e: React.KeyboardEvent) => {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'b') return;
+    e.preventDefault();
+    if (!editable) return;
+    const id = (e.target as HTMLElement).closest('[data-lov-row]')?.getAttribute('data-lov-row');
+    const row = draft.find((d) => d.id === id);
+    if (row) copyRow(row);
+    else showToast('Click in a value row, then press Ctrl+B to duplicate it.', 'info');
   };
   const removeRow = (r: Rec) => change(draft.filter((d) => d !== r));
   const move = (r: Rec, dir: -1 | 1) => {
@@ -141,7 +164,8 @@ export const LovExplorer: React.FC<Props> = ({ master, canEdit, onSave, onTableV
     const { records, errors: found } = applyLovTypeDraft(rows, isNew ? null : selected, header, draft);
     setErrors(found);
     if (Object.keys(found).length) {
-      showToast('Please fix the highlighted cells before saving.', 'error');
+      const dup = Object.values(found).flatMap((e) => Object.values(e)).find((m) => m.startsWith(DUPLICATE_RECORD_MESSAGE));
+      showToast(dup ? `${DUPLICATE_RECORD_MESSAGE}. Change the copied row's value before saving.` : 'Please fix the highlighted cells before saving.', 'error');
       return;
     }
     onSave({ ...master, records });
@@ -340,14 +364,14 @@ export const LovExplorer: React.FC<Props> = ({ master, canEdit, onSave, onTableV
                       {editable && <th className="px-2 py-2 w-16"><span className="sr-only">Actions</span></th>}
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody onKeyDown={onGridKeyDown}>
                     {visible.map((r) => {
                       const group = draft.filter((d) => String(d.parentValue ?? '') === String(r.parentValue ?? ''));
                       const pos = group.indexOf(r);
                       const rowErrors = Object.values(errors[r.id] ?? {});
                       return (
                         <React.Fragment key={r.id}>
-                          <tr className={`border-t border-slate-100 ${String(r.status) === 'Inactive' ? 'text-slate-400' : ''}`} data-testid="lov-value-row">
+                          <tr className={`border-t border-slate-100 ${String(r.status) === 'Inactive' ? 'text-slate-400' : ''}`} data-testid="lov-value-row" data-lov-row={r.id}>
                             <td className="px-2 py-1">
                               <span className="flex items-center gap-0.5">
                                 <span className="w-5 text-right font-mono">{pos + 1}</span>
@@ -396,7 +420,7 @@ export const LovExplorer: React.FC<Props> = ({ master, canEdit, onSave, onTableV
                             {editable && (
                               <td className="px-2 py-1">
                                 <span className="flex items-center gap-1">
-                                  <button type="button" title="Copy value" aria-label={`Copy ${r.value || 'value'}`} onClick={() => copyRow(r)} className="p-1 rounded hover:bg-slate-100 cursor-pointer"><Copy className="h-3.5 w-3.5" /></button>
+                                  <button type="button" title="Duplicate row (Ctrl+B)" aria-label={`Duplicate ${r.value || 'value'}`} onClick={() => copyRow(r)} className="p-1 rounded hover:bg-slate-100 cursor-pointer"><Copy className="h-3.5 w-3.5" /></button>
                                   {r._new ? (
                                     <button type="button" title="Remove" aria-label={`Remove ${r.value || 'value'}`} onClick={() => removeRow(r)} className="p-1 rounded text-red-700 hover:bg-red-50 cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>
                                   ) : (
@@ -423,7 +447,7 @@ export const LovExplorer: React.FC<Props> = ({ master, canEdit, onSave, onTableV
                 </table>
               </div>
               <p className="text-[11px] text-slate-500">
-                Order = position in the dropdown (use the arrows). Code (LIC) is filled from the Display Value when left blank and
+                <b>Ctrl+B</b> duplicates the row you are in — type over the copy's values. Order = position in the dropdown (use the arrows). Code (LIC) is filled from the Display Value when left blank and
                 stays fixed when the wording changes. Untick Active to retire a value; old records keep showing it.
                 {!editable && ' View only: TML Admin maintains the List of Values.'}
               </p>

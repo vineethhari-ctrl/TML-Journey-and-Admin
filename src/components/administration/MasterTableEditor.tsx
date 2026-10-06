@@ -7,6 +7,7 @@ import {
   Sliders,
   Download,
   Edit,
+  Copy,
   Trash2,
   CheckCircle2,
   AlertTriangle,
@@ -49,6 +50,7 @@ import { findEqcConflict } from '../../utils/eqcRules';
 import { findThdConflict } from '../../utils/thdRules';
 import { findClaimConflict } from '../../utils/claimRules';
 import { findCommonLovConflict } from '../../utils/commonLov';
+import { DUPLICATE_RECORD_MESSAGE, duplicateMessage, findIdenticalRecord, nextRecordId } from '../../utils/recordDuplicates';
 import { masterValidationSchema } from '../../utils/masterValidationSchema';
 import { MasterDataImportModal } from './MasterDataImportModal';
 import { BatchUndoModal, MasterChangeSnapshot } from './BatchUndoModal';
@@ -265,6 +267,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
       const fieldRes = masterValidationSchema.validateField(targetField, value);
       setFormErrors((prev) => {
         const next = { ...prev };
+        delete next._duplicate; // the row changed, so it may no longer be a duplicate
         if (!fieldRes.isValid && fieldRes.error) {
           next[fieldKey] = fieldRes.error;
         } else {
@@ -419,6 +422,36 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     setEditingRecordId(rec.id);
     setIsRecordModalOpen(true);
   };
+
+  // Ctrl+B: open the Add form pre-filled with a copy of the row; the admin replaces the values that differ
+  const handleDuplicateRecord = (rec: Record<string, any>) => {
+    if (!canEdit) return;
+    setFormData({ ...rec, id: nextRecordId(master.id, master.records) });
+    setFormErrors({});
+    setEditingRecordId(null);
+    setIsRecordModalOpen(true);
+    showToast(`Copy of ${rec.id} ready: change the values that differ, then save.`, 'info');
+  };
+
+  // Ctrl+B anywhere in the editor: copy the open record, else the single ticked row
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'b' || !canEdit) return;
+      const target = e.target as HTMLElement;
+      if (target.closest?.('[data-record-row]')) return; // the row handler deals with it
+      const open = editingRecordId ? master.records.find((r) => r.id === editingRecordId) : undefined;
+      const ticked = master.records.filter((r) => selectedRowIds.includes(r.id));
+      const source = isRecordModalOpen ? open : ticked.length === 1 ? ticked[0] : undefined;
+      if (!source) {
+        if (!isRecordModalOpen && !target.closest?.('input,textarea,select')) showToast('Tick one row (or click in a row), then press Ctrl+B to duplicate it.', 'info');
+        return;
+      }
+      e.preventDefault();
+      handleDuplicateRecord(source);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   // Helper to record a snapshot of the master before making a mutation
   const recordSnapshot = (
@@ -630,6 +663,12 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     }
 
     const others = master.records.filter((r) => r.id !== editingRecordId);
+    const identical = findIdenticalRecord(master.fields, sanitizedData, others);
+    if (identical) {
+      showToast(duplicateMessage(identical), 'error');
+      setFormErrors({ _duplicate: DUPLICATE_RECORD_MESSAGE });
+      return;
+    }
     const conflict = findEqcConflict(master.id, sanitizedData, others) ?? findThdConflict(master.id, sanitizedData, others) ?? findClaimConflict(master.id, sanitizedData, others) ?? findCommonLovConflict(master.id, sanitizedData, others);
     if (conflict) {
       showToast(conflict, 'error');
@@ -1761,7 +1800,15 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                   return (
                     <tr
                       key={row.id}
-                      className={`transition-colors ${
+                      data-record-row={row.id}
+                      tabIndex={canEdit ? 0 : undefined}
+                      onKeyDown={(e) => {
+                        if (canEdit && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+                          e.preventDefault();
+                          handleDuplicateRecord(row);
+                        }
+                      }}
+                      className={`transition-colors focus:bg-blue-50/40 focus:outline-hidden ${
                         isSelected ? 'bg-blue-50/60' : 'hover:bg-slate-50/70'
                       }`}
                     >
@@ -1820,6 +1867,14 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                       <td className="py-2.5 px-3.5 text-right">
                         {canEdit ? (
                           <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => handleDuplicateRecord(row)}
+                              className="p-1 rounded text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                              title="Duplicate Row (Ctrl+B)"
+                              aria-label={`Duplicate row ${row.id}`}
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
                             <button
                               onClick={() => handleOpenEditRecord(row)}
                               className="p-1 rounded text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition-colors cursor-pointer"
@@ -1880,12 +1935,21 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
               <div className="mx-5 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-xs text-rose-800 animate-fade-in shrink-0">
                 <AlertCircle className="h-4 w-4 text-rose-600 mt-0.5 shrink-0" />
                 <div className="space-y-0.5">
-                  <div className="font-bold">
-                    Validation required: {Object.keys(formErrors).length} field{Object.keys(formErrors).length > 1 ? 's have' : ' has'} issues
-                  </div>
-                  <div className="text-[11px] text-rose-700">
-                    Data types (Number, Date, Dropdown) and mandatory constraints are strictly validated.
-                  </div>
+                  {formErrors._duplicate ? (
+                    <>
+                      <div className="font-bold" data-testid="duplicate-error">{DUPLICATE_RECORD_MESSAGE}</div>
+                      <div className="text-[11px] text-rose-700">This row has the same values as an existing row. Change at least one value, then save.</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="font-bold">
+                        Validation required: {Object.keys(formErrors).length} field{Object.keys(formErrors).length > 1 ? 's have' : ' has'} issues
+                      </div>
+                      <div className="text-[11px] text-rose-700">
+                        Data types (Number, Date, Dropdown) and mandatory constraints are strictly validated.
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}

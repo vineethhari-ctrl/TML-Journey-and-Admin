@@ -234,3 +234,45 @@ test('List of Values screen (Siebel style): pick a type, add / reorder / retire 
   await page.getByRole('button', { name: /Back to the List of Values screen/ }).click();
   await expect(lov).toBeVisible();
 });
+
+test('Ctrl+B duplicates a row in the List of Values screen; saving it unchanged is refused as a duplicate', async ({ page }) => {
+  await page.goto('/#/admin/masters?open=common');
+  const lov = page.getByTestId('lov-explorer');
+  await lov.getByTestId('lov-type-list').getByRole('button', { name: /THD_CLOSURE_ACTION/ }).click();
+  const values = lov.getByTestId('lov-values').getByRole('textbox', { name: 'Display Value' });
+  await expect(values).toHaveCount(3);
+
+  await values.first().click();
+  await page.keyboard.press('Control+b');
+  await expect(values).toHaveCount(4);
+  await expect(values.nth(1)).toBeFocused();
+  await expect(values.nth(1)).toHaveValue('Closed');
+
+  // Saved as is → refused
+  await lov.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText(/Duplicate record cannot exist\. Change the copied row/)).toBeVisible();
+
+  // Type over the copy → saved
+  await values.nth(1).fill('Closed by Dealer');
+  await lov.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('THD_CLOSURE_ACTION saved (4 values).')).toBeVisible();
+});
+
+test('Ctrl+B duplicates a row in any master table; saving it unchanged shows "Duplicate record cannot exist"', async ({ page }) => {
+  await page.goto('/#/admin/masters?open=common');
+  await page.getByRole('button', { name: /Table \/ Excel view/ }).click();
+  const rows = page.locator('tbody tr[data-record-row]');
+  const before = await rows.count();
+
+  await rows.first().focus();
+  await page.keyboard.press('Control+b');
+  await expect(page.getByText('Add New Master Row')).toBeVisible();
+  await page.getByRole('button', { name: 'Insert Row' }).click();
+  await expect(page.getByTestId('duplicate-error')).toHaveText('Duplicate record cannot exist');
+
+  // Change a value → saves as a new row
+  await page.getByLabel(/^Display Value/).fill('Brand new value');
+  await page.getByLabel(/^Code \(LIC\)/).fill('BRAND_NEW_VALUE');
+  await page.getByRole('button', { name: 'Insert Row' }).click();
+  await expect(rows).toHaveCount(before + 1);
+});
