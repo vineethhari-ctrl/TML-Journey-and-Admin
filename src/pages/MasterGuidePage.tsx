@@ -13,10 +13,14 @@ import {
   HelpCircle,
   Wrench,
   Sparkles,
+  Keyboard,
+  ShieldCheck,
+  Layers,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { SmartExcelPicture, SMART_TEMPLATE_FILE } from '../components/administration/SmartExcelPicture';
 import { LOGICAL_MODULES, WORKSHOP_MODULES } from '../data/masterCatalogue';
+import { RULE_COLUMNS, RULE_TYPES } from '../utils/masterRules';
 import {
   buildMasterWorkbook,
   downloadWorkbook,
@@ -52,6 +56,24 @@ const FILES = [
     title: 'Existing Masters Catalogue',
     desc: 'Every master shipped with the system, in the same format — check here before creating one.',
     icon: ListChecks,
+  },
+  {
+    file: 'Sample_Upload_1_LOV_Correct.xlsx',
+    title: 'Practice 1 · List of Values (correct)',
+    desc: 'Test data in the Common LOV template: 3 values of a new list. Upload it on Upload a Master.',
+    icon: Upload,
+  },
+  {
+    file: 'Sample_Upload_2_LOV_WrongColumns.xlsx',
+    title: 'Practice 2 · wrong columns',
+    desc: 'The same list with the wrong column headings — see the error that tells you what to change.',
+    icon: AlertTriangle,
+  },
+  {
+    file: 'Sample_Upload_3_NewMaster.xlsx',
+    title: 'Practice 3 · a new master',
+    desc: 'Any Excel table: it is detected as a new master and you pick its module.',
+    icon: Plus,
   },
 ];
 
@@ -114,7 +136,11 @@ const Code: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 const TOC = [
   ['before', 'Before you start'],
   ['downloads', 'Downloads'],
-  ['smart', '★ Fastest: Smart Excel Import'],
+  ['upload', '★ Easiest: Upload a Master'],
+  ['common', 'Common Masters & Lists of Values'],
+  ['rules', 'Rules (no coding)'],
+  ['shortcuts', 'Shortcuts'],
+  ['smart', 'Smart Excel Import (detailed)'],
   ['choose', 'Which option to use'],
   ['create', 'A. Create one master (form)'],
   ['workbook', 'B. Prepare a workbook'],
@@ -140,10 +166,17 @@ export const MasterGuidePage: React.FC = () => {
             <BookOpen className="h-5 w-5" /> Adding Masters Without a Deployment
           </h1>
           <p className="text-xs text-blue-100 mt-1 max-w-2xl">
-            Everything you need to define new masters, or add fields and values that were missed, directly in the portal.
+            Everything you need to define new masters, upload Excel files, maintain lists of values and set rules — directly in the portal,
+            no coding and no deployment.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => navigate('/admin/upload-master')}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-400 cursor-pointer"
+          >
+            <Upload className="h-3.5 w-3.5" /> Open Upload a Master
+          </button>
           <button
             onClick={() => navigate('/admin/masters?open=create')}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white text-blue-950 text-xs font-bold hover:bg-blue-50 cursor-pointer"
@@ -183,7 +216,11 @@ export const MasterGuidePage: React.FC = () => {
           <li>Use <strong>Chrome or Edge</strong> on a laptop.</li>
           <li>
             Keep the <strong>Role View</strong> (top bar) on <em>Super Administrator</em>. In Masters Maintenance keep the toggle on{' '}
-            <strong>TML Admin</strong> — workbook import is only available there.
+            <strong>TML Admin</strong> — changing lists of values, rules and importing workbooks is a TML Admin task. Dealer Admins can upload
+            masters they own and see rules, but not change them.
+          </li>
+          <li>
+            <strong>No AI is used when the portal runs.</strong> Uploads, checks and rules are ordinary, repeatable functions in your browser — the same file always gives the same result.
           </li>
           <li className="text-amber-800">
             <strong>This is a prototype.</strong> What you create is saved <strong>only in your own browser</strong>; colleagues won't see it.
@@ -226,9 +263,132 @@ export const MasterGuidePage: React.FC = () => {
         </button>
       </Section>
 
-      <Section id="smart" title="★ Fastest: Smart Excel Import (your own Excel, any layout)" icon={Sparkles}>
+      <Section id="upload" title="★ Easiest: Upload a Master (drop any Excel file)" icon={Upload}>
         <p>
-          Already have the master in your own Excel? Upload it as it is. The portal finds each table, works out the column types
+          One page for everything: <strong>Administration → Upload a Master</strong>{' '}
+          <button className="text-blue-700 font-semibold underline cursor-pointer" onClick={() => navigate('/admin/upload-master')}>
+            (open it)
+          </button>
+          . Drop your Excel file and the page tells you straight away what it found and whether it can be loaded.{' '}
+          <strong>Nothing is saved until you press Import, and nothing is saved if any problem is shown.</strong>
+        </p>
+        <Table
+          prose
+          head={['Your file', 'What the page does']}
+          rows={[
+            [
+              'A sheet from an existing master (its own template)',
+              <>Recognised by the sheet name or by its columns. <strong>The columns must match the template exactly</strong> — a missing, extra or renamed column is an error that lists the difference, with a link to the correct template.</>,
+            ],
+            ['Any other Excel table with a header row', <>Treated as a <strong>new master</strong>: each column becomes a field. You choose the master name, module and owner on the page.</>],
+            ['A BA workbook with "Masters" and "Fields" sheets (and optional "Rules")', 'Creates the masters in the module named in the sheet, with their rows and rules (see B below).'],
+          ]}
+        />
+        <p className="font-bold text-slate-900 pt-1">What happens to each row of an existing master</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li><strong>Empty template</strong> (no <Code>id</Code> column): every row is added as a <strong>new row</strong>. Nothing existing is changed.</li>
+          <li>
+            <strong>"Current rows" file</strong> (has an <Code>id</Code> column): to <strong>change</strong> a row, edit its cells and keep its <Code>id</Code> — that row is updated.
+            To add a new row in that file, leave the <Code>id</Code> cell empty.
+          </li>
+          <li>An <strong>empty cell</strong> in a row you are changing keeps the present value — type only what changes.</li>
+          <li>A row identical to one already saved is not added again: <em>"Duplicate record cannot exist"</em>, with the Excel row number.</li>
+          <li>Wrong values, missing mandatory values and broken <strong>rules</strong> are listed per Excel row. Rule <em>warnings</em> are shown but the file still imports.</li>
+        </ul>
+        <Steps
+          items={[
+            <>Open <strong>Upload a Master</strong>. To start from the system's own layout, pick the master at the bottom and download its <strong>Empty template</strong> (new rows) or <strong>Current rows</strong> (changes).</>,
+            <>Fill it in Excel. Keep the column headings (they are the field names shown on screen).</>,
+            <>Drop the file on the page and read the <strong>Check result</strong>. Fix the file and drop it again until it says <span className="text-emerald-700 font-bold">Ready to import</span>.</>,
+            <>Press <strong>Import</strong>. The change is recorded in the Audit Log.</>,
+          ]}
+        />
+        <p>Practice files with test data are in <strong>Downloads</strong> above (Practice 1, 2 and 3), and on the Upload page.</p>
+      </Section>
+
+      <Section id="common" title="Common Masters & Lists of Values (dropdowns)" icon={Layers}>
+        <p>
+          Masters needed by several modules are kept once in <strong>Common Masters</strong> (sidebar → Common Masters): the <strong>Common LOV Master</strong>
+          (every dropdown list of every module), PPL &amp; PL, Complaint Codes and the Dealer Registry. <strong>BU is PV or EV</strong> — there is no
+          "PV + EV" or CV; a row that applies to both is entered once for PV and once for EV.
+        </p>
+        <Table
+          head={['Column', 'What to enter', 'Example']}
+          rows={[
+            ['LOV Type (Parameter)', <>Name of the list: <Code>&lt;MODULE&gt;_&lt;FIELD&gt;</Code>, capitals, starting with the module. <Code>COMMON_</Code> for lists several modules share.</>, <Code>THD_COMPLAINT_TYPE</Code>],
+            ['Module', 'Owner module of the list', 'THD'],
+            ['Field Name', 'Label of the dropdown on the screen', 'Type of Complaint'],
+            ['Display Value', 'What users see', 'Technical Query'],
+            ['Code (LIC)', 'Fixed code kept in records; filled from the value if left blank; stays when the wording changes', <Code>TECHNICAL_QUERY</Code>],
+            ['Order', 'Position in the dropdown', '1'],
+            ['Parent LOV Code / Parent Value', 'Only for dependent dropdowns (sub-status under a status)', <><Code>THD_PROGRESS</Code> / Work in process</>],
+            ['Description / Status', 'Optional note · Active or Inactive (retire a value, never delete it)', 'Active'],
+          ]}
+        />
+        <p className="font-bold text-slate-900 pt-1">Maintaining a list on screen — the List of Values screen</p>
+        <Steps
+          items={[
+            <>Sidebar → <strong>Common Masters</strong> (TML Admin). Left: find the list by typing part of its name, field or a value, or filter by module.</>,
+            <>Right: its values in a grid. <strong>New Value</strong> adds a blank row, <strong>Add several</strong> takes values pasted one per line, <strong>Ctrl+B</strong> copies a row, the arrows change the order, untick <strong>Active</strong> to retire a value.</>,
+            <>Press <strong>Ctrl+S</strong> (or Save). Duplicates and mistakes are marked on the cell and nothing is saved until they are fixed.</>,
+            <><strong>New LOV Type</strong>: choose the module and type the Field Name — the Parameter is proposed (<Code>THD</Code> + "ABC" → <Code>THD_ABC</Code>); choose "Depends on" for a dependent list.</>,
+            <><strong>Table / Excel view</strong> shows the plain table for Excel export / import. To load a list from Excel use <strong>Upload a Master</strong> with the Common LOV template (several lists can be in one sheet).</>,
+          ]}
+        />
+        <p>A master field uses a list by naming it (<Code>lovCode</Code>), so a list is maintained once and every screen that uses it follows.</p>
+      </Section>
+
+      <Section id="rules" title="Rules for a master (no coding)" icon={ShieldCheck}>
+        <p>
+          Every master has a <strong>Rules</strong> button (Masters Maintenance → open the master → <strong>Rules</strong>). The TML Admin adds business rules by
+          choosing a type and filling in the blanks. Rules are saved with the master and checked on <strong>every save, new row, Ctrl+S copy, List of Values save,
+          Excel upload and BA workbook import</strong>.
+        </p>
+        <Table
+          prose
+          head={['Rule type', 'What it checks', 'Example']}
+          rows={RULE_TYPES.map((t) => [t.title, t.hint, t.example])}
+        />
+        <Steps
+          items={[
+            <>Open the master → <strong>Rules</strong> → <strong>Add rule</strong>.</>,
+            <>Pick the kind of rule, then choose the fields and values from the dropdowns. The rule is shown as a plain sentence as you go.</>,
+            <>Choose <strong>Error</strong> (the row is refused) or <strong>Warning</strong> (saved, but the user is told). Optionally type your own message. <strong>Save rule</strong>.</>,
+            <>The list shows for each rule whether <em>all saved rows follow it</em> or which rows do not. Saved rows are never changed automatically. Switch a rule <strong>On / Off</strong>, edit or delete it any time.</>,
+          ]}
+        />
+        <p className="font-bold text-slate-900 pt-1">Rules in a BA workbook — optional "Rules" sheet, one row per rule</p>
+        <p>
+          Columns: {RULE_COLUMNS.map((c, i) => (
+            <React.Fragment key={c}>{i > 0 && ', '}<Code>{c}</Code></React.Fragment>
+          ))}
+          . <strong>Rule Type</strong> is <Code>{RULE_TYPES.map((t) => t.type).join(' | ')}</Code> (or the title above). Fields can be given by key or by the label shown on screen;
+          lists are comma separated. The rows in the same workbook are checked against its rules before anything is imported. The Blank Template has three examples.
+        </p>
+        <p className="text-slate-600">
+          Not covered by rules: multi-step logic such as auto-raising THD cases or routing approvals by amount — those stay built-in (a developer is needed).
+        </p>
+      </Section>
+
+      <Section id="shortcuts" title="Shortcuts that save time" icon={Keyboard}>
+        <Table
+          prose
+          head={['Do this', 'What happens']}
+          rows={[
+            [<><strong>+ Add Row</strong></>, 'A new row with every field blank appears at the top of the table (no popup). Fill it in place and press Ctrl+S.'],
+            [<><strong>Ctrl+B</strong></>, 'Click in a row (or tick one row) and press it: an editable copy appears right below. Type over what differs. Press again for more copies.'],
+            [<><strong>Ctrl+S</strong></>, 'Saves all new and copied rows (and the record form / List of Values screen).'],
+            [<><strong>Esc</strong></>, 'On an unsaved row (a new row or a copy) removes it, the same as deleting it. Saved rows are never removed by Esc.'],
+            [<><strong>Duplicates</strong></>, 'A copy identical to an existing row turns red at once, clicking away shows "Duplicate record cannot exist", and Ctrl+S refuses until a value is changed. Saving an edit with no change is refused the same way.'],
+            [<><strong>Ctrl+K</strong></>, 'Search any screen, e.g. "upload", "lov" or "guide".'],
+          ]}
+        />
+      </Section>
+
+      <Section id="smart" title="Smart Excel Import (any layout — detailed, step-by-step screen)" icon={Sparkles}>
+        <p>
+          <strong>Upload a Master</strong> (above) does this for you in one step. Smart Excel Import is the same detection with more control, and
+          can create several masters from one file. Already have the master in your own Excel? Upload it as it is. The portal finds each table, works out the column types
           (Y/N, numbers, dates, dropdowns) and which columns are mandatory, and lists any gaps with their Excel row numbers.
         </p>
         <Steps
@@ -249,6 +409,9 @@ export const MasterGuidePage: React.FC = () => {
           prose
           head={['You have…', 'Use']}
           rows={[
+            ['An Excel file — any master, new or existing', <><strong>Upload a Master</strong> — drop it; the page tells you what it is and whether it can be loaded</>],
+            ['A dropdown list (values) to add or change', <><strong>Common Masters → List of Values</strong> screen, or Upload a Master with the Common LOV template</>],
+            ['A check on a master (required, no duplicates, From ≤ To…)', <>The master's <strong>Rules</strong> button — no coding</>],
             ['One new master', <>Path <strong>A</strong> — Create New Master form</>],
             ["A module's masters in Excel", <>Paths <strong>B + C</strong> — workbook import</>],
             ['A field or values missed in an existing master', <>Path <strong>D</strong> — workbook with "Update existing masters", or <em>+ Add Custom Parameter</em> on that master</>],
@@ -271,7 +434,7 @@ export const MasterGuidePage: React.FC = () => {
 
       <Section id="workbook" title="B. Prepare a workbook" icon={FileSpreadsheet}>
         <p>
-          Start from the <strong>Blank Template</strong>. One workbook can hold many masters. It has three kinds of sheets
+          Start from the <strong>Blank Template</strong>. One workbook can hold many masters. It has these kinds of sheets
           (the README sheet is ignored on import):
         </p>
         <p className="font-bold text-slate-900 pt-1">1. "Masters" sheet — one row per master</p>
@@ -295,7 +458,7 @@ export const MasterGuidePage: React.FC = () => {
             ['Field Label', 'Shown to users', 'Warranty (Months)'],
             ['Type', FIELD_TYPES.join(' · ') + ' (select = dropdown)', 'number'],
             ['Mandatory', 'Y / N', 'Y'],
-            ['Options', 'Dropdown values, comma separated, at least 2', 'PV, EV, CV'],
+            ['Options', 'Dropdown values, comma separated, at least 2', 'PV, EV'],
             ['Min / Max', 'Number limits', '0 / 120'],
             ['Min Date / Max Date', 'YYYY-MM-DD', '2026-04-01'],
             ['Pattern + Pattern Error Message', 'Optional format rule for text, and the message users see', <Code>^[A-Z]{'{3}'}$</Code>],
@@ -311,9 +474,12 @@ export const MasterGuidePage: React.FC = () => {
           <li>Row 1 = <Code>id</Code> plus one column per field (field key or field label both work).</li>
           <li><Code>id</Code> is optional — blank ids are generated. Booleans: <Code>Y</Code>/<Code>N</Code>. Dates: <Code>YYYY-MM-DD</Code>.</li>
         </ul>
+        <p className="font-bold text-slate-900 pt-1">4. "Rules" sheet (optional) — one row per rule</p>
+        <p>Business rules for the masters in this workbook (see "Rules for a master" above for the columns and rule types). Rows of the workbook are checked against them.</p>
       </Section>
 
       <Section id="import" title="C. Import the workbook" icon={Upload}>
+        <p>You can also simply drop the workbook on <strong>Upload a Master</strong> — it recognises a BA workbook and does the same checks. The steps below use the older import dialog.</p>
         <Steps
           items={[
             <>Masters Maintenance → <strong>Import BA Workbook</strong>.</>,
@@ -370,6 +536,10 @@ export const MasterGuidePage: React.FC = () => {
             ['Record id "…" appears more than once', 'Each row in a records sheet needs a unique id.'],
             ['Fields reference "…" which is not listed', 'Add that master to the Masters sheet, or fix the Master ID spelling.'],
             ['Column "…" doesn\'t match any field (warning)', 'The column header isn\'t a field key/label of that master — it is ignored.'],
+            ['This file is not in the … template — Missing columns / Columns not in the template', 'Upload a Master: use the exact column headings of that master (download its template from the page). Rename, add or remove the columns listed.'],
+            ['Duplicate record cannot exist', 'The row is the same as one already saved (or earlier in the file). Change a value, or remove the row.'],
+            ['… must be unique / is required when … / must be between … (a rule)', 'The row breaks a rule of that master (Rules button). Fix the value, or ask the TML Admin to change the rule.'],
+            ['Rule Type "…" is not one of …', 'In the Rules sheet use one of the rule types listed in "Rules for a master".'],
           ]}
         />
       </Section>
@@ -377,7 +547,7 @@ export const MasterGuidePage: React.FC = () => {
       <Section id="verify" title="Check the result" icon={CheckCircle2}>
         <ul className="list-disc pl-5 space-y-1">
           <li><strong>Masters Maintenance</strong> → the master's group tab → its tab in the workspace: fields as columns, records as rows.</li>
-          <li>Try <strong>+ Add Row</strong> with a wrong value to see the validation you defined.</li>
+          <li>Try <strong>+ Add Row</strong> (a blank row appears in the table) with a wrong value and press <strong>Ctrl+S</strong> to see the validation and rules you defined.</li>
           <li>
             Fields with <em>Show in Dealer App</em> + target <Code>vehicle_journey</Code> or <Code>general</Code> appear on{' '}
             <button className="text-blue-700 font-semibold underline cursor-pointer" onClick={() => navigate('/journey/JC20260930001234')}>
@@ -398,9 +568,13 @@ export const MasterGuidePage: React.FC = () => {
       <Section id="faq" title="FAQ" icon={HelpCircle}>
         <dl className="space-y-2">
           {[
+            ['Does the portal use AI when I upload an Excel file?', 'No. Uploads, checks, duplicates and rules are ordinary code in your browser. Nothing is sent to a server or an AI service, and the same file always gives the same result.'],
+            ['Why was my file refused with "not in the template"?', 'For an existing master the columns must match its template exactly. Download the template from Upload a Master and copy your data into it.'],
+            ['How do I change existing rows from Excel?', 'Download "Current rows" for that master, edit the cells, keep the id column, and upload it. Rows with an id are updated; empty cells keep their value.'],
+            ['Is CV or "PV + EV" a BU?', 'No. BU is PV or EV. For both, enter two rows.'],
             ['Will my colleagues see what I import?', 'No. In this prototype everything stays in your own browser. Share your Excel file instead.'],
             ['Can I import the same file twice?', 'Yes. With "Skip it" existing masters are skipped; with "Update" rows are matched by id, so nothing is duplicated.'],
-            ['Can an import delete anything?', 'No. Imports only add masters, add fields and add/update rows.'],
+            ['Can an import delete anything?', 'No. Imports only add masters, add fields and add/update rows. Lists of values are retired with Active = off, never deleted.'],
             ['Why is "Import BA Workbook" refused?', 'Switch the toggle in Masters Maintenance to TML Admin.'],
             ['Bay Management / Holiday Calendar / Time Slots / Dealer Registry?', 'These have their own screens and cannot be changed by import.'],
           ].map(([q, a]) => (
@@ -414,11 +588,12 @@ export const MasterGuidePage: React.FC = () => {
 
       <Section id="reference" title="Allowed values" icon={ListChecks}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Table head={['Module Code', 'Module']} rows={WORKSHOP_MODULES.map((m) => [m.code, m.title])} />
+          <Table head={['Module Code', 'Module']} rows={[...WORKSHOP_MODULES.map((m) => [m.code, m.title]), ['common', 'Common Masters (shared by all modules)']]} />
           <div className="space-y-4">
             <Table head={['Logical Group', 'Portal tab']} rows={LOGICAL_MODULES.map((g) => [g.id, g.title])} />
             <Table head={['Owner', 'Meaning']} rows={[['TML_ADMIN', 'OEM-governed (TML Central)'], ['DEALER_ADMIN', 'Dealer-editable']]} />
             <Table head={['Dealer Target Module', '']} rows={DEALER_TARGETS.map((t) => [t, ''])} />
+            <Table head={['Rule Type (Rules sheet)', 'Title']} rows={RULE_TYPES.map((t) => [t.type, t.title])} />
             <Table head={['Type', '']} rows={FIELD_TYPES.map((t) => [t, t === 'select' ? 'dropdown' : t === 'boolean' ? 'Y/N' : ''])} />
           </div>
         </div>
