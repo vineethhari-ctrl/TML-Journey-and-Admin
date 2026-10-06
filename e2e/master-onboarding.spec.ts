@@ -404,7 +404,7 @@ test.describe('Upload a Master page', () => {
     // Correct file → ready, import adds 3 rows
     await input.setInputFiles(sample('Sample_Upload_1_LOV_Correct.xlsx'));
     await expect(page.getByText('Ready to import')).toBeVisible();
-    await expect(page.getByTestId('sheet-result')).toContainText('3 to add');
+    await expect(page.getByTestId('sheet-result')).toContainText('3 new row(s)');
     await page.getByRole('button', { name: 'Import', exact: true }).click();
     await expect(page.getByTestId('upload-done')).toContainText('3 row(s) saved');
 
@@ -429,5 +429,16 @@ test.describe('Upload a Master page', () => {
     await page.goto('/#/admin/masters');
     await page.getByRole('button', { name: /Spare Parts|SPD/ }).first().click();
     await expect(page.getByRole('button', { name: /Tyre Brand Upload/ })).toBeVisible();
+  });
+
+  test('page explains what happens to each row and offers the BA workbook templates', async ({ page }) => {
+    await page.goto('/#/admin/upload-master');
+    await expect(page.getByTestId('upload-explainer')).toContainText('as a new row');
+    const ba = page.getByTestId('ba-templates');
+    for (const name of ['Blank BA workbook template', 'Filled example workbook', 'Simple table template', 'All existing masters']) {
+      await expect(ba.getByRole('link', { name: new RegExp(name) })).toBeVisible();
+    }
+    const [download] = await Promise.all([page.waitForEvent('download'), ba.getByRole('link', { name: /Blank BA workbook template/ }).click()]);
+    expect(download.suggestedFilename()).toBe('TML_Master_Definition_Template.xlsx');
   });
 });

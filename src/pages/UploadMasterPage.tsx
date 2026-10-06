@@ -116,7 +116,7 @@ export const UploadMasterPage: React.FC = () => {
       <section className="grid gap-3 sm:grid-cols-3 text-xs text-slate-700">
         <div className="rounded-xl border border-slate-200 bg-white p-3">
           <div className="font-bold text-slate-900">Existing master</div>
-          Use that master&apos;s own template (download it below). Columns must match exactly — a missing, extra or renamed column is an error.
+          Use that master&apos;s own template (download it below). Columns must match exactly — a missing, extra or renamed column is an error. Rows are added as new rows; to change a row, keep its <i>id</i>.
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-3">
           <div className="font-bold text-slate-900">New master</div>
@@ -192,7 +192,7 @@ export const UploadMasterPage: React.FC = () => {
                 {o.kind === 'existing' && o.master && <span className={badge('bg-blue-100 text-blue-800')}>Existing master: {o.master.name} (found by {o.matchedBy})</span>}
                 {o.kind === 'new' && <span className={badge('bg-violet-100 text-violet-800')}><PlusCircle className="h-3.5 w-3.5" /> New master</span>}
                 {o.kind === 'skipped' && <span className={badge('bg-slate-100 text-slate-600')}>Skipped</span>}
-                {o.kind === 'existing' && o.ok && <span className={badge('bg-emerald-100 text-emerald-800')}>{o.add} to add · {o.update} to update · {o.unchanged} unchanged</span>}
+                {o.kind === 'existing' && o.ok && <span className={badge('bg-emerald-100 text-emerald-800')}>{o.add} new row(s) · {o.update} existing row(s) changed · {o.unchanged} already the same</span>}
               </div>
               {o.note && <p className="text-slate-600">{o.note}</p>}
 
@@ -264,8 +264,18 @@ export const UploadMasterPage: React.FC = () => {
       <section className="rounded-xl border border-slate-200 bg-white p-4 text-xs space-y-2">
         <h2 className="text-sm font-bold text-slate-900">Templates of the existing masters</h2>
         <p className="text-slate-600">
-          <Info className="inline h-3.5 w-3.5" /> Pick a master, download its template (empty) or its current rows (edit and upload again; the <b>id</b> column updates those rows).
+          <Info className="inline h-3.5 w-3.5" /> Pick a master and download either an <b>empty template</b> (to add new rows) or its <b>current rows</b> (to change existing rows).
         </p>
+        <div className="rounded-lg bg-slate-50 p-3 space-y-1 text-slate-700" data-testid="upload-explainer">
+          <div className="font-bold text-slate-900">What happens to each row you upload</div>
+          <ul className="list-disc pl-5 space-y-0.5">
+            <li><b>Empty template</b> (no <i>id</i> column): every row is added as a <b>new row</b>. Nothing existing is changed.</li>
+            <li><b>Current rows</b> file (has an <i>id</i> column): to <b>change</b> an existing row, edit its cells and keep its <i>id</i>. The row with that <i>id</i> is updated instead of a new one being added.</li>
+            <li>To add a new row in a <i>Current rows</i> file, leave the <i>id</i> cell empty.</li>
+            <li>A cell you leave <b>empty</b> in a row you are changing keeps its present value — you only type what changes.</li>
+            <li>A row that is exactly the same as one already saved is not added again (it is flagged as a duplicate or counted as &quot;already the same&quot;).</li>
+          </ul>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <select className={`${field} min-w-64`} aria-label="Master template" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
             {LOGICAL_MODULES.map((g) => (
@@ -281,6 +291,18 @@ export const UploadMasterPage: React.FC = () => {
             <Download className="h-3.5 w-3.5" /> Current rows
           </button>
         </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-2" data-testid="ba-templates">
+          <span className="font-semibold text-slate-700">BA workbook (to define NEW masters):</span>
+          {[
+            ['TML_Master_Definition_Template.xlsx', 'Blank BA workbook template'],
+            ['TML_Master_Practice_Workbook.xlsx', 'Filled example workbook'],
+            ['TML_Smart_Excel_Template.xlsx', 'Simple table template (any master)'],
+            ['TML_Existing_Masters_Catalogue.xlsx', 'All existing masters (reference)'],
+          ].map(([file, label]) => (
+            <a key={file} href={`${import.meta.env.BASE_URL}downloads/${file}`} download className="font-semibold text-blue-700 underline">{label}</a>
+          ))}
+        </div>
+        <p className="text-slate-500">In the BA workbook, the <b>Masters</b> sheet names each master and its module; the <b>Fields</b> sheet lists its columns; optional sheets named after a master hold its rows. Upload it here as it is.</p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-2" data-testid="sample-files">
           <span className="font-semibold text-slate-700">Practice files (test data):</span>
           {[

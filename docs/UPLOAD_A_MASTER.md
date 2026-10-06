@@ -6,7 +6,7 @@ shown.
 
 | Your file | What happens |
 | --- | --- |
-| A sheet in an **existing master's own template** (columns = the field names shown on screen; sheet named after the master, or columns that match exactly) | Rows are added; a row whose **id** already exists is updated (blank cells leave the value as it is). Duplicates, wrong values and mandatory gaps are listed with the Excel row number. |
+| A sheet in an **existing master's own template** (columns = the field names shown on screen; sheet named after the master, or columns that match exactly) | Every row is **added as a new row**. If the file has an **id** column (the *Current rows* download) and a row's id already exists, that row is **changed** instead; an empty cell in a changed row keeps its present value. Duplicates, wrong values and mandatory gaps are listed with the Excel row number. |
 | A sheet **close to** an existing master's template but with a missing, extra or renamed column | **Error** listing the missing / extra columns, with a link to download the correct template. Nothing is imported. |
 | **Any other table** with a header row | Detected as a **new master**: columns become fields (type, dropdown values and mandatory guessed from the data). Choose the master name, module and owner on the page. No coding or deployment. |
 | A **BA definition workbook** (sheets *Masters* and *Fields*) | Creates / extends masters in the module named in the sheet, with their rows. |
