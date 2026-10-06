@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { PreferenceRemote, scopedKey, usePreferenceStore } from './usePreferenceStore';
+import { scopedKey, usePreferenceStore } from './usePreferenceStore';
 import { ColumnPreference, moveColumn, normalizeColumnPreference, setColumnVisible } from '../utils/viewPreferences';
 
 export const COLUMN_PREF_STORAGE_KEY = 'user_pref_columns';
@@ -24,13 +24,12 @@ interface Options<Row> {
   columns: ColumnDef<Row>[];
   /** Lean default: visible, hidden pool and pinned columns. */
   preset: ColumnPreference;
-  remote?: PreferenceRemote<AllTabs>;
 }
 
-/** Per-tab column visibility and order, with pinned columns and Reset to Default (local first, then backend). */
-export function useColumnPreferences<Row>({ userId, roleId, tabId, columns, preset, remote }: Options<Row>) {
+/** Per-list column visibility and order, with pinned columns and Reset to Default, for the login session. */
+export function useColumnPreferences<Row>({ userId, roleId, tabId, columns, preset }: Options<Row>) {
   // One saved object holds every tab's layout: { gate_in: {...}, my_assignment: {...} }.
-  const store = usePreferenceStore<AllTabs>(scopedKey(COLUMN_PREF_STORAGE_KEY, userId, roleId), remote);
+  const store = usePreferenceStore<AllTabs>(scopedKey(COLUMN_PREF_STORAGE_KEY, userId, roleId));
   const keys = useMemo(() => columns.map((c) => c.key), [columns]);
   const pref = useMemo(() => normalizeColumnPreference(store.value?.[tabId] ?? null, keys, preset), [store.value, tabId, keys, preset]);
   const byKey = useMemo(() => new Map(columns.map((c) => [c.key, c])), [columns]);
@@ -50,6 +49,5 @@ export function useColumnPreferences<Row>({ userId, roleId, tabId, columns, pres
     },
     move: (key: string, direction: -1 | 1) => saveTab(moveColumn(pref, key, direction)),
     reset: () => saveTab(normalizeColumnPreference(null, keys, preset)),
-    syncState: store.syncState,
   };
 }

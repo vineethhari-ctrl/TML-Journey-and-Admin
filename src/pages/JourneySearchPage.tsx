@@ -21,19 +21,14 @@ import {
 import { ModuleType, ServiceCase } from '../types';
 import { ColumnDef, useColumnPreferences } from '../hooks/useColumnPreferences';
 import { ColumnCustomizer } from '../components/workshop/ColumnCustomizer';
-import { ColumnPreference } from '../utils/viewPreferences';
+import { DEFAULT_COLUMNS, policyForRole, useWorkshopPolicy } from '../data/workshopPolicy';
 
-/** Journey Search default columns: the minimum to find a journey; Dealer & Workshop and Last Updated on demand. */
-const JOURNEY_RESULT_COLUMNS: ColumnPreference = {
-  pinnedLeft: ['vehicle'],
-  pinnedRight: ['action'],
-  visibleColumns: ['vehicle', 'customer', 'jcNumber', 'stage', 'status', 'action'],
-  hiddenColumns: ['dealer', 'updated'],
-};
+
 import { MaskedName, MaskedPhone } from '../components/dpdp/MaskedPii';
 
 export const JourneySearchPage: React.FC = () => {
   const { serviceCases, vehicles, navigate, currentRoute, currentUser, activeRoleId } = useApp();
+  const { policy } = useWorkshopPolicy();
 
   const [searchBy, setSearchBy] = useState<JourneySearchBy>('auto');
   const [queryInput, setQueryInput] = useState('MH01AB1234');
@@ -344,7 +339,8 @@ export const JourneySearchPage: React.FC = () => {
     roleId: activeRoleId,
     tabId: 'journey_search',
     columns: resultColumns,
-    preset: JOURNEY_RESULT_COLUMNS,
+    // Lean default set by the TML admin in Default Views
+    preset: policyForRole(policy, activeRoleId).columns.journey_search ?? DEFAULT_COLUMNS.journey_search,
   });
 
   return (

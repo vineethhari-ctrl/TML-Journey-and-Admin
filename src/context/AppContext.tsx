@@ -453,13 +453,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         route === '/admin/users' ||
         route === '/admin/devices' ||
         route === '/admin/sessions' ||
-        route === '/admin/config' ||
-        route === '/admin/workshop-policy'
+        route === '/admin/config'
       ) {
         return ['superAdmin', 'dealerAdmin'].includes(activeRoleId);
       }
       if (route === '/admin/roles') {
         return ['superAdmin', 'dealerAdmin', 'dgm'].includes(activeRoleId);
+      }
+      // Default views (tabs, cards, fields per role) are set by the TML admin only
+      if (route === '/admin/workshop-policy') {
+        return false;
       }
       if (route === '/admin/audit') {
         return ['superAdmin', 'dgm'].includes(activeRoleId);

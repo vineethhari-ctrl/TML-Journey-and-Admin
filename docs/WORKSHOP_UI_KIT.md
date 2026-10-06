@@ -19,18 +19,23 @@ The screen follows the BU-accepted design from the JC Creation walkthrough:
 - an Appointments / Walk-In switch on Gate-In;
 - sample grids for Today's Gate-In, My Assignment and MR Details.
 
-## Admin control (Admin Portal → Workshop Tabs & Columns, `#/admin/workshop-policy`)
+## Default views: TML admin only (Admin Portal → Default Views, `#/admin/workshop-policy`)
 
-From the walkthrough: *"Needs to be in admin… which tabs should be visible to who"*. Per role, an admin sets:
+From the walkthrough (*"Needs to be in admin… which tabs should be visible to who"*) and the BU rule of 6 Oct 2026, the
+**TML admin** sets the defaults per role:
 
-- **Allowed tabs:** a tab not allowed for the role never appears, not even under "More".
-- **Default layout:** which tabs are visible by default, their order, and the landing tab (★).
-- **Default columns** per worklist. Locked columns are always shown; the rest go into each user's "More columns" pool.
+- **Landing page cards:** which cards the role may see, which are shown by default, and their order.
+- **Header tabs:** which tabs are allowed (a disallowed tab never appears, not even under "More"), which are visible by
+  default, their order, and the landing tab (★).
+- **Fields (columns)** of each list across the pages:
+  - workshop *Today's Total Gate-In*, *My Assignment* and *MR Details*;
+  - *TML Journey Search*.
 
-Users personalise within this policy. A user who already personalised keeps their layout, minus any tab the admin
-disallows. The policy lives in `src/data/workshopPolicy.ts` (`useWorkshopPolicy`, `policyForRole`). In the prototype
-it is stored in the browser under `tml_workshop_policy_v1`; in production it comes from the backend. Every save or reset
-is written to the Audit Log.
+  Locked columns are always shown; the rest go into each user's "More columns" pool.
+
+Dealer Admins and other roles cannot open this screen. The policy lives in `src/data/workshopPolicy.ts`
+(`useWorkshopPolicy`, `policyForRole`). In the prototype it is stored in the browser under `tml_workshop_policy_v1`; in
+production it comes from the backend. Every save or reset is written to the Audit Log.
 
 ## DPDP access log (`#/admin/audit?module=DPDP`)
 
@@ -58,7 +63,7 @@ every `EXPORT_WORKLIST`, with whether the export was masked.
 
 **Home** shows the BU landing page with the module cards the role may use. Each user can hide and reorder cards with
 **Customise cards**, and **Default view** puts them back. Admins choose the allowed cards and the default order per
-role in *Workshop Tabs & Columns*. Built-in defaults:
+role in *Default Views*. Built-in defaults:
 
 | Role | Cards |
 | --- | --- |
@@ -78,20 +83,14 @@ order the fields; pinned fields stay. It is on the workshop worklists and on **T
 shows Vehicle, Customer, JC Number, Current Stage, Status and Action by default; Dealer & Workshop and Last Updated are
 on demand.
 
-## Back to the default view after logout (BU rule, 6 Oct 2026)
+## Personalisation lasts for the session; logout restores the defaults (BU rule, 6 Oct 2026)
 
-By default, personal layouts (cards, tabs, columns) last only for the session. They are kept in `sessionStorage` and
-cleared at logout (`clearPersonalisation`), so every user starts from the default view at the next login.
+Every logged-in user, **dealer or TML**, can personalise cards, tabs and columns for their own needs. These personal
+layouts are kept in `sessionStorage` (`usePreferenceStore`), so they survive page reloads. They are cleared at logout
+(`clearPersonalisation` in `src/utils/personalisationSettings.ts`), so after logging back in the user sees the admin's
+default view again. There is no backend storage of personal layouts.
 
-The walkthrough notes asked for the opposite ("remember even after logout"). Admins can switch that on with **Keep
-personal layouts after logout** in *Workshop Tabs & Columns*. Layouts then go to `localStorage` and the optional
-backend adapter. The setting is in `src/utils/personalisationSettings.ts`.
-
-## Saving preferences (local first, then backend)
-
-`usePreferenceStore` writes to browser storage (session by default, see above) immediately and calls an optional `remote` adapter after 600 ms. On load,
-the server copy replaces the local one when it is newer (`updatedAt`). Suggested backend endpoints:
-`GET /me/preferences/{key}` and `PUT /me/preferences/{key}` with body `{ value, updatedAt }`.
+The walkthrough notes had asked to "remember even after logout". The BU rule above replaces that.
 
 ## DPDP (TASK-02)
 

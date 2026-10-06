@@ -3,8 +3,8 @@ import type { TabPreference, ColumnPreference } from '../utils/viewPreferences';
 import { WORKSHOP_MODULES } from './masterCatalogue';
 
 /**
- * Admin-controlled workshop worklist policy (Admin Portal → Workshop Tabs & Columns).
- * Per role: which tabs the role may see at all, the default tab layout, and the default (lean) columns per grid tab.
+ * Default views set by the TML admin (Admin Portal → Default Views), per role: landing cards, header tabs and the
+ * default (lean) fields of each list across the pages (workshop worklists, TML Journey Search).
  * Users personalise within this policy; a tab not allowed for the role never appears, not even under "More".
  */
 
@@ -34,7 +34,7 @@ export interface GridColumn {
   label: string;
 }
 
-/** Every column each sample grid can show (the full set in the BU screenshots); the policy picks the lean default. */
+/** Every column each list can show (the full set in the BU screenshots); the policy picks the lean default. */
 export const GRID_COLUMNS: Record<string, GridColumn[]> = {
   gate_in: [
     { key: 'action', label: 'Action' },
@@ -67,6 +67,16 @@ export const GRID_COLUMNS: Record<string, GridColumn[]> = {
     { key: 'workshopElapsed', label: 'Workshop Elapsed Time' },
     { key: 'visitorType', label: 'Visitor Type' },
     { key: 'vehicleType', label: 'Vehicle Type' },
+  ],
+  journey_search: [
+    { key: 'vehicle', label: 'Vehicle' },
+    { key: 'customer', label: 'Customer' },
+    { key: 'jcNumber', label: 'JC Number' },
+    { key: 'dealer', label: 'Dealer & Workshop' },
+    { key: 'stage', label: 'Current Stage' },
+    { key: 'status', label: 'Status' },
+    { key: 'updated', label: 'Last Updated' },
+    { key: 'action', label: 'Action' },
   ],
   mr_details: [
     { key: 'action', label: 'Action' },
@@ -124,6 +134,12 @@ export const DEFAULT_COLUMNS: Record<string, ColumnPreference> = {
     pinnedRight: [],
     visibleColumns: ['action', 'vehicleNo', 'model', 'customerName', 'maskedPhone', 'status', 'stageAging', 'vehicleType'],
     hiddenColumns: ['customerType', 'customerSeverity', 'visitorType', 'revisit', 'criticalCustomer', 'workshopElapsed'],
+  },
+  journey_search: {
+    pinnedLeft: ['vehicle'],
+    pinnedRight: ['action'],
+    visibleColumns: ['vehicle', 'customer', 'jcNumber', 'stage', 'status', 'action'],
+    hiddenColumns: ['dealer', 'updated'],
   },
   mr_details: {
     pinnedLeft: ['action', 'requestId'],

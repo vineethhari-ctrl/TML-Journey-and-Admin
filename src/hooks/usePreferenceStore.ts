@@ -1,19 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { PREFS_CLEARED_EVENT, preferenceStorage, readPersonalisationSettings } from '../utils/personalisationSettings';
+import { useCallback, useEffect, useState } from 'react';
+import { PREFS_CLEARED_EVENT, preferenceStorage } from '../utils/personalisationSettings';
 
 /**
- * A user preference kept in the browser first and saved to the backend in the background.
- *  - Reads are instant from browser storage (works offline and on first paint).
- *  - By default (BU rule) preferences last for the session only and are cleared at logout, so users return to the
- *    default view; when admins enable "keep after logout" they go to localStorage and `remote` (see personalisationSettings).
- *  - Writes update storage immediately, then call `remote.save` after a short debounce (only when kept after logout).
- *  - On mount, `remote.load` can replace the local value when the server copy is newer.
+ * A user's personal layout for the current login session (BU rule: back to the default view after logout).
+ * Stored in sessionStorage, so it survives page reloads and is cleared at logout (see personalisationSettings).
  */
-export interface PreferenceRemote<T> {
-  load: (key: string) => Promise<StoredPreference<T> | null>;
-  save: (key: string, value: StoredPreference<T>) => Promise<void>;
-}
-
 export interface StoredPreference<T> {
   value: T;
   updatedAt: string;
@@ -41,12 +32,10 @@ const write = <T,>(key: string, pref: StoredPreference<T> | null) => {
 /** Scope a storage key to the user and role, e.g. "user_pref_tabs:SA_1042:serviceAdvisor". */
 export const scopedKey = (base: string, userId: string, roleId: string) => `${base}:${userId}:${roleId}`;
 
-export function usePreferenceStore<T>(key: string, remote?: PreferenceRemote<T>, debounceMs = 600) {
+export function usePreferenceStore<T>(key: string) {
   const [pref, setPref] = useState<StoredPreference<T> | null>(() => read<T>(key));
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [syncState, setSyncState] = useState<'idle' | 'saving' | 'error'>('idle');
 
-  // Key changes (another user / role): load that scope's local copy. Logout clears every layout.
+  // Key changes (another user / role): load that scope's copy. Logout clears every layout.
   useEffect(() => {
     setPref(read<T>(key));
     const reload = () => setPref(read<T>(key));
@@ -54,49 +43,14 @@ export function usePreferenceStore<T>(key: string, remote?: PreferenceRemote<T>,
     return () => window.removeEventListener(PREFS_CLEARED_EVENT, reload);
   }, [key]);
 
-  // Server copy wins when it is newer than the local one.
-  useEffect(() => {
-    if (!remote || !readPersonalisationSettings().keepAfterLogout) return;
-    let cancelled = false;
-    remote
-      .load(key)
-      .then((server) => {
-        if (cancelled || !server) return;
-        const local = read<T>(key);
-        if (!local || server.updatedAt > local.updatedAt) {
-          write(key, server);
-          setPref(server);
-        }
-      })
-      .catch(() => {
-        // Offline or server error: keep the local copy.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [key, remote]);
-
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
-
   const save = useCallback(
     (value: T | null) => {
       const next = value === null ? null : { value, updatedAt: new Date().toISOString() };
       write(key, next);
       setPref(next);
-      if (!remote || !next || !readPersonalisationSettings().keepAfterLogout) return;
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => {
-        setSyncState('saving');
-        remote
-          .save(key, next)
-          .then(() => setSyncState('idle'))
-          .catch(() => setSyncState('error'));
-      }, debounceMs);
     },
-    [key, remote, debounceMs],
+    [key],
   );
 
-  return { value: pref?.value ?? null, save, syncState };
+  return { value: pref?.value ?? null, save };
 }

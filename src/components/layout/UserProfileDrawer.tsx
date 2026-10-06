@@ -2,7 +2,7 @@ import React from 'react';
 import { User, Shield, Laptop, LogOut, CheckCircle, Clock } from 'lucide-react';
 import { Drawer } from '../common/Drawer';
 import { useApp } from '../../context/AppContext';
-import { clearPersonalisation, readPersonalisationSettings } from '../../utils/personalisationSettings';
+import { clearPersonalisation } from '../../utils/personalisationSettings';
 
 interface UserProfileDrawerProps {
   isOpen: boolean;
@@ -14,14 +14,9 @@ export const UserProfileDrawer: React.FC<UserProfileDrawerProps> = ({ isOpen, on
 
   const handleLogout = () => {
     onClose();
-    const kept = readPersonalisationSettings().keepAfterLogout;
-    if (!kept) clearPersonalisation();
-    showToast(
-      kept
-        ? 'Session logout simulated. Your personal layouts are kept for your next login.'
-        : 'Session logout simulated. Tabs, cards and columns are back to the default view.',
-      'info'
-    );
+    // Personal layouts last for the session only: the next login starts from the admin's default view
+    clearPersonalisation();
+    showToast('Session logout simulated. Tabs, cards and columns are back to the default view.', 'info');
   };
 
   return (

@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Lock, RotateCcw, Save, Star } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DEFAULT_COLUMNS, GRID_COLUMNS, LANDING_CARDS, RoleWorkshopPolicy, WORKSHOP_TABS, policyForRole, useWorkshopPolicy } from '../data/workshopPolicy';
-import { usePersonalisationSettings } from '../utils/personalisationSettings';
 import { moveItem, normalizeColumnPreference, normalizeTabPreference, setColumnVisible, MIN_VISIBLE_TABS } from '../utils/viewPreferences';
 
 const ROLES: Array<[string, string]> = [
@@ -16,7 +15,12 @@ const ROLES: Array<[string, string]> = [
   ['cro', 'CRO (Telecaller)'],
 ];
 
-const GRID_LABEL: Record<string, string> = { gate_in: "Today's Total Gate-In", my_assignment: 'My Assignment', mr_details: 'MR Details' };
+const GRID_LABEL: Record<string, string> = {
+  gate_in: "Workshop · Today's Total Gate-In",
+  my_assignment: 'Workshop · My Assignment',
+  mr_details: 'Workshop · MR Details',
+  journey_search: 'TML Journey · Journey Search',
+};
 
 /** Keep the role policy consistent: landing tab visible and allowed, at least 2 tabs visible. */
 function tidy(p: RoleWorkshopPolicy): RoleWorkshopPolicy {
@@ -81,17 +85,16 @@ export const WorkshopPolicyPage: React.FC = () => {
     const hiddenTabs = on ? cards.layout.hiddenTabs.filter((h) => h !== id) : [...cards.layout.hiddenTabs, id];
     setCards({ layout: { ...cards.layout, hiddenTabs } });
   };
-  const { settings, save: saveSettings } = usePersonalisationSettings();
 
   const save = () => {
     const before = policyForRole(policy, roleId);
     saveRole(roleId, draft);
-    logAudit('Workshop Policy Updated', 'Administration', `Workshop tabs & columns: ${roleId}`, `${before.allowedTabs.length} tabs allowed`, `${draft.allowedTabs.length} tabs allowed, landing ${draft.tabs.defaultLandingTab}`);
-    showToast(`Saved tabs & columns for ${ROLES.find((r) => r[0] === roleId)?.[1]}`, 'success');
+    logAudit('Default Views Updated', 'Administration', `Default views: ${roleId}`, `${before.allowedTabs.length} tabs allowed`, `${draft.allowedTabs.length} tabs allowed, landing ${draft.tabs.defaultLandingTab}`);
+    showToast(`Saved default views for ${ROLES.find((r) => r[0] === roleId)?.[1]}`, 'success');
   };
   const reset = () => {
     saveRole(roleId, null);
-    logAudit('Workshop Policy Reset', 'Administration', `Workshop tabs & columns: ${roleId}`, 'custom', 'built-in default');
+    logAudit('Default Views Reset', 'Administration', `Default views: ${roleId}`, 'custom', 'built-in default');
     showToast('Restored the built-in default for this role', 'info');
   };
 
@@ -99,8 +102,8 @@ export const WorkshopPolicyPage: React.FC = () => {
     <div className="space-y-4 p-4 sm:p-6" data-testid="workshop-policy">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Workshop Tabs &amp; Columns</h1>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Personalisation defaults per role: landing cards, tabs, columns</p>
+          <h1 className="text-xl font-bold text-slate-900">Default Views</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">TML admin · default landing cards, header tabs and fields per role, across all pages</p>
           <p className="text-xs text-slate-500">
             Which workflow tabs each role sees, the default layout, and the default columns. Users can personalise within this; users who already did keep
             their layout, but a tab you disallow disappears for them.
@@ -114,26 +117,12 @@ export const WorkshopPolicyPage: React.FC = () => {
         </div>
       </div>
 
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 text-xs" data-testid="personalisation-setting">
-        <div>
-          <h2 className="text-sm font-bold text-slate-900">Personal layouts after logout</h2>
-          <p className="text-slate-500">
-            {settings.keepAfterLogout
-              ? 'Kept: each user sees their own cards, tabs and columns again at the next login.'
-              : 'Reset (BU rule): every user is back on the default view after logging out. Changes last only for the session.'}
-          </p>
-        </div>
-        <label className="flex cursor-pointer items-center gap-2 font-semibold text-slate-700">
-          <input
-            type="checkbox"
-            checked={settings.keepAfterLogout}
-            onChange={(e) => {
-              saveSettings({ keepAfterLogout: e.target.checked });
-              logAudit('Personalisation Setting Updated', 'Administration', 'Keep personal layouts after logout', String(!e.target.checked), String(e.target.checked));
-            }}
-          />
-          Keep personal layouts after logout
-        </label>
+      <section className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 text-xs text-slate-700" data-testid="personalisation-setting">
+        <h2 className="text-sm font-bold text-slate-900">How users see these defaults</h2>
+        <p>
+          Every user — dealer or TML — starts from the defaults below and can personalise tabs, cards and columns for their own needs. When they log out and log
+          back in, they see these defaults again.
+        </p>
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 text-xs" data-testid="card-policy">
@@ -222,7 +211,7 @@ export const WorkshopPolicyPage: React.FC = () => {
         </section>
 
         <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 text-xs">
-          <h2 className="text-sm font-bold text-slate-900">Default columns</h2>
+          <h2 className="text-sm font-bold text-slate-900">Default fields (columns) per page</h2>
           {Object.keys(GRID_COLUMNS).map((grid) => {
             const pref = normalizeColumnPreference(draft.columns[grid], GRID_COLUMNS[grid].map((c) => c.key), DEFAULT_COLUMNS[grid]);
             const pinned = new Set([...pref.pinnedLeft, ...pref.pinnedRight]);
