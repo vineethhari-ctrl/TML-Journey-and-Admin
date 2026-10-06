@@ -1,8 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, ChevronDown, RotateCcw, Settings2, Star } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, RotateCcw, Settings2, Star } from 'lucide-react';
 import { useTabPreferences, TabDef } from '../../hooks/useTabPreferences';
 
 type TabPrefs = ReturnType<typeof useTabPreferences>;
+
+const TONE: Record<NonNullable<TabDef['tone']>, string> = {
+  blue: 'text-blue-600',
+  purple: 'text-purple-700',
+  amber: 'text-amber-500',
+  red: 'text-red-600',
+  green: 'text-emerald-600',
+};
 
 const Badge: React.FC<{ n?: number; active?: boolean }> = ({ n, active }) =>
   n === undefined ? null : (
@@ -40,10 +48,14 @@ export const WorkshopTabBar: React.FC<Props> = ({ prefs, activeTab, onSelect }) 
         role="tab"
         aria-selected={active}
         onClick={() => onSelect(t.id)}
-        className={`flex shrink-0 items-center rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer ${active ? 'bg-blue-700 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+        className={`relative flex min-w-[112px] shrink-0 flex-col items-start rounded-lg px-3 pt-1.5 pb-2 text-left cursor-pointer hover:bg-slate-50 ${active ? 'bg-blue-50/60' : ''}`}
       >
-        {t.label}
-        <Badge n={t.badge} active={active} />
+        <span className={`pl-6 text-xl font-semibold leading-tight ${TONE[t.tone ?? 'blue']}`}>{String(t.badge ?? 0).padStart(2, '0')}</span>
+        <span className="flex items-start gap-1.5 text-[11px] leading-tight text-slate-600">
+          <ClipboardList className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+          <span className={active ? 'font-semibold text-slate-900' : ''}>{t.label}</span>
+        </span>
+        {active && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-blue-700" />}
       </button>
     );
   };

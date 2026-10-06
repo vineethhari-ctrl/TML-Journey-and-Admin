@@ -4,6 +4,7 @@ import {
   Compass,
   Search,
   ClipboardList,
+  LayoutList,
   Users,
   Shield,
   Smartphone,
@@ -237,6 +238,16 @@ export const Sidebar: React.FC = () => {
               >
                 <Sliders className="h-4 w-4" />
                 <span className="flex-1 text-left">Configuration</span>
+              </button>
+            )}
+
+            {canAccessRoute('/admin/workshop-policy') && (
+              <button
+                onClick={() => navigate('/admin/workshop-policy')}
+                className={`w-full cursor-pointer ${navItemClass(currentRoute.split('?')[0] === '/admin/workshop-policy')}`}
+              >
+                <LayoutList className="h-4 w-4" />
+                <span className="flex-1 text-left">Workshop Tabs &amp; Columns</span>
               </button>
             )}
 

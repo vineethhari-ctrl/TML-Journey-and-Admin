@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useRouteSearchParam } from '../hooks/useRouteSearchParam';
 import { AuditLogEntry } from '../types';
@@ -12,15 +12,21 @@ import {
   AlertTriangle,
   Clock,
   Layers,
+  ShieldCheck,
 } from 'lucide-react';
 
 export const AuditLogPage: React.FC = () => {
-  const { auditLogs, exportAuditLogs } = useApp();
+  const { auditLogs, exportAuditLogs, currentRoute } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   useRouteSearchParam(setSearchQuery);
   const [actionFilter, setActionFilter] = useState('ALL');
   const [moduleFilter, setModuleFilter] = useState('ALL');
+  // ?module=DPDP opens the DPDP access trail: who saw which customer's data, and when
+  useEffect(() => {
+    const m = new URLSearchParams(currentRoute.split('?')[1] || '').get('module');
+    if (m) setModuleFilter(m);
+  }, [currentRoute]);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'SUCCESS' | 'FAILED' | 'WARNING'>('ALL');
 
   // Pagination state
@@ -56,7 +62,7 @@ export const AuditLogPage: React.FC = () => {
   }, [filteredLogs, currentPage, pageSize]);
 
   const uniqueActions = Array.from(new Set(auditLogs.map((l) => l.action)));
-  const uniqueModules = Array.from(new Set(auditLogs.map((l) => l.module)));
+  const uniqueModules = Array.from(new Set([...auditLogs.map((l) => l.module), 'DPDP']));
 
   return (
     <div className="space-y-6">
@@ -78,6 +84,18 @@ export const AuditLogPage: React.FC = () => {
           </p>
         </div>
 
+        <div className="flex items-center gap-2">
+        <button
+          onClick={() => {
+            setModuleFilter('DPDP');
+            setCurrentPage(1);
+          }}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold text-xs cursor-pointer"
+          title="Who revealed, called or exported customer data, and when"
+        >
+          <ShieldCheck className="h-4 w-4" />
+          <span>DPDP access log</span>
+        </button>
         <button
           onClick={exportAuditLogs}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
@@ -85,6 +103,7 @@ export const AuditLogPage: React.FC = () => {
           <FileDown className="h-4 w-4" />
           <span>Export Audit Log (CSV)</span>
         </button>
+        </div>
       </div>
 
       {/* Main Table Container */}
