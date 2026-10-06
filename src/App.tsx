@@ -22,6 +22,7 @@ import { BayApprovalsPage } from './pages/BayApprovalsPage';
 import { WorkshopWorklistPage } from './pages/WorkshopWorklistPage';
 import { WorkshopPolicyPage } from './pages/WorkshopPolicyPage';
 import { HomePage } from './pages/HomePage';
+import { FleetRegisterPage } from './pages/FleetRegisterPage';
 
 const AppRouter: React.FC = () => {
   const { currentRoute } = useApp();
@@ -47,6 +48,9 @@ const AppRouter: React.FC = () => {
     }
     if (path === '/admin/workshop-policy') {
       return <WorkshopPolicyPage />;
+    }
+    if (path === '/admin/fleet') {
+      return <FleetRegisterPage />;
     }
     if (path === '/admin/bay-approvals') {
       return <BayApprovalsPage />;

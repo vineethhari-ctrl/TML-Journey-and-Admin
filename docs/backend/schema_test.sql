@@ -87,6 +87,50 @@ INSERT INTO audit_log (user_id, user_name, action, module, entity) VALUES ('u', 
 SELECT pg_temp.expect_error('audit log is append-only (update)', $q$UPDATE audit_log SET action='tampered'$q$);
 SELECT pg_temp.expect_error('audit log is append-only (delete)', $q$DELETE FROM audit_log$q$);
 
+-- 3b. Fleet flag and the ID chain under a JC
+INSERT INTO fleet_vehicle (chassis_no, fleet_account, valid_from, valid_to, is_active, created_by, updated_by) VALUES
+  ('MAT700222K1000984', 'Test Fleet Logistics', '2026-04-01', '2027-03-31', true, 'u', 'u'),
+  ('MAT700555K1002460', 'Test Cab Aggregator', NULL, NULL, false, 'u', 'u'),
+  ('MAT701332K1005904', 'Test Rental Cars', NULL, '2026-06-30', true, 'u', 'u');
+SELECT pg_temp.expect_error('chassis must be a 17-character VIN (no I/O/Q)',
+  $q$INSERT INTO fleet_vehicle (chassis_no, created_by, updated_by) VALUES ('MAT70O222K1000984','u','u')$q$);
+SELECT pg_temp.expect_error('valid to before valid from',
+  $q$INSERT INTO fleet_vehicle (chassis_no, valid_from, valid_to, created_by, updated_by) VALUES ('MAT700999K1004428','2026-05-01','2026-04-01','u','u')$q$);
+DO $$ BEGIN
+  ASSERT customer_category('mat-700222 k1000984', '2026-10-06') = 'FLEET', 'listed + active + in validity = FLEET';
+  ASSERT customer_category('MAT700222K1000984', '2027-03-31') = 'FLEET', 'validity end date is inclusive';
+  ASSERT customer_category('MAT700222K1000984', '2027-04-01') = 'INDIVIDUAL', 'after validity = INDIVIDUAL';
+  ASSERT customer_category('MAT700555K1002460', '2026-10-06') = 'INDIVIDUAL', 'inactive = INDIVIDUAL';
+  ASSERT customer_category('MAT701332K1005904', '2026-10-06') = 'INDIVIDUAL', 'expired = INDIVIDUAL';
+  ASSERT customer_category('MAT624009K1234567', '2026-10-06') = 'INDIVIDUAL', 'not on the list = INDIVIDUAL';
+  ASSERT (SELECT can_create FROM role_permission WHERE role_id = 'TML_ADMIN' AND module = 'FLEET'), 'TML admin holds the fleet-upload privilege';
+END $$;
+
+INSERT INTO journey_id_link (jc_number, id_kind, id_value, source_system, issued_at) VALUES
+  ('JC20260930001234', 'APPOINTMENT', 'APT-2026-99120', 'Appointment app', '2026-09-29 17:30+05:30'),
+  ('JC20260930001234', 'VISIT', 'VIS-20260930-1234', 'Gate-In', '2026-09-30 09:42+05:30'),
+  ('JC20260930001234', 'SR', 'SR-20260930-08638', 'CRM', '2026-09-30 09:44+05:30'),
+  ('JC20260930001234', 'PRE_JC', 'PJC-20260930-1234', 'Pre-JC service', '2026-09-30 09:50+05:30'),
+  ('JC20260930001234', 'JC', 'JC20260930001234', 'DMS', '2026-09-30 10:15+05:30'),
+  ('JC20260930001234', 'MR', 'MR-20260930-3702', 'DMS', '2026-09-30 11:00+05:30'),
+  ('JC20260930001234', 'MR', 'MR-20260930-3703', 'DMS', '2026-09-30 11:40+05:30');
+SELECT pg_temp.expect_error('an ID belongs to one JC only',
+  $q$INSERT INTO journey_id_link (jc_number, id_kind, id_value, source_system, issued_at) VALUES ('JC20260930001201','SR','SR-20260930-08638','CRM',now())$q$);
+SELECT pg_temp.expect_error('one SR per JC',
+  $q$INSERT INTO journey_id_link (jc_number, id_kind, id_value, source_system, issued_at) VALUES ('JC20260930001234','SR','SR-20260930-09999','CRM',now())$q$);
+SELECT pg_temp.expect_error('a JC link must carry its own JC number',
+  $q$INSERT INTO journey_id_link (jc_number, id_kind, id_value, source_system, issued_at) VALUES ('JC20260930001201','JC','JC20260930009999','DMS',now())$q$);
+INSERT INTO customer_update (jc_number, linked_kind, linked_id, channel, template_code, message_text, status) VALUES
+  ('JC20260930001234', 'JC', 'JC20260930001234', 'WhatsApp', 'JC_OPENED', 'Job card opened; estimate shared.', 'DELIVERED');
+SELECT pg_temp.expect_error('customer update must point at a known ID',
+  $q$INSERT INTO customer_update (jc_number, linked_kind, linked_id, channel, template_code, message_text) VALUES ('JC20260930001234','SR','SR-UNKNOWN','SMS','X','x')$q$);
+SELECT pg_temp.expect_error('customer update channel',
+  $q$INSERT INTO customer_update (jc_number, linked_kind, linked_id, channel, template_code, message_text) VALUES ('JC20260930001234','JC','JC20260930001234','Fax','X','x')$q$);
+DO $$ BEGIN
+  ASSERT (SELECT jc_number FROM journey_id_link WHERE upper(id_value) = upper('mr-20260930-3703')) = 'JC20260930001234', 'any ID finds its JC';
+  ASSERT (SELECT count(*) FROM journey_id_link WHERE jc_number = 'JC20260930001234' AND id_kind = 'MR') = 2, 'a JC can have several MRs';
+END $$;
+
 -- 4. Row-level security: a dealer user only sees their own dealer
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tml_api_test') THEN CREATE ROLE tml_api_test; END IF;

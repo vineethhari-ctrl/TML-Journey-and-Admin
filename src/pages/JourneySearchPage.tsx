@@ -25,9 +25,11 @@ import { DEFAULT_COLUMNS, policyForRole, useWorkshopPolicy } from '../data/works
 
 
 import { MaskedName, MaskedPhone } from '../components/dpdp/MaskedPii';
+import { CustomerCategoryBadge } from '../components/fleet/CustomerCategoryBadge';
+import { buildIdChain, chainIds } from '../utils/jcIdChain';
 
 export const JourneySearchPage: React.FC = () => {
-  const { serviceCases, vehicles, navigate, currentRoute, currentUser, activeRoleId } = useApp();
+  const { serviceCases, vehicles, stages, navigate, currentRoute, currentUser, activeRoleId } = useApp();
   const { policy } = useWorkshopPolicy();
 
   const [searchBy, setSearchBy] = useState<JourneySearchBy>('auto');
@@ -143,6 +145,12 @@ export const JourneySearchPage: React.FC = () => {
     }
   }, [currentRoute]);
 
+  // IDs under each JC (Appointment, Visit, SR, Pre-JC, MR) so any of them finds the journey
+  const linkedIdsByJc = useMemo(
+    () => Object.fromEntries(serviceCases.map((c) => [c.jcNumber, chainIds(buildIdChain(c, stages[c.jcNumber] ?? []))])),
+    [serviceCases, stages],
+  );
+
   // Filtered cases
   const filteredCases = useMemo(() => {
     return journeyService.filterServiceCases(serviceCases, {
@@ -155,8 +163,9 @@ export const JourneySearchPage: React.FC = () => {
       overallStatus,
       inWorkshopOnly,
       hasPendingActionsOnly,
+      linkedIdsByJc,
     });
-  }, [serviceCases, activeQuery, searchBy, zone, region, dealer, currentStage, overallStatus, inWorkshopOnly, hasPendingActionsOnly]);
+  }, [serviceCases, activeQuery, searchBy, zone, region, dealer, currentStage, overallStatus, inWorkshopOnly, hasPendingActionsOnly, linkedIdsByJc]);
 
   const totalItems = filteredCases.length;
   const paginatedCases = useMemo(() => {
@@ -206,6 +215,7 @@ export const JourneySearchPage: React.FC = () => {
     jc: 'JC Number',
     phone: 'Mobile Number',
     name: 'Customer Name',
+    linked: 'Appointment / Visit / SR / Pre-JC / MR ID',
   };
 
   const handleQuickPreset = (val: string) => {
@@ -257,6 +267,7 @@ export const JourneySearchPage: React.FC = () => {
               <MaskedName name={c.customerName} vehicleRegNo={c.vehicleRegistration} assignedSa={{ name: c.serviceAdvisor }} />
             </p>
             <MaskedPhone phone={c.customerMobile} vehicleRegNo={c.vehicleRegistration} />
+            <div className="mt-0.5"><CustomerCategoryBadge chassisNo={c.vin} /></div>
           </div>
         ),
       },
@@ -529,6 +540,7 @@ export const JourneySearchPage: React.FC = () => {
                   <option value="jc">JC Number</option>
                   <option value="phone">Customer Mobile Number</option>
                   <option value="name">Customer Name</option>
+                  <option value="linked">Appointment / SR / MR ID</option>
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-slate-400" />
               </div>
@@ -544,7 +556,7 @@ export const JourneySearchPage: React.FC = () => {
                   type="text"
                   value={queryInput}
                   onChange={(e) => setQueryInput(e.target.value)}
-                  placeholder="Type a Reg No, VIN, JC, mobile or customer name…"
+                  placeholder="Type a Reg No, VIN, JC, Appointment / SR / MR ID, mobile or name…"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pl-10 pr-36 text-xs font-mono font-medium text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white focus:outline-hidden"
                 />
                 <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />

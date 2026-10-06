@@ -27,12 +27,18 @@ import {
   ChevronRight,
   Info,
   Zap,
+  Link2,
 } from 'lucide-react';
 import { MasterFieldDef } from '../data/masterCatalogue';
 import { DynamicFieldRenderer } from '../components/common/DynamicFieldRenderer';
 import { MaskedName, MaskedPhone } from '../components/dpdp/MaskedPii';
 import { useDpdp } from '../hooks/useDpdp';
 import { sanitizeForExport } from '../utils/dpdp';
+import { buildIdChain } from '../utils/jcIdChain';
+import { IdChainStrip, JourneyIdChain } from '../components/journey/JourneyIdChain';
+import { CustomerCategoryBadge } from '../components/fleet/CustomerCategoryBadge';
+import { useFleetRegister } from '../data/fleetRegister';
+import { classifyVehicle } from '../utils/fleetRegister';
 
 interface JourneyDetailPageProps {
   jcNumber?: string;
@@ -101,7 +107,7 @@ const JourneyDetailContent: React.FC<{ jcNumber: string }> = ({ jcNumber }) => {
   const { serviceCases, stages, events, exceptions, navigate, showToast, masterConfigs, vehicles } = useApp();
   const { canExportPlainPii } = useDpdp();
 
-  const [activeTab, setActiveTab] = useState<'timeline' | 'exceptions' | 'performance' | 'master_mapping' | 'rules_engine'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'id_chain' | 'exceptions' | 'performance' | 'master_mapping' | 'rules_engine'>('timeline');
   const [selectedStage, setSelectedStage] = useState<JourneyStage | null>(null);
 
   // Dynamic Custom Field Values managed by Rules Engine
@@ -129,6 +135,8 @@ const JourneyDetailContent: React.FC<{ jcNumber: string }> = ({ jcNumber }) => {
   const caseStages = stages[currentCase.jcNumber] || [];
   const caseEvents = events[currentCase.jcNumber] || [];
   const caseExceptions = exceptions.filter((e) => e.jcNumber === currentCase.jcNumber);
+  const idChain = useMemo(() => buildIdChain(currentCase, caseStages), [currentCase, caseStages]);
+  const { vehicles: fleetVehicles } = useFleetRegister();
   const activeStage =
     caseStages.find((s) => s.status === 'IN PROGRESS' || s.status === 'BLOCKED') ||
     caseStages.find((s) => s.module === currentCase.currentStage);
@@ -157,6 +165,8 @@ const JourneyDetailContent: React.FC<{ jcNumber: string }> = ({ jcNumber }) => {
       stages: caseStages,
       events: caseEvents,
       exceptions: caseExceptions,
+      customerCategory: classifyVehicle(currentCase.vin, fleetVehicles).category,
+      idChain,
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(dossier, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a');
@@ -312,7 +322,15 @@ const JourneyDetailContent: React.FC<{ jcNumber: string }> = ({ jcNumber }) => {
                 Customer:{' '}
                 <MaskedName name={currentCase.customerName} vehicleRegNo={currentCase.vehicleRegistration} assignedSa={{ name: currentCase.serviceAdvisor }} className="text-slate-800 font-medium" />
                 <MaskedPhone phone={currentCase.customerMobile} vehicleRegNo={currentCase.vehicleRegistration} />
+                <CustomerCategoryBadge chassisNo={currentCase.vin} />
               </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+                <Link2 className="h-3.5 w-3.5 text-slate-400" /> ID chain:
+              </span>
+              <IdChainStrip chain={idChain} onOpen={() => setActiveTab('id_chain')} />
             </div>
           </div>
 
@@ -495,6 +513,22 @@ const JourneyDetailContent: React.FC<{ jcNumber: string }> = ({ jcNumber }) => {
           </button>
 
           <button
+            onClick={() => setActiveTab('id_chain')}
+            data-testid="tab-id-chain"
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+              activeTab === 'id_chain'
+                ? 'border-blue-900 text-blue-900 font-extrabold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Link2 className="h-4 w-4 text-blue-600" />
+            <span>ID Chain &amp; Customer Updates</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 text-blue-800 font-bold">
+              {idChain.updates.length}
+            </span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('exceptions')}
             className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
               activeTab === 'exceptions'
@@ -554,6 +588,8 @@ const JourneyDetailContent: React.FC<{ jcNumber: string }> = ({ jcNumber }) => {
           </button>
         </div>
       </div>
+
+      {activeTab === 'id_chain' && <JourneyIdChain chain={idChain} />}
 
       {/* Tab 1: Timeline & Stage Tracker */}
       {activeTab === 'timeline' && (

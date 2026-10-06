@@ -117,6 +117,12 @@ Rules enforced **inside the database** (all proven by `schema_test.sql`):
 - allocation 0–500; calendar open < close; an hours override needs both times
 - audit log cannot be edited or deleted; every record change bumps the master version and writes history
 - dealer users see only their own dealer (row-level security)
+- **Fleet flag**: chassis must be a 17-character VIN; Valid To ≥ Valid From; `customer_category(chassis, day)` returns
+  FLEET only for an active row inside its validity (else INDIVIDUAL); the fleet-upload privilege is
+  `role_permission (module 'FLEET', can_create)`
+- **ID chain under a JC** (`journey_id_link`, `customer_update`): an ID belongs to one JC; one Appointment / Visit / SR /
+  Pre-JC / JC per JC, several MRs; a JC link carries its own number; a customer update points at a known ID and holds
+  no personal data. See `docs/FLEET_AND_ID_CHAIN.md` for the assumptions (BA gave no further detail)
 
 ## 4. How a new master flows (no deployment)
 

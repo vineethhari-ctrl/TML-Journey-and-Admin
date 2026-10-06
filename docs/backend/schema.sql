@@ -184,7 +184,7 @@ CREATE TABLE master_definition_history (
 -- Imports (Smart Excel Import, BA workbook, bulk upload): preview → commit, all-or-nothing
 CREATE TABLE import_job (
   import_job_id    uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
-  kind             varchar(20)  NOT NULL CHECK (kind IN ('SMART_EXCEL', 'BA_WORKBOOK', 'BULK_RECORDS')),
+  kind             varchar(20)  NOT NULL CHECK (kind IN ('SMART_EXCEL', 'BA_WORKBOOK', 'BULK_RECORDS', 'FLEET_LIST')),
   file_name        varchar(255) NOT NULL,
   file_object_key  varchar(500),                              -- original file in object storage (kept for audit)
   status           varchar(12)  NOT NULL DEFAULT 'PREVIEW' CHECK (status IN ('PREVIEW', 'COMMITTED', 'REJECTED', 'EXPIRED')),
@@ -362,6 +362,71 @@ END $$;
 CREATE TRIGGER audit_log_no_update BEFORE UPDATE OR DELETE ON audit_log FOR EACH ROW EXECUTE FUNCTION audit_log_immutable();
 
 -- -----------------------------------------------------------------------------
+-- 6b. Fleet flag and the ID chain under a Job Card (JC Creation walkthrough, 6 Oct 2026)
+--     The BA gave no more detail; the assumptions are listed in docs/FLEET_AND_ID_CHAIN.md.
+-- -----------------------------------------------------------------------------
+-- Chassis numbers uploaded as Fleet. Not on the list (or inactive / outside validity) = Individual.
+-- Uploading needs role_permission (module 'FLEET', can_create); TML_ADMIN always has it.
+CREATE TABLE fleet_vehicle (
+  chassis_no       varchar(17)  PRIMARY KEY CHECK (chassis_no ~ '^[A-HJ-NPR-Z0-9]{17}$'),   -- VIN, upper case, no I/O/Q
+  fleet_account    varchar(150),
+  valid_from       date,
+  valid_to         date,
+  is_active        boolean      NOT NULL DEFAULT true,
+  remarks          varchar(300),
+  import_job_id    uuid         REFERENCES import_job,        -- the upload that last set this row
+  row_version      integer      NOT NULL DEFAULT 1,
+  created_at       timestamptz  NOT NULL DEFAULT now(),
+  created_by       varchar(60)  NOT NULL,
+  updated_at       timestamptz  NOT NULL DEFAULT now(),
+  updated_by       varchar(60)  NOT NULL,
+  CHECK (valid_to IS NULL OR valid_from IS NULL OR valid_to >= valid_from)
+);
+
+-- FLEET / INDIVIDUAL for a chassis on a day (validity dates inclusive) — what the badge shows
+CREATE FUNCTION customer_category(p_chassis_no text, p_on date DEFAULT current_date) RETURNS varchar
+LANGUAGE sql STABLE AS $$
+  SELECT CASE WHEN EXISTS (
+    SELECT 1 FROM fleet_vehicle f
+     WHERE f.chassis_no = upper(regexp_replace(p_chassis_no, '[\s-]', '', 'g'))
+       AND f.is_active
+       AND (f.valid_from IS NULL OR p_on >= f.valid_from)
+       AND (f.valid_to IS NULL OR p_on <= f.valid_to)
+  ) THEN 'FLEET' ELSE 'INDIVIDUAL' END
+$$;
+
+-- Appointment → Visit → SR → Pre-JC → JC, plus MRs, published by each module with the JC number.
+-- An ID belongs to exactly one JC; a JC has at most one of each kind except MR.
+CREATE TABLE journey_id_link (
+  jc_number        varchar(20)  NOT NULL,
+  id_kind          varchar(12)  NOT NULL CHECK (id_kind IN ('APPOINTMENT', 'VISIT', 'SR', 'PRE_JC', 'JC', 'MR')),
+  id_value         varchar(40)  NOT NULL,
+  source_system    varchar(40)  NOT NULL,                     -- Appointment app, Gate-In, CRM, Service Buddy, Pre-JC service, DMS
+  issued_at        timestamptz  NOT NULL,                     -- when the source system created the ID
+  received_at      timestamptz  NOT NULL DEFAULT now(),
+  PRIMARY KEY (id_kind, id_value),
+  CHECK (id_kind <> 'JC' OR id_value = jc_number)
+);
+CREATE UNIQUE INDEX journey_id_link_one_per_kind ON journey_id_link (jc_number, id_kind) WHERE id_kind <> 'MR';
+CREATE INDEX journey_id_link_jc ON journey_id_link (jc_number);
+CREATE INDEX journey_id_link_value ON journey_id_link (upper(id_value));   -- Journey Search by any ID
+
+-- Customer updates sent for the JC. No name / mobile here (DPDP): the sender resolves the recipient.
+CREATE TABLE customer_update (
+  update_id        uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
+  jc_number        varchar(20)  NOT NULL,
+  linked_kind      varchar(12)  NOT NULL,
+  linked_id        varchar(40)  NOT NULL,
+  channel          varchar(10)  NOT NULL CHECK (channel IN ('SMS', 'WhatsApp', 'Email')),
+  template_code    varchar(40)  NOT NULL,
+  message_text     varchar(1000) NOT NULL,                    -- rendered template, no personal data
+  status           varchar(10)  NOT NULL DEFAULT 'SENT' CHECK (status IN ('SENT', 'DELIVERED', 'FAILED')),
+  sent_at          timestamptz  NOT NULL DEFAULT now(),
+  FOREIGN KEY (linked_kind, linked_id) REFERENCES journey_id_link (id_kind, id_value)
+);
+CREATE INDEX customer_update_jc ON customer_update (jc_number, sent_at);
+
+-- -----------------------------------------------------------------------------
 -- 7. Keep master versions and history consistent automatically
 -- -----------------------------------------------------------------------------
 -- Every record insert / update / delete bumps the master's version, stamps the row
@@ -421,3 +486,7 @@ INSERT INTO app_role (role_id, role_name, description) VALUES
   ('READ_ONLY',           'Read only',                 'View and export'),
   ('DEALER_APP',          'Dealer application (service account)', 'Reads published masters and resolves rules');
 INSERT INTO bay_policy (policy_id) VALUES (1);
+-- Fleet-upload privilege: TML admin by default; grant other roles by adding a row
+INSERT INTO role_permission (role_id, module, can_view, can_create, can_edit, can_delete, can_export) VALUES
+  ('TML_ADMIN', 'FLEET', true, true, true, true, true),
+  ('DEALER_ADMIN', 'FLEET', true, false, false, false, false);

@@ -19,6 +19,7 @@ import {
   ClipboardCheck,
   ListChecks,
   Flame,
+  Truck,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useBays } from '../../context/BayContext';
@@ -260,6 +261,16 @@ export const Sidebar: React.FC = () => {
               >
                 <LayoutList className="h-4 w-4" />
                 <span className="flex-1 text-left">Default Views</span>
+              </button>
+            )}
+
+            {canAccessRoute('/admin/fleet') && (
+              <button
+                onClick={() => navigate('/admin/fleet')}
+                className={`w-full cursor-pointer ${navItemClass(isCurrent('/admin/fleet'))}`}
+              >
+                <Truck className="h-4 w-4" />
+                <span className="flex-1 text-left">Fleet Register</span>
               </button>
             )}
 

@@ -55,6 +55,10 @@ tags:
     description: Dealers and divisions
   - name: Notifications & audit
     description: The bell, and the append-only audit trail
+  - name: Fleet
+    description: Fleet flag — chassis numbers uploaded as Fleet; every other vehicle is Individual
+  - name: Journeys
+    description: The ID chain under a Job Card (Appointment → Visit → SR → Pre-JC → JC, MRs) and customer updates
 
 paths:
   /me:
@@ -378,6 +382,7 @@ paths:
         - `SMART_EXCEL`: a BA's own Excel in any layout (same detection as the portal's Smart Excel Import)
         - `BA_WORKBOOK`: the TML master-definition workbook (Masters / Fields / record sheets)
         - `BULK_RECORDS`: rows for one existing master (`masterId` required)
+        - `FLEET_LIST`: fleet chassis numbers (needs the fleet-upload privilege); `mode` = MERGE (add / update) or REPLACE
       operationId: createImport
       requestBody:
         required: true
@@ -389,6 +394,7 @@ paths:
               properties:
                 kind: { $ref: '#/components/schemas/ImportKind' }
                 masterId: { type: string, description: Required for BULK_RECORDS }
+                mode: { type: string, enum: [MERGE, REPLACE], default: MERGE, description: FLEET_LIST only }
                 file: { type: string, format: binary }
           application/json:
             schema:
@@ -950,6 +956,140 @@ paths:
 
         '401': { $ref: '#/components/responses/Unauthorized' }
   # ---------------------------------------------------------------- Organisation, notifications, audit
+  # ---------------------------------------------------------------- Fleet flag
+  /fleet-vehicles:
+    get:
+      tags: [Fleet]
+      summary: The fleet list (upload goes through POST /imports with kind FLEET_LIST)
+      operationId: listFleetVehicles
+      parameters:
+        - { name: q, in: query, description: Chassis No or fleet account contains, schema: { type: string } }
+        - { name: active, in: query, schema: { type: boolean } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Fleet vehicles
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/FleetVehicle' } }
+                  nextCursor: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /fleet-vehicles/{chassisNo}:
+    parameters: [{ $ref: '#/components/parameters/ChassisNo' }]
+    patch:
+      tags: [Fleet]
+      summary: Activate / deactivate or change one row (fleet-upload privilege)
+      operationId: updateFleetVehicle
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fleetAccount: { type: string }
+                validFrom: { type: [string, 'null'], format: date }
+                validTo: { type: [string, 'null'], format: date }
+                active: { type: boolean }
+                remarks: { type: string }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FleetVehicle' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      tags: [Fleet]
+      summary: Remove from the list (the vehicle becomes Individual)
+      operationId: deleteFleetVehicle
+      responses:
+        '204': { description: Removed }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /fleet-vehicles/{chassisNo}/category:
+    parameters: [{ $ref: '#/components/parameters/ChassisNo' }]
+    get:
+      tags: [Fleet, Dealer apps]
+      summary: Fleet or Individual for the Vehicle Info badge
+      description: Any chassis may be asked; one not on the list is INDIVIDUAL (never 404).
+      operationId: getCustomerCategory
+      parameters:
+        - { name: on, in: query, description: Day to check (default today), schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Category
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerCategory' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ---------------------------------------------------------------- Journeys (ID chain)
+  /journeys/{jcNumber}/id-chain:
+    parameters: [{ $ref: '#/components/parameters/JcNumber' }]
+    get:
+      tags: [Journeys]
+      summary: Appointment → Visit → SR → Pre-JC → JC, the MRs and the customer updates under one JC
+      operationId: getIdChain
+      responses:
+        '200':
+          description: ID chain
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IdChain' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /journeys/{jcNumber}/id-links:
+    parameters: [{ $ref: '#/components/parameters/JcNumber' }]
+    post:
+      tags: [Journeys]
+      summary: A module publishes the ID it created for this JC
+      description: |
+        Called by the Appointment app, Gate-In, CRM / Service Buddy, the Pre-JC service, DMS (JC, MR).
+        Idempotent for the same kind + ID + JC. An ID already linked to another JC, or a second ID of the
+        same kind (except MR) for this JC, is a conflict.
+      operationId: publishIdLink
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IdLinkInput' }
+      responses:
+        '201':
+          description: Linked
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IdLink' }
+        '200': { description: Already linked (same values) }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /journeys/lookup:
+    get:
+      tags: [Journeys]
+      summary: Find the JC for any ID in its chain (Journey Search)
+      operationId: lookupJourneyById
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string }, example: SR-20260930-08638 }
+      responses:
+        '200':
+          description: The JC the ID belongs to
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jcNumber, idKind]
+                properties:
+                  jcNumber: { type: string }
+                  idKind: { $ref: '#/components/schemas/IdKind' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /dealers:
     get:
       tags: [Organisation]
@@ -1075,6 +1215,18 @@ components:
       name: cursor
       in: query
       schema: { type: string }
+    ChassisNo:
+      name: chassisNo
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[A-HJ-NPR-Z0-9]{17}$' }
+      example: MAT700222K1000984
+    JcNumber:
+      name: jcNumber
+      in: path
+      required: true
+      schema: { type: string }
+      example: JC20260930001234
 
   responses:
     Unauthorized:
@@ -1131,7 +1283,7 @@ components:
     BU: { type: string, enum: [PV, EV, CV] }
     ApprovalStatus: { type: string, enum: [Draft, Approved, Pending Approval, Rejected] }
     DealerTargetModule: { type: string, enum: [vehicle_journey, job_card, reception, workshop_floor, general] }
-    ImportKind: { type: string, enum: [SMART_EXCEL, BA_WORKBOOK, BULK_RECORDS] }
+    ImportKind: { type: string, enum: [SMART_EXCEL, BA_WORKBOOK, BULK_RECORDS, FLEET_LIST] }
 
     Me:
       type: object
@@ -1645,3 +1797,69 @@ components:
         newValue: { type: [string, 'null'] }
         ipAddress: { type: [string, 'null'] }
         status: { type: string, enum: [SUCCESS, FAILED, WARNING] }
+
+    FleetVehicle:
+      type: object
+      required: [chassisNo, active, updatedAt, updatedBy]
+      properties:
+        chassisNo: { type: string, pattern: '^[A-HJ-NPR-Z0-9]{17}$' }
+        fleetAccount: { type: [string, 'null'] }
+        validFrom: { type: [string, 'null'], format: date }
+        validTo: { type: [string, 'null'], format: date }
+        active: { type: boolean }
+        remarks: { type: [string, 'null'] }
+        updatedAt: { type: string, format: date-time }
+        updatedBy: { type: string }
+
+    CustomerCategory:
+      type: object
+      required: [chassisNo, category]
+      properties:
+        chassisNo: { type: string }
+        category: { type: string, enum: [FLEET, INDIVIDUAL] }
+        fleetAccount: { type: [string, 'null'] }
+        reason: { type: [string, 'null'], description: Why a listed vehicle is still Individual (inactive / not yet valid / expired) }
+
+    IdKind: { type: string, enum: [APPOINTMENT, VISIT, SR, PRE_JC, JC, MR] }
+
+    IdLinkInput:
+      type: object
+      required: [idKind, idValue, sourceSystem, issuedAt]
+      properties:
+        idKind: { $ref: '#/components/schemas/IdKind' }
+        idValue: { type: string, maxLength: 40 }
+        sourceSystem: { type: string, example: CRM }
+        issuedAt: { type: string, format: date-time }
+
+    IdLink:
+      type: object
+      required: [idKind, status, sourceSystem]
+      properties:
+        idKind: { $ref: '#/components/schemas/IdKind' }
+        idValue: { type: [string, 'null'] }
+        status: { type: string, enum: [CREATED, AWAITED, NOT_APPLICABLE] }
+        sourceSystem: { type: string }
+        issuedAt: { type: [string, 'null'], format: date-time }
+
+    IdChain:
+      type: object
+      required: [jcNumber, arrival, links, mrs, updates]
+      properties:
+        jcNumber: { type: string }
+        arrival: { type: string, enum: [APPOINTMENT, WALK_IN] }
+        links: { type: array, description: 'In order: APPOINTMENT, VISIT, SR, PRE_JC, JC', items: { $ref: '#/components/schemas/IdLink' } }
+        mrs: { type: array, items: { $ref: '#/components/schemas/IdLink' } }
+        issues: { type: array, items: { type: string }, description: 'Consistency problems (missing earlier link, time going backwards)' }
+        updates:
+          type: array
+          description: Customer updates sent; never the customer's name or number
+          items:
+            type: object
+            required: [channel, message, linkedKind, linkedId, status, sentAt]
+            properties:
+              channel: { type: string, enum: [SMS, WhatsApp, Email] }
+              message: { type: string }
+              linkedKind: { $ref: '#/components/schemas/IdKind' }
+              linkedId: { type: string }
+              status: { type: string, enum: [SENT, DELIVERED, FAILED] }
+              sentAt: { type: string, format: date-time }
