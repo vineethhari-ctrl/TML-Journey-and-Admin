@@ -259,7 +259,7 @@ export const Sidebar: React.FC = () => {
                 className={`w-full cursor-pointer ${navItemClass(currentRoute.split('?')[0] === '/admin/workshop-policy')}`}
               >
                 <LayoutList className="h-4 w-4" />
-                <span className="flex-1 text-left">Workshop Tabs &amp; Columns</span>
+                <span className="flex-1 text-left">Default Views</span>
               </button>
             )}
 

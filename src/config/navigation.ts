@@ -21,7 +21,7 @@ export const NAV_PAGES: NavPage[] = [
   { route: '/admin/masters?open=smart-import', label: 'Smart Excel Import (BA Excel → masters)', group: 'Administration', keywords: 'upload excel ba sheet any format new master import xlsx auto detect' },
   { route: '/admin/masters?open=eqc', label: 'EQC Masters (Electronic Quality Check)', group: 'Administration', keywords: 'eqc quality check guided gc road test ptd risk did threshold checklist schedule' },
   { route: '/admin/masters?open=bodyshop', label: 'Bodyshop Masters', group: 'Administration', keywords: 'bodyshop inventory capture checkpoint section insurance document facility tools technician paint denting' },
-  { route: '/admin/workshop-policy', label: 'Workshop Tabs & Columns (per role)', group: 'Administration', keywords: 'tabs columns worklist role default landing visible personalise preference policy' },
+  { route: '/admin/workshop-policy', label: 'Default Views (tabs, cards, fields per role)', group: 'Administration', keywords: 'default views tabs columns fields cards worklist role landing visible personalise preference policy' },
   { route: '/admin/audit?module=DPDP', label: 'DPDP Access Log', group: 'Administration', keywords: 'dpdp privacy pii unmask reveal who saw customer data phone audit' },
   { route: '/admin/users', label: 'Employee / Users', group: 'Administration', keywords: 'user employee staff create' },
   { route: '/admin/roles', label: 'Roles & Access', group: 'Administration', keywords: 'permission rbac matrix' },

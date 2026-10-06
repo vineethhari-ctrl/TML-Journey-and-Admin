@@ -52,30 +52,28 @@ test('Home cards: role default, user hides and reorders, survives reload, back t
   await expect(page).toHaveURL(/#\/journey$/);
 });
 
-test('Admin: card policy per role, and keeping layouts after logout', async ({ page }) => {
+test('TML admin sets default cards and Journey fields; dealers personalise but cannot change defaults', async ({ page }) => {
   await page.goto('/#/admin/workshop-policy');
   await page.locator('header select').selectOption('superAdmin');
+  await expect(page.getByTestId('personalisation-setting')).toContainText('log back in, they see these defaults again');
+  await expect(page.getByLabel('Keep personal layouts after logout')).toHaveCount(0);
   await page.getByLabel('Role').selectOption('securityGuard');
-  const cardPolicy = page.getByTestId('card-policy');
-  await cardPolicy.getByLabel('Allow card Appointment Reminder').check();
+  await page.getByTestId('card-policy').getByLabel('Allow card Appointment Reminder').check();
+  await page.getByLabel('TML Journey · Journey Search: Last Updated').check();
   await page.getByRole('button', { name: 'Save for this role' }).click();
-
-  // Keep layouts after logout
-  await page.getByTestId('personalisation-setting').getByLabel('Keep personal layouts after logout').check();
+  await expect(page.getByText('Saved default views for Security Guard')).toBeVisible();
 
   await page.goto('/#/home');
   await page.locator('header select').selectOption('securityGuard');
-  const cards = page.locator('[data-testid^="portal-card-"]');
-  await expect(cards).toHaveCount(3);
-  await page.getByRole('button', { name: 'Customise cards' }).click();
-  await page.getByTestId('card-customizer').getByLabel('Customer Journey & Dealer Network', { exact: true }).uncheck();
-  await page.mouse.click(5, 5);
-  await expect(cards).toHaveCount(2);
-  await expect(page.getByTestId('home-toolbar')).toContainText('kept after logout');
-  await page.locator('header').getByRole('button', { name: /Super Admin|Security|Vineeth|Balwinder|Guard/ }).first().click();
-  await page.getByRole('button', { name: /Logout/ }).click();
-  await expect(page.getByText('kept for your next login')).toBeVisible();
-  await expect(cards).toHaveCount(2);
+  await expect(page.locator('[data-testid^="portal-card-"]')).toHaveCount(3);
+  await page.goto('/#/journey');
+  await expect(page.getByTestId('journey-results').locator('thead th')).toContainText(['Last Updated']);
+
+  // Dealer Admin personalises but cannot change the defaults
+  await page.locator('header select').selectOption('dealerAdmin');
+  await page.goto('/#/admin/workshop-policy');
+  await expect(page.getByText('Access Restricted')).toBeVisible();
+  await expect(page.locator('aside').getByRole('button', { name: 'Default Views' })).toHaveCount(0);
 });
 
 test('Journey Search: lean default columns and "Columns displayed"', async ({ page }) => {

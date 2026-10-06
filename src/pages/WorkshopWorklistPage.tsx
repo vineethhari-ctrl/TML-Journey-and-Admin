@@ -258,7 +258,7 @@ export const WorkshopWorklistPage: React.FC = () => {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Workshop Worklist</h1>
-          <p className="text-xs text-slate-500">Reference screen for the dealer-app team (BU design). Tabs and default columns per role are set in Admin → Workshop Tabs &amp; Columns. Test data only.</p>
+          <p className="text-xs text-slate-500">Reference screen for the dealer-app team (BU design). Default tabs and columns per role are set by the TML admin in Admin → Default Views. Test data only.</p>
         </div>
         <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-800" data-testid="dpdp-status">
           <ShieldCheck className="h-3.5 w-3.5" /> DPDP: {canUnmask ? 'you can reveal PII (logged)' : 'PII masked for your role'} · export {canExportPlainPii ? 'full (supervisor)' : 'masked'}

@@ -6,7 +6,6 @@ import { TabCustomizer } from '../components/workshop/WorkshopTabBar';
 import { CARD_PREF_STORAGE_KEY, useTabPreferences } from '../hooks/useTabPreferences';
 import { WORKSHOP_MODULES } from '../data/masterCatalogue';
 import { LANDING_CARDS, policyForRole, useWorkshopPolicy } from '../data/workshopPolicy';
-import { readPersonalisationSettings } from '../utils/personalisationSettings';
 
 /** Where a card leads inside this portal; the other module apps are built by the dealer-app team. */
 const CARD_ROUTES: Record<string, string> = {
@@ -20,7 +19,7 @@ const CARD_ROUTES: Record<string, string> = {
 
 /**
  * Landing page (BU design): the module cards a role may use, in the user's own order and with the user's hidden
- * cards removed. Admins set the allowed cards and default layout per role (Workshop Tabs & Columns).
+ * cards removed. Admins set the allowed cards and default layout per role (TML admin, Default Views).
  */
 export const HomePage: React.FC = () => {
   const { currentUser, activeRoleId, navigate, showToast } = useApp();
@@ -39,7 +38,6 @@ export const HomePage: React.FC = () => {
   const visible = prefs.orderedTabs.filter((c) => !prefs.isHidden(c.id));
   const modules = visible.map((c) => WORKSHOP_MODULES.find((m) => m.code === c.id)!).filter(Boolean);
   const hiddenCount = prefs.orderedTabs.length - visible.length;
-  const kept = readPersonalisationSettings().keepAfterLogout;
 
   const open = (code: string) => {
     const route = CARD_ROUTES[code];
@@ -51,7 +49,7 @@ export const HomePage: React.FC = () => {
   const toolbar = (
     <div className="relative flex flex-wrap items-center justify-between gap-2" data-testid="home-toolbar">
       <p className="text-xs text-slate-500">
-        Your cards: {visible.length} shown{hiddenCount > 0 ? `, ${hiddenCount} hidden` : ''}. {kept ? 'Your layout is kept after logout.' : 'Your layout resets to the default view when you log out.'}
+        Your cards: {visible.length} shown{hiddenCount > 0 ? `, ${hiddenCount} hidden` : ''}. Your layout resets to the default view when you log out.
       </p>
       <div className="flex items-center gap-2">
         {hiddenCount > 0 && (

@@ -142,7 +142,7 @@ test('Admin sets which tabs and default columns a role gets', async ({ page }) =
   await policy.getByLabel('Allow THD').check();
   await policy.getByLabel("Today's Total Gate-In: Customer Name").check();
   await page.getByRole('button', { name: 'Save for this role' }).click();
-  await expect(page.getByText('Saved tabs & columns for Receptionist')).toBeVisible();
+  await expect(page.getByText('Saved default views for Receptionist')).toBeVisible();
 
   await page.goto('/#/workshop');
   await page.locator('header select').selectOption('receptionist');

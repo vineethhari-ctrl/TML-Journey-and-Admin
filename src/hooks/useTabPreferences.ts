@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { PreferenceRemote, scopedKey, usePreferenceStore } from './usePreferenceStore';
+import { scopedKey, usePreferenceStore } from './usePreferenceStore';
 import { MIN_VISIBLE_TABS, TabPreference, moveItem, normalizeTabPreference, setTabVisible, splitTabs } from '../utils/viewPreferences';
 
 export const TAB_PREF_STORAGE_KEY = 'user_pref_tabs';
@@ -22,14 +22,13 @@ interface Options {
   roleDefault: TabPreference;
   /** How many visible tabs fit inline before the rest collapse into "More (n)". */
   maxInline?: number;
-  remote?: PreferenceRemote<TabPreference>;
   /** Storage base key; landing-page cards use "user_pref_cards". */
   storageKey?: string;
 }
 
-/** Tab visibility, order and default landing tab, saved per user + role (local first, then backend). */
-export function useTabPreferences({ userId, roleId, tabs, roleDefault, maxInline = 6, remote, storageKey = TAB_PREF_STORAGE_KEY }: Options) {
-  const store = usePreferenceStore<TabPreference>(scopedKey(storageKey, userId, roleId), remote);
+/** Tab visibility, order and default landing tab per user + role, for the login session (admin defaults otherwise). */
+export function useTabPreferences({ userId, roleId, tabs, roleDefault, maxInline = 6, storageKey = TAB_PREF_STORAGE_KEY }: Options) {
+  const store = usePreferenceStore<TabPreference>(scopedKey(storageKey, userId, roleId));
   const tabIds = useMemo(() => tabs.map((t) => t.id), [tabs]);
   const pref = useMemo(() => normalizeTabPreference(store.value, tabIds, roleDefault), [store.value, tabIds, roleDefault]);
   const byId = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs]);
@@ -61,6 +60,5 @@ export function useTabPreferences({ userId, roleId, tabs, roleDefault, maxInline
       if (!pref.hiddenTabs.includes(id)) store.save({ ...pref, defaultLandingTab: id });
     },
     reset: () => store.save(normalizeTabPreference(null, tabIds, roleDefault)),
-    syncState: store.syncState,
   };
 }
