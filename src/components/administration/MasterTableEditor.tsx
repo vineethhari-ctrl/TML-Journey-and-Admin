@@ -51,6 +51,7 @@ import { findThdConflict } from '../../utils/thdRules';
 import { findClaimConflict } from '../../utils/claimRules';
 import { findCommonLovConflict } from '../../utils/commonLov';
 import { DUPLICATE_RECORD_MESSAGE, duplicateMessage, findIdenticalRecord, nextRecordId } from '../../utils/recordDuplicates';
+import { checkCopies, insertCopies } from '../../utils/recordCopies';
 import { masterValidationSchema } from '../../utils/masterValidationSchema';
 import { MasterDataImportModal } from './MasterDataImportModal';
 import { BatchUndoModal, MasterChangeSnapshot } from './BatchUndoModal';
@@ -386,6 +387,69 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     sortDirection,
   ]);
 
+  const renderCopyRow = (c: Record<string, any>) => {
+    const problems = copyErrors[c.id] ?? liveCopy?.duplicates[c.id] ?? [];
+    const flagged = problems.length > 0;
+    const field = (f: MasterFieldDef) => {
+      const base = `w-full px-2 py-1 rounded border text-xs bg-white focus:border-blue-500 focus:outline-hidden ${flagged ? 'border-red-400 bg-red-50' : 'border-amber-300'}`;
+      const v = c[f.key];
+      if (f.type === 'boolean') return <input type="checkbox" aria-label={f.label} checked={Boolean(v)} onChange={(e) => updateCopy(c.id, f.key, e.target.checked)} className="h-4 w-4 cursor-pointer" />;
+      if (f.type === 'select')
+        return (
+          <select aria-label={f.label} className={base} value={v ?? ''} onChange={(e) => updateCopy(c.id, f.key, e.target.value)}>
+            {!(f.options ?? []).includes(String(v ?? '')) && <option value={v ?? ''}>{v ?? ''}</option>}
+            {(f.options ?? []).map((o) => <option key={o}>{o}</option>)}
+          </select>
+        );
+      return (
+        <input
+          aria-label={f.label}
+          className={base}
+          type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
+          value={v ?? ''}
+          onChange={(e) => updateCopy(c.id, f.key, f.type === 'number' && e.target.value !== '' ? Number(e.target.value) : e.target.value)}
+        />
+      );
+    };
+    return (
+      <React.Fragment key={`copy-${c.id}`}>
+        <tr
+          data-copy-row={c.id}
+          data-testid="copy-row"
+          className="bg-amber-50/70"
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+              e.preventDefault();
+              handleDuplicateRecord(c);
+            }
+          }}
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null) && liveCopy?.duplicates[c.id]?.length)
+              showToast(`${DUPLICATE_RECORD_MESSAGE}. Change this row's values or remove the copy.`, 'error');
+          }}
+        >
+          <td className="py-2 px-3.5 text-center text-[10px] font-bold text-amber-800">COPY</td>
+          {master.fields.map((f) => (
+            <td key={f.key} className="py-1.5 px-2 min-w-28">{field(f)}</td>
+          ))}
+          <td className="py-1.5 px-2 text-right whitespace-nowrap">
+            <button type="button" onClick={handleSaveCopies} title="Save copied rows (Ctrl+S)" className="mr-1 rounded bg-emerald-700 px-2 py-1 text-[11px] font-bold text-white hover:bg-emerald-800 cursor-pointer">
+              Save {copies.length > 1 ? `${copies.length} copies` : 'copy'}
+            </button>
+            <button type="button" onClick={() => removeCopy(c.id)} title="Remove copy" aria-label={`Remove copy ${c.id}`} className="p-1 rounded text-rose-600 hover:bg-rose-50 cursor-pointer">
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </td>
+        </tr>
+        {flagged && (
+          <tr className="bg-red-50/60">
+            <td colSpan={master.fields.length + 2} className="px-4 pb-1.5 text-[11px] text-red-700" data-testid="copy-error">{problems.join(' ')}</td>
+          </tr>
+        )}
+      </React.Fragment>
+    );
+  };
+
   // Open Add Record Modal
   const handleOpenAddRecord = () => {
     const existingIds = new Set(master.records.map((r) => String(r.id)));
@@ -423,27 +487,79 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     setIsRecordModalOpen(true);
   };
 
-  // Ctrl+B: open the Add form pre-filled with a copy of the row; the admin replaces the values that differ
+  // Ctrl+B: a copy of the row appears right below it, editable in place (same on every screen); Ctrl+S saves the copies
+  const [copies, setCopies] = useState<Array<Record<string, any>>>([]);
+  const [copyErrors, setCopyErrors] = useState<Record<string, string[]>>({});
+  const [focusCopyId, setFocusCopyId] = useState<string | null>(null);
+  const liveCopy = useMemo(() => (copies.length ? checkCopies(master, copies) : null), [copies, master]);
+
   const handleDuplicateRecord = (rec: Record<string, any>) => {
     if (!canEdit) return;
-    setFormData({ ...rec, id: nextRecordId(master.id, master.records) });
-    setFormErrors({});
-    setEditingRecordId(null);
-    setIsRecordModalOpen(true);
-    showToast(`Copy of ${rec.id} ready: change the values that differ, then save.`, 'info');
+    const taken = [...master.records, ...copies];
+    const { _after, ...values } = rec;
+    const copy = { ...values, id: nextRecordId(master.id, taken), _after: _after ?? rec.id };
+    const at = copies.findIndex((c) => c.id === rec.id);
+    setCopies(at >= 0 ? [...copies.slice(0, at + 1), copy, ...copies.slice(at + 1)] : [...copies, copy]);
+    setCopyErrors({});
+    setIsRecordModalOpen(false);
+    setFocusCopyId(copy.id);
+  };
+  const updateCopy = (id: string, key: string, value: any) => {
+    setCopies((prev) => prev.map((c) => (c.id === id ? { ...c, [key]: value } : c)));
+    setCopyErrors({});
+  };
+  const removeCopy = (id: string) => setCopies((prev) => prev.filter((c) => c.id !== id));
+
+  useEffect(() => {
+    if (!focusCopyId) return;
+    const el = document.querySelector<HTMLInputElement>(`[data-copy-row="${focusCopyId}"] input:not([type=checkbox]), [data-copy-row="${focusCopyId}"] select`);
+    el?.focus();
+    if (el && 'select' in el && el.tagName === 'INPUT') el.select();
+    setFocusCopyId(null);
+  }, [focusCopyId, copies]);
+
+  const handleSaveCopies = () => {
+    if (!copies.length) return;
+    const check = checkCopies(master, copies);
+    if (Object.keys(check.errors).length) {
+      setCopyErrors(check.errors);
+      const dup = Object.values(check.duplicates).flat()[0];
+      showToast(dup ? `${DUPLICATE_RECORD_MESSAGE}. Change the copied row's values before saving.` : 'Please correct the highlighted copied rows before saving.', 'error');
+      return;
+    }
+    const newMaster = { ...master, records: insertCopies(master.records, copies, check.sanitized) };
+    recordSnapshot('CREATE_RECORD', `Added ${copies.length} copied record(s)`, copies.length, newMaster, `Inserted ${copies.length} copied row(s) into ${master.name}`);
+    check.sanitized.forEach((record) =>
+      AuditTrailMiddleware.logCreateRow({
+        masterName: master.name,
+        masterId: master.id,
+        record,
+        user: { userId: currentUser.userId, userName: currentUser.name },
+        logAudit,
+      }),
+    );
+    onUpdateMaster(newMaster);
+    setCopies([]);
+    setCopyErrors({});
+    showToast(`${copies.length} copied row(s) added to ${master.name}.`, 'success');
   };
 
   // Ctrl+B anywhere in the editor: copy the open record, else the single ticked row. Ctrl+S saves the open record.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && isRecordModalOpen && canEdit) {
-        e.preventDefault();
-        handleSaveRecord({ preventDefault() {} } as React.FormEvent);
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && canEdit) {
+        if (isRecordModalOpen) {
+          e.preventDefault();
+          handleSaveRecord({ preventDefault() {} } as React.FormEvent);
+        } else if (copies.length) {
+          e.preventDefault();
+          handleSaveCopies();
+        }
         return;
       }
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'b' || !canEdit) return;
       const target = e.target as HTMLElement;
-      if (target.closest?.('[data-record-row]')) return; // the row handler deals with it
+      if (target.closest?.('[data-record-row],[data-copy-row]')) return; // the row handler deals with it
       const open = editingRecordId ? master.records.find((r) => r.id === editingRecordId) : undefined;
       const ticked = master.records.filter((r) => selectedRowIds.includes(r.id));
       const source = isRecordModalOpen ? open : ticked.length === 1 ? ticked[0] : undefined;
@@ -1811,8 +1927,8 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                 filteredRecords.map((row) => {
                   const isSelected = selectedRowIds.includes(row.id);
                   return (
+                    <React.Fragment key={row.id}>
                     <tr
-                      key={row.id}
                       data-record-row={row.id}
                       tabIndex={canEdit ? 0 : undefined}
                       onKeyDown={(e) => {
@@ -1908,6 +2024,8 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                         )}
                       </td>
                     </tr>
+                    {copies.filter((c) => c._after === row.id).map((c) => renderCopyRow(c))}
+                    </React.Fragment>
                   );
                 })
               )}

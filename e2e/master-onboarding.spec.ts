@@ -258,23 +258,33 @@ test('Ctrl+B duplicates a row in the List of Values screen; saving it unchanged 
   await expect(page.getByText('THD_CLOSURE_ACTION saved (4 values).')).toBeVisible();
 });
 
-test('Ctrl+B duplicates a row in any master table; saving it unchanged shows "Duplicate record cannot exist"', async ({ page }) => {
+test('Ctrl+B copies a row in place in any master table, like the LOV screen; Ctrl+S saves it', async ({ page }) => {
   await page.goto('/#/admin/masters?open=common');
-  await page.getByRole('button', { name: /Table \/ Excel view/ }).click();
+  await page.getByRole('button', { name: /^PPL & PL \(Product Line\) Master/ }).click();
   const rows = page.locator('tbody tr[data-record-row]');
   const before = await rows.count();
 
   await rows.first().focus();
   await page.keyboard.press('Control+b');
-  await expect(page.getByText('Add New Master Row')).toBeVisible();
-  await page.getByRole('button', { name: 'Insert Row' }).click();
-  await expect(page.getByTestId('duplicate-error')).toHaveText('Duplicate record cannot exist');
+  const copy = page.getByTestId('copy-row');
+  await expect(copy).toHaveCount(1);
+  await expect(page.getByText('Add New Master Row')).toHaveCount(0);
+  await expect(copy.locator('select, input:not([type=checkbox])').first()).toBeFocused();
 
-  // Change a value → saves as a new row
-  await page.getByLabel(/^Display Value/).fill('Brand new value');
-  await page.getByLabel(/^Code \(LIC\)/).fill('BRAND_NEW_VALUE');
-  await page.getByRole('button', { name: 'Insert Row' }).click();
+  // Flagged at once, refused on Ctrl+S, nothing saved
+  await expect(page.getByTestId('copy-error')).toContainText('Duplicate record cannot exist');
+  await page.keyboard.press('Control+s');
+  await expect(page.getByText(/Duplicate record cannot exist\. Change the copied row/)).toBeVisible();
+  await expect(rows).toHaveCount(before);
+
+  // Type over the values that differ → Ctrl+S saves right below the source
+  await copy.getByLabel('PPL Code').fill('PPL-COPY-TEST');
+  await copy.getByLabel(/^PL \(Variant/).fill('Copy test variant');
+  await expect(page.getByTestId('copy-error')).toHaveCount(0);
+  await page.keyboard.press('Control+s');
+  await expect(page.getByText(/copied row\(s\) added/)).toBeVisible();
   await expect(rows).toHaveCount(before + 1);
+  await expect(rows.nth(1)).toContainText('PPL-COPY-TEST');
 });
 
 test('Ctrl+S saves; unchanged copies are flagged live, on leaving the row, and never saved', async ({ page }) => {
