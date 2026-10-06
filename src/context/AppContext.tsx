@@ -455,7 +455,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (route === '/admin/bay-approvals') {
         return false;
       }
-      if (route === '/admin/masters' || route === '/admin/masters-guide') {
+      if (route === '/admin/masters' || route === '/admin/masters-guide' || route === '/admin/upload-master') {
         return ['superAdmin', 'dealerAdmin'].includes(activeRoleId);
       }
       if (

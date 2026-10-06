@@ -32,6 +32,12 @@ Allocation-driven bay governance with approvals (TML Network Manager / TML Admin
 policy switches — see [`docs/BAY_MANAGEMENT.md`](docs/BAY_MANAGEMENT.md). Rules: `src/utils/bayGovernance.ts` (pure, unit-tested);
 state: `src/context/BayContext.tsx`; UI: `BayManagementConsole.tsx`, `pages/BayApprovalsPage.tsx`.
 
+## Upload a Master (business users)
+
+Drop any Excel on **Administration → Upload a Master**: an existing master's own template is imported (any column
+difference is an error), any other table becomes a new master, a BA definition workbook creates masters in its module —
+see [`docs/UPLOAD_A_MASTER.md`](docs/UPLOAD_A_MASTER.md).
+
 ## Common Masters (shared by every module)
 
 Every dropdown list of every module lives in **one Common LOV Master**, one row per value, named by a Parameter

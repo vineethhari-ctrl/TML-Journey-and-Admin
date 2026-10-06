@@ -17,6 +17,7 @@ export const NAV_PAGES: NavPage[] = [
   { route: '/journey?filter=in_workshop', label: 'Vehicles In Workshop', group: 'TML Journey', keywords: 'bay floor' },
   { route: '/admin/masters', label: 'Masters Maintenance', group: 'Administration', keywords: 'master data fields schema bay' },
   { route: '/admin/bay-approvals', label: 'Bay Approvals', group: 'Administration', keywords: 'bay approve reject network manager allocation inactive request' },
+  { route: '/admin/upload-master', label: 'Upload a Master (drop any Excel)', group: 'Administration', keywords: 'upload excel master import template new existing lov list of values check validate file drop' },
   { route: '/admin/masters-guide', label: 'BA Guide: Adding Masters', group: 'Administration', keywords: 'help guide template workbook import excel ba how to' },
   { route: '/admin/masters?open=smart-import', label: 'Smart Excel Import (BA Excel → masters)', group: 'Administration', keywords: 'upload excel ba sheet any format new master import xlsx auto detect' },
   { route: '/admin/masters?open=common', label: 'Common Masters (Common LOV: all dropdown lists)', group: 'Administration', keywords: 'lov list of values dropdown common shared parameter code values ppl complaint codes dealer registry' },
