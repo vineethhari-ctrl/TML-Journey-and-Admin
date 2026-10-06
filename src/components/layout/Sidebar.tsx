@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Compass,
   Search,
+  ClipboardList,
   Users,
   Shield,
   Smartphone,
@@ -95,6 +96,17 @@ export const Sidebar: React.FC = () => {
               >
                 <Search className="h-4 w-4" />
                 <span className="flex-1 text-left">Journey Search</span>
+                <ChevronRight className="h-3 w-3 opacity-40" />
+              </button>
+            )}
+
+            {canAccessRoute('/workshop') && (
+              <button
+                onClick={() => navigate('/workshop')}
+                className={`w-full cursor-pointer ${navItemClass(currentRoute.split('?')[0] === '/workshop')}`}
+              >
+                <ClipboardList className="h-4 w-4" />
+                <span className="flex-1 text-left">Workshop Worklist</span>
                 <ChevronRight className="h-3 w-3 opacity-40" />
               </button>
             )}

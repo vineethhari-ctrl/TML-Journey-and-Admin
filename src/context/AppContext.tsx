@@ -357,6 +357,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           'journey.read',
           'journey.search',
           'dashboard.read',
+          'pii.unmask',
         ],
         receptionist: [
           'appointment.read',
@@ -391,6 +392,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           'journey.read',
           'journey.search',
           'dashboard.read',
+          'pii.unmask',
+          'pii.export',
         ],
         dealerAdmin: [
           'appointment.read',
@@ -407,6 +410,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           'journey.read',
           'journey.search',
           'dashboard.read',
+          'pii.unmask',
+          'pii.export',
         ],
         cro: [],
       };

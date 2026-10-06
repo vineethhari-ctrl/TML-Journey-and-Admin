@@ -59,6 +59,12 @@ Goodwill and Warranty / AMC / EW authorisation masters from the BA workbook *Cla
 Request Category mapping, the Warranty Authorization approval matrix, Service Guideline files and SHQ approvers. They come
 with a **Claims Rule Tester** and the open BA questions — see [`docs/CLAIM_MASTERS.md`](docs/CLAIM_MASTERS.md).
 
+## Workshop worklist UI kit (tabs, columns, DPDP, vehicle renders)
+
+Personalised top tabs, lean grid columns with a customiser, DPDP masking (CTI click-to-call, audited reveal, masked
+exports) and variant + colour vehicle renders. It is live at `#/workshop`, and DPDP masking is also applied to TML Journey.
+See [`docs/WORKSHOP_UI_KIT.md`](docs/WORKSHOP_UI_KIT.md).
+
 **Note for AI Studio / other tools:** never delete or regenerate `package-lock.json` — CI (`npm ci`) and the Pages deploy
 depend on it.
 

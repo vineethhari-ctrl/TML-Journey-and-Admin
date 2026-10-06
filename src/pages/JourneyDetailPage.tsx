@@ -30,6 +30,9 @@ import {
 } from 'lucide-react';
 import { MasterFieldDef } from '../data/masterCatalogue';
 import { DynamicFieldRenderer } from '../components/common/DynamicFieldRenderer';
+import { MaskedName, MaskedPhone } from '../components/dpdp/MaskedPii';
+import { useDpdp } from '../hooks/useDpdp';
+import { sanitizeForExport } from '../utils/dpdp';
 
 interface JourneyDetailPageProps {
   jcNumber?: string;
@@ -96,6 +99,7 @@ const formatClock = (dateTime: string) => {
 
 const JourneyDetailContent: React.FC<{ jcNumber: string }> = ({ jcNumber }) => {
   const { serviceCases, stages, events, exceptions, navigate, showToast, masterConfigs, vehicles } = useApp();
+  const { canExportPlainPii } = useDpdp();
 
   const [activeTab, setActiveTab] = useState<'timeline' | 'exceptions' | 'performance' | 'master_mapping' | 'rules_engine'>('timeline');
   const [selectedStage, setSelectedStage] = useState<JourneyStage | null>(null);
@@ -140,10 +144,16 @@ const JourneyDetailContent: React.FC<{ jcNumber: string }> = ({ jcNumber }) => {
   };
 
   const handleExportDossier = () => {
+    // DPDP: customer details are masked unless the user holds the supervisor export permission
+    const [serviceCase] = sanitizeForExport([currentCase], { customerName: 'name', customerMobile: 'phone' }, canExportPlainPii);
+    const vehicle = matchingVehicle
+      ? sanitizeForExport([matchingVehicle], { customerName: 'name', customerMobile: 'phone', customerEmail: 'email' }, canExportPlainPii)[0]
+      : null;
     const dossier = {
       exportedAt: new Date().toISOString(),
-      serviceCase: currentCase,
-      vehicle: matchingVehicle ?? null,
+      piiMasked: !canExportPlainPii,
+      serviceCase,
+      vehicle,
       stages: caseStages,
       events: caseEvents,
       exceptions: caseExceptions,
@@ -156,7 +166,7 @@ const JourneyDetailContent: React.FC<{ jcNumber: string }> = ({ jcNumber }) => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    showToast(`Journey dossier exported (${caseStages.length} stages, ${caseEvents.length} events)`, 'success');
+    showToast(`Journey dossier exported (${caseStages.length} stages, ${caseEvents.length} events)${canExportPlainPii ? '' : ', customer details masked'}`, 'success');
   };
 
   const handleStageSelect = (stage: JourneyStage) => {
@@ -299,8 +309,9 @@ const JourneyDetailContent: React.FC<{ jcNumber: string }> = ({ jcNumber }) => {
               <span>•</span>
               <span className="flex items-center gap-1">
                 <User className="h-3.5 w-3.5 text-slate-400" />
-                Customer: <strong className="text-slate-800 font-medium">{currentCase.customerName}</strong>
-                <span className="text-slate-400 font-mono">({currentCase.customerMobile})</span>
+                Customer:{' '}
+                <MaskedName name={currentCase.customerName} vehicleRegNo={currentCase.vehicleRegistration} assignedSa={{ name: currentCase.serviceAdvisor }} className="text-slate-800 font-medium" />
+                <MaskedPhone phone={currentCase.customerMobile} vehicleRegNo={currentCase.vehicleRegistration} />
               </span>
             </div>
           </div>

@@ -12,6 +12,7 @@ export const NAV_PAGES: NavPage[] = [
   { route: '/journey/JC20260930001234', label: 'Vehicle Journey (Demo EV)', group: 'TML Journey', keywords: 'timeline demo mh01ab1234' },
   { route: '/journey?filter=delayed', label: 'Delayed Journeys', group: 'TML Journey', keywords: 'sla breach late' },
   { route: '/journey?filter=pending', label: 'Pending Actions', group: 'TML Journey', keywords: 'approval blocked waiting' },
+  { route: '/workshop', label: 'Workshop Worklist (tabs, columns, DPDP)', group: 'TML Journey', keywords: 'gate-in my assignment worklist tabs columns dpdp mask phone privacy cti call vehicle image variant colour' },
   { route: '/journey?filter=in_workshop', label: 'Vehicles In Workshop', group: 'TML Journey', keywords: 'bay floor' },
   { route: '/admin/masters', label: 'Masters Maintenance', group: 'Administration', keywords: 'master data fields schema bay' },
   { route: '/admin/bay-approvals', label: 'Bay Approvals', group: 'Administration', keywords: 'bay approve reject network manager allocation inactive request' },
