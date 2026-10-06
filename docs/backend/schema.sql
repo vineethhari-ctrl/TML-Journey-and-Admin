@@ -134,6 +134,30 @@ CREATE TABLE master_field (
   CHECK (field_type <> 'select' OR jsonb_array_length(options) >= 2)
 );
 
+-- No-code business rules of a master (portal "Rules" tab / BA workbook "Rules" sheet). Checked on every record
+-- write and import, after the field rules. Parameters by type (field keys):
+--   required_if {field, whenField, whenValues[]}   unique {fields[]}          not_greater {field, otherField}
+--   allowed_if  {field, whenField, whenValues[], values[]}                    exists_in {field, refMaster, refField}
+--   range       {field, min?, max?}                 pattern {field, pattern}
+-- Same evaluator as src/utils/masterRules.ts (its unit tests are the contract).
+CREATE TABLE master_rule (
+  master_id        varchar(31)  NOT NULL REFERENCES master_definition ON DELETE CASCADE,
+  rule_id          varchar(40)  NOT NULL,
+  rule_type        varchar(20)  NOT NULL CHECK (rule_type IN ('required_if', 'unique', 'not_greater', 'allowed_if', 'exists_in', 'range', 'pattern')),
+  params           jsonb        NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(params) = 'object'),
+  severity         varchar(7)   NOT NULL DEFAULT 'error' CHECK (severity IN ('error', 'warning')),
+  message          varchar(300),                             -- optional wording shown to users
+  is_enabled       boolean      NOT NULL DEFAULT true,
+  display_order    integer      NOT NULL DEFAULT 0,
+  created_at       timestamptz  NOT NULL DEFAULT now(),
+  created_by       varchar(60)  NOT NULL,
+  updated_at       timestamptz  NOT NULL DEFAULT now(),
+  updated_by       varchar(60)  NOT NULL,
+  PRIMARY KEY (master_id, rule_id),
+  CHECK (rule_type <> 'unique' OR jsonb_array_length(params -> 'fields') >= 1),
+  CHECK (rule_type = 'unique' OR params ? 'field')
+);
+
 CREATE TABLE master_record (
   master_id        varchar(31)  NOT NULL REFERENCES master_definition ON DELETE CASCADE,
   record_id        varchar(60)  NOT NULL,                    -- business id shown in the portal (e.g. GCM-01)
@@ -463,6 +487,20 @@ CREATE TRIGGER master_record_track_ins_upd BEFORE INSERT OR UPDATE ON master_rec
   FOR EACH ROW EXECUTE FUNCTION master_record_track();
 CREATE TRIGGER master_record_track_del AFTER DELETE ON master_record
   FOR EACH ROW EXECUTE FUNCTION master_record_track();
+
+-- A rule change is a definition change: bump the master's version so dealer apps re-sync it.
+CREATE FUNCTION master_rule_bump() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE master_definition SET version = version + 1, updated_at = now()
+   WHERE master_id = coalesce(NEW.master_id, OLD.master_id);
+  IF TG_OP = 'UPDATE' THEN NEW.updated_at := now(); END IF;
+  RETURN coalesce(NEW, OLD);
+END $$;
+
+CREATE TRIGGER master_rule_bump_ins_upd BEFORE INSERT OR UPDATE ON master_rule
+  FOR EACH ROW EXECUTE FUNCTION master_rule_bump();
+CREATE TRIGGER master_rule_bump_del AFTER DELETE ON master_rule
+  FOR EACH ROW EXECUTE FUNCTION master_rule_bump();
 
 -- A Dealer Admin may only see / change their own dealer's rows (row-level security).
 -- The API sets app.dealer_code per request for dealer users; TML users leave it empty.

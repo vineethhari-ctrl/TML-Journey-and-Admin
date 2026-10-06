@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Copy, ListPlus, Plus, 
 import { useApp } from '../../context/AppContext';
 import type { MasterConfig } from '../../data/masterCatalogue';
 import { DUPLICATE_RECORD_MESSAGE } from '../../utils/recordDuplicates';
+import { evaluateRules } from '../../utils/masterRules';
 import { LOV_MODULES, licFor } from '../../data/commonLov';
 import { LOV_TYPE_ERRORS, applyLovTypeDraft, commonLovHealthCheck, lovCatalogue, lovRows, lovValues, type LovTypeHeader } from '../../utils/commonLov';
 
@@ -202,6 +203,16 @@ export const LovExplorer: React.FC<Props> = ({ master, canEdit, onSave, onTableV
       showToast(dup ? `${DUPLICATE_RECORD_MESSAGE}. Change the copied row's value before saving.` : 'Please fix the highlighted cells before saving.', 'error');
       return;
     }
+    // The master's own Rules-tab rules, on the rows of this list that are new or changed
+    const savedById = new Map(rows.map((r) => [String(r.id), JSON.stringify(r)]));
+    const touched = records.filter((r) => savedById.get(String(r.id)) !== JSON.stringify(r));
+    const violations = touched.flatMap((r) => evaluateRules(master, r, { others: records, masters: masterConfigs }).map((v) => ({ ...v, value: r.value })));
+    const blocking = violations.find((v) => v.severity === 'error');
+    if (blocking) {
+      showToast(`"${blocking.value}": ${blocking.message}`, 'error');
+      return;
+    }
+    if (violations.length) showToast(`Saved, with a warning: ${violations[0].message}`, 'info');
     onSave({ ...master, records });
     const before = isNew ? 0 : lovRows(rows, selected!).length;
     logAudit('LOV Saved', 'Masters', `Common LOV ${header.code}`, `${before} values`, `${draft.length} values`);

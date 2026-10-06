@@ -175,7 +175,11 @@ Status changes follow the same pattern, with **TML Admin (L1/L2)** as approver. 
    This is a port of `src/utils/masterValidationSchema.ts`.
 2. **Master business rules** chosen by `master_definition.rule_set`: ports of `eqcRules.ts` and `bodyshopRules.ts`
    (cross-field checks, duplicates, Red < Orange …). The portal's unit tests become the backend's contract tests.
-3. **Database constraints** (section 3), the last line of defence.
+3. **No-code rules** from `master_rule` (set by the TML Admin in the portal's Rules tab or the BA workbook "Rules"
+   sheet): Required when, No duplicates, From ≤ To, Allowed values depend on another field, Must exist in another
+   master, Number between, Format. Severity error = refuse, warning = save and report. Port of
+   `src/utils/masterRules.ts`; its unit tests are the contract. Plain code — no AI or external service.
+4. **Database constraints** (section 3), the last line of defence.
 
 Errors are returned as `application/problem+json` with the field, and for imports also the sheet and Excel row.
 

@@ -4,7 +4,7 @@
  * copies before them. Nothing is saved while any copy has a problem.
  */
 import type { MasterConfig } from '../data/masterCatalogue';
-import { masterValidationSchema } from './masterValidationSchema';
+import { checkRecord } from './masterRules';
 import { findEqcConflict } from './eqcRules';
 import { findThdConflict } from './thdRules';
 import { findClaimConflict } from './claimRules';
@@ -20,13 +20,16 @@ export interface CopyCheck {
   errors: Record<string, string[]>;
   /** Only the "Duplicate record cannot exist" problems per copy id (for live highlighting). */
   duplicates: Record<string, string[]>;
+  /** Rule warnings per copy id (do not block saving). */
+  warnings: Record<string, string[]>;
 }
 
 const withPrefix = (m: string) => (m.startsWith(DUPLICATE_RECORD_MESSAGE) ? m : `${DUPLICATE_RECORD_MESSAGE}: ${m}`);
 
-export function checkCopies(master: MasterConfig, copies: Rec[]): CopyCheck {
+export function checkCopies(master: MasterConfig, copies: Rec[], masters: MasterConfig[] = []): CopyCheck {
   const errors: Record<string, string[]> = {};
   const duplicates: Record<string, string[]> = {};
+  const warnings: Record<string, string[]> = {};
   const sanitized: Rec[] = [];
   const add = (id: string, msg: string, dup = false) => {
     (errors[id] ??= []).push(msg);
@@ -34,11 +37,12 @@ export function checkCopies(master: MasterConfig, copies: Rec[]): CopyCheck {
   };
   copies.forEach((copy, i) => {
     const { _after, ...data } = copy;
-    const res = masterValidationSchema.validateRecord(master.fields, data, master.id);
+    const others = [...master.records, ...sanitized.slice(0, i)];
+    const res = checkRecord(master, data, { others, masters });
     if (!res.isValid) Object.values(res.errors).forEach((m) => add(copy.id, String(m)));
+    if (res.warnings.length) warnings[copy.id] = res.warnings;
     const rec = res.isValid ? res.sanitizedRecord : data;
     sanitized.push(rec);
-    const others = [...master.records, ...sanitized.slice(0, i)];
     if (!rec.id || others.some((o) => String(o.id) === String(rec.id))) add(copy.id, `Record ID "${rec.id ?? ''}" is missing or already exists.`);
     const identical = findIdenticalRecord(master.fields, rec, others);
     if (identical) add(copy.id, duplicateMessage(identical), true);
@@ -47,7 +51,7 @@ export function checkCopies(master: MasterConfig, copies: Rec[]): CopyCheck {
       if (conflict) add(copy.id, withPrefix(conflict), true);
     }
   });
-  return { sanitized, errors, duplicates };
+  return { sanitized, errors, duplicates, warnings };
 }
 
 /** Saved rows with the copies inserted straight after the row each was copied from. */

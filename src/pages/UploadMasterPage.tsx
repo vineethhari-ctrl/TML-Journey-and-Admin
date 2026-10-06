@@ -222,6 +222,12 @@ export const UploadMasterPage: React.FC = () => {
                 </div>
               )}
 
+              {o.warnings.length > 0 && (
+                <ul className="list-disc rounded-lg border border-amber-200 bg-amber-50 py-1.5 pl-6 pr-2 text-amber-900" data-testid="row-warnings">
+                  {o.warnings.slice(0, 15).map((w, n) => <li key={n}>{w.row ? `Row ${w.row}: ` : ''}{w.message} (warning — will still be imported)</li>)}
+                </ul>
+              )}
+
               {o.kind === 'new' && o.detected && (() => {
                 const n = newMasters.find((x) => x.s === o);
                 const d = draftFor(o);

@@ -38,6 +38,12 @@ The portal runs entirely in the browser with plain, tested code: Excel reading (
 rules are ordinary functions. There are **no AI / LLM calls**, no API keys and no server calls when a user uploads an
 Excel file; AI was used only to write the code, not when it runs.
 
+## Master Rules (no coding)
+
+Every master has a **Rules** tab: Required when, No duplicates, From ≤ To, Allowed values depend on another field,
+Must exist in another master, Number between, Format — error or warning, on/off. Checked on every save, new row,
+Excel upload and BA workbook import (optional "Rules" sheet) — see [`docs/MASTER_RULES.md`](docs/MASTER_RULES.md).
+
 ## Upload a Master (business users)
 
 Drop any Excel on **Administration → Upload a Master**: an existing master's own template is imported (any column
