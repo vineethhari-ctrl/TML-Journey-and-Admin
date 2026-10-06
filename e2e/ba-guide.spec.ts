@@ -68,3 +68,32 @@ test('guide is linked from the palette and blocked for roles without masters acc
   await page.locator('header select').selectOption('driver');
   await expect(page.getByText('Access Restricted')).toBeVisible();
 });
+
+test('guide covers Upload a Master, Lists of Values, Rules and shortcuts, with working practice files and links', async ({ page }) => {
+  await page.goto('/#/admin/masters-guide');
+  const nav = page.getByRole('navigation', { name: 'Guide contents' });
+  for (const label of ['★ Easiest: Upload a Master', 'Common Masters & Lists of Values', 'Rules (no coding)', 'Shortcuts']) {
+    await expect(nav.getByRole('button', { name: label })).toBeVisible();
+  }
+  await expect(page.locator('#upload')).toContainText('Nothing is saved until you press Import');
+  await expect(page.locator('#upload')).toContainText('keep its id');
+  await expect(page.locator('#common')).toContainText('BU is PV or EV');
+  await expect(page.locator('#rules')).toContainText('No duplicates');
+  await expect(page.locator('#rules')).toContainText('Allowed values depend on another field');
+  await expect(page.locator('#shortcuts')).toContainText('Ctrl+B');
+  await expect(page.locator('#shortcuts')).toContainText('Esc');
+
+  // Practice files download as real .xlsx files
+  for (const name of ['Sample_Upload_1_LOV_Correct.xlsx', 'Sample_Upload_2_LOV_WrongColumns.xlsx', 'Sample_Upload_3_NewMaster.xlsx']) {
+    const download = page.waitForEvent('download');
+    await page.getByRole('link', { name: new RegExp(name.replace(/\./g, '\\.')) }).click();
+    const d = await download;
+    expect(d.suggestedFilename()).toBe(name);
+    expect(fs.readFileSync((await d.path())!).subarray(0, 2).toString()).toBe('PK');
+  }
+
+  // The header button opens the Upload page
+  await page.getByRole('button', { name: 'Open Upload a Master' }).click();
+  await expect(page).toHaveURL(/#\/admin\/upload-master$/);
+  await expect(page.getByRole('heading', { name: 'Upload a Master' })).toBeVisible();
+});

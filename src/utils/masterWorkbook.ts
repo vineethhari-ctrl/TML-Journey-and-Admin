@@ -33,7 +33,7 @@ export const README_SHEET = 'README';
 export const FIELD_TYPES: MasterFieldDef['type'][] = ['text', 'number', 'select', 'boolean', 'date'];
 export const OWNERS: MasterConfig['owner'][] = ['TML_ADMIN', 'DEALER_ADMIN'];
 export const DEALER_TARGETS: DealerTargetModule[] = ['vehicle_journey', 'job_card', 'reception', 'workshop_floor', 'general'];
-export const MODULE_CODES = WORKSHOP_MODULES.map((m) => m.code);
+export const MODULE_CODES = [...WORKSHOP_MODULES.map((m) => m.code), 'common'];
 export const LOGICAL_GROUPS = LOGICAL_MODULES.map((g) => g.id);
 
 /** Masters rendered by dedicated consoles; their rows can't be managed through generic imports. */
@@ -119,7 +119,7 @@ export function slugifyFieldKey(label: string): string {
   return /^[a-z]/.test(key) ? key.slice(0, 49) : `f_${key}`.slice(0, 49);
 }
 
-export const moduleNameFor = (code: ModuleCode) => WORKSHOP_MODULES.find((m) => m.code === code)?.title || code;
+export const moduleNameFor = (code: ModuleCode) => (code === 'common' ? 'Common Masters' : WORKSHOP_MODULES.find((m) => m.code === code)?.title || code);
 
 const str = (v: unknown) => (v === undefined || v === null ? '' : String(v).trim());
 const yes = (v: unknown) => ['y', 'yes', 'true', '1'].includes(str(v).toLowerCase());
