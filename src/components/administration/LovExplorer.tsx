@@ -123,6 +123,16 @@ export const LovExplorer: React.FC<Props> = ({ master, canEdit, onSave, onTableV
       showToast(`${DUPLICATE_RECORD_MESSAGE}. Change this row's value or remove the copy.`, 'error');
   };
   const onGridKeyDown = (e: React.KeyboardEvent) => {
+    // Esc on an unsaved row is the same as deleting it
+    if (e.key === 'Escape' && editable) {
+      const id = (e.target as HTMLElement).closest('[data-lov-row]')?.getAttribute('data-lov-row');
+      const row = draft.find((d) => d.id === id);
+      if (row?._new) {
+        e.preventDefault();
+        removeRow(row);
+      }
+      return;
+    }
     if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'b') return;
     e.preventDefault();
     if (!editable) return;
@@ -486,7 +496,7 @@ export const LovExplorer: React.FC<Props> = ({ master, canEdit, onSave, onTableV
                 </table>
               </div>
               <p className="text-[11px] text-slate-500">
-                <b>Ctrl+B</b> duplicates the row you are in — type over the copy's values; <b>Ctrl+S</b> saves. Order = position in the dropdown (use the arrows). Code (LIC) is filled from the Display Value when left blank and
+                <b>Esc</b> removes an unsaved row. <b>Ctrl+B</b> duplicates the row you are in — type over the copy's values; <b>Ctrl+S</b> saves. Order = position in the dropdown (use the arrows). Code (LIC) is filled from the Display Value when left blank and
                 stays fixed when the wording changes. Untick Active to retire a value; old records keep showing it.
                 {!editable && ' View only: TML Admin maintains the List of Values.'}
               </p>

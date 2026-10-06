@@ -84,7 +84,10 @@ Every master behaves like the List of Values screen:
 
 - **Ctrl+B** — click in a row (or tick one row) and press it: a copy of the row appears right below, editable in place
   (amber "COPY" row), cursor in the first field. Type over what differs; press Ctrl+B again for more copies.
-- **Ctrl+S** — saves all copied rows (the green "Save copy" button does the same); in the Add / Edit form it saves the
+- **+ Add Row** — adds a new row with **every field blank** at the top of the table (no popup), so it is clear what must
+  be typed. It is edited and saved exactly like a copy.
+- **Esc** — on an unsaved row (a copy or a new row) removes it, the same as deleting it. Saved rows are not affected.
+- **Ctrl+S** — saves all copied and new rows (the green "Save copy" button does the same); in the Add / Edit form it saves the
   record.
 - **Duplicate record cannot exist** — a copy identical to an existing row (every field the same) turns red at once,
   clicking away shows the error, and Ctrl+S / Save refuse until it is changed. Editing a record without changing any

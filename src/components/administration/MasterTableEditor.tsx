@@ -397,7 +397,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
       if (f.type === 'select')
         return (
           <select aria-label={f.label} className={base} value={v ?? ''} onChange={(e) => updateCopy(c.id, f.key, e.target.value)}>
-            {!(f.options ?? []).includes(String(v ?? '')) && <option value={v ?? ''}>{v ?? ''}</option>}
+            {!(f.options ?? []).includes(String(v ?? '')) && <option value={v ?? ''}>{v ? v : 'Select…'}</option>}
             {(f.options ?? []).map((o) => <option key={o}>{o}</option>)}
           </select>
         );
@@ -421,6 +421,11 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
               e.preventDefault();
               handleDuplicateRecord(c);
+            } else if (e.key === 'Escape') {
+              // Esc is the same as deleting the unsaved row
+              e.preventDefault();
+              e.stopPropagation();
+              removeCopy(c.id);
             }
           }}
           onBlur={(e) => {
@@ -428,13 +433,13 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
               showToast(`${DUPLICATE_RECORD_MESSAGE}. Change this row's values or remove the copy.`, 'error');
           }}
         >
-          <td className="py-2 px-3.5 text-center text-[10px] font-bold text-amber-800">COPY</td>
+          <td className="py-2 px-3.5 text-center text-[10px] font-bold text-amber-800" title="Unsaved row: Ctrl+S saves, Esc removes">NEW</td>
           {master.fields.map((f) => (
             <td key={f.key} className="py-1.5 px-2 min-w-28">{field(f)}</td>
           ))}
           <td className="py-1.5 px-2 text-right whitespace-nowrap">
-            <button type="button" onClick={handleSaveCopies} title="Save copied rows (Ctrl+S)" className="mr-1 rounded bg-emerald-700 px-2 py-1 text-[11px] font-bold text-white hover:bg-emerald-800 cursor-pointer">
-              Save {copies.length > 1 ? `${copies.length} copies` : 'copy'}
+            <button type="button" onClick={handleSaveCopies} title="Save new rows (Ctrl+S)" className="mr-1 rounded bg-emerald-700 px-2 py-1 text-[11px] font-bold text-white hover:bg-emerald-800 cursor-pointer">
+              Save {copies.length > 1 ? `${copies.length} rows` : 'row'}
             </button>
             <button type="button" onClick={() => removeCopy(c.id)} title="Remove copy" aria-label={`Remove copy ${c.id}`} className="p-1 rounded text-rose-600 hover:bg-rose-50 cursor-pointer">
               <Trash2 className="h-3.5 w-3.5" />
@@ -497,12 +502,22 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     if (!canEdit) return;
     const taken = [...master.records, ...copies];
     const { _after, ...values } = rec;
-    const copy = { ...values, id: nextRecordId(master.id, taken), _after: _after ?? rec.id };
+    const copy = { ...values, id: nextRecordId(master.id, taken), _after: '_after' in rec ? _after : rec.id };
     const at = copies.findIndex((c) => c.id === rec.id);
     setCopies(at >= 0 ? [...copies.slice(0, at + 1), copy, ...copies.slice(at + 1)] : [...copies, copy]);
     setCopyErrors({});
     setIsRecordModalOpen(false);
     setFocusCopyId(copy.id);
+  };
+  // "+ Add Row": a new row with every field blank appears at the top of the table, edited in place like a copy
+  const handleAddBlankRow = () => {
+    if (!canEdit) return;
+    const blank: Record<string, any> = { id: nextRecordId(master.id, [...master.records, ...copies]), _after: null };
+    master.fields.forEach((f) => (blank[f.key] = f.type === 'boolean' ? false : ''));
+    setCopies((prev) => [blank, ...prev]);
+    setCopyErrors({});
+    setIsRecordModalOpen(false);
+    setFocusCopyId(blank.id);
   };
   const updateCopy = (id: string, key: string, value: any) => {
     setCopies((prev) => prev.map((c) => (c.id === id ? { ...c, [key]: value } : c)));
@@ -524,11 +539,11 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     if (Object.keys(check.errors).length) {
       setCopyErrors(check.errors);
       const dup = Object.values(check.duplicates).flat()[0];
-      showToast(dup ? `${DUPLICATE_RECORD_MESSAGE}. Change the copied row's values before saving.` : 'Please correct the highlighted copied rows before saving.', 'error');
+      showToast(dup ? `${DUPLICATE_RECORD_MESSAGE}. Change the copied row's values before saving.` : 'Please correct the highlighted rows before saving.', 'error');
       return;
     }
     const newMaster = { ...master, records: insertCopies(master.records, copies, check.sanitized) };
-    recordSnapshot('CREATE_RECORD', `Added ${copies.length} copied record(s)`, copies.length, newMaster, `Inserted ${copies.length} copied row(s) into ${master.name}`);
+    recordSnapshot('CREATE_RECORD', `Added ${copies.length} record(s)`, copies.length, newMaster, `Inserted ${copies.length} row(s) into ${master.name}`);
     check.sanitized.forEach((record) =>
       AuditTrailMiddleware.logCreateRow({
         masterName: master.name,
@@ -541,7 +556,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     onUpdateMaster(newMaster);
     setCopies([]);
     setCopyErrors({});
-    showToast(`${copies.length} copied row(s) added to ${master.name}.`, 'success');
+    showToast(`${copies.length} row(s) added to ${master.name}.`, 'success');
   };
 
   // Ctrl+B anywhere in the editor: copy the open record, else the single ticked row. Ctrl+S saves the open record.
@@ -1362,7 +1377,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
 
             {canEdit ? (
               <button
-                onClick={handleOpenAddRecord}
+                onClick={handleAddBlankRow}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold shadow-xs cursor-pointer transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -1897,6 +1912,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {copies.filter((c) => !c._after).map((c) => renderCopyRow(c))}
               {filteredRecords.length === 0 ? (
                 <tr>
                   <td

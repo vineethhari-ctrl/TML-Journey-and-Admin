@@ -67,8 +67,8 @@ describe('MasterTableEditor', () => {
     const user = userEvent.setup();
     wrap(<EditorHarness />);
     await user.click(screen.getByRole('button', { name: /\+ Add Row/ }));
-    await user.type(screen.getByPlaceholderText('Enter Name'), 'Gamma');
-    await user.click(screen.getByRole('button', { name: 'Insert Row' }));
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Gamma');
+    await user.click(screen.getByRole('button', { name: /^Save row/ }));
     const ids = screen.getByTestId('ids').textContent!.split(',');
     expect(ids).toHaveLength(3);
     expect(new Set(ids).size).toBe(3);
@@ -78,11 +78,9 @@ describe('MasterTableEditor', () => {
     const user = userEvent.setup();
     wrap(<EditorHarness />);
     await user.click(screen.getByRole('button', { name: /\+ Add Row/ }));
-    await user.type(screen.getByPlaceholderText('Enter Name'), 'Gamma');
-    const hours = screen.getByPlaceholderText(/numeric value/);
-    await user.clear(hours);
-    await user.type(hours, '99');
-    await user.click(screen.getByRole('button', { name: 'Insert Row' }));
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Gamma');
+    await user.type(screen.getByRole('spinbutton', { name: 'Hours' }), '99');
+    await user.click(screen.getByRole('button', { name: /^Save row/ }));
     expect(screen.getByTestId('ids').textContent!.split(',')).toHaveLength(2);
     expect(screen.getAllByText(/cannot be greater than 10/).length).toBeGreaterThan(0);
   });
