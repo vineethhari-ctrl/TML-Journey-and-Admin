@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { MASTER_COLLECTIONS } from '../../data/masterCatalogue';
 import {
+  THD_LOV,
   THD_MASTER_IDS,
   criticalComplaint,
   criticalWithoutPpl,
-  dropdownValues,
   evaluateAutoThd,
   findThdConflict,
   pendingTriggerRules,
@@ -14,9 +14,12 @@ import {
   windowHours,
 } from '../thdRules';
 import { validateMasterRecordRules } from '../recordRules';
+import { COMMON_LOV_ID } from '../../data/commonLov';
+import { lovRows, lovValues } from '../commonLov';
 
 const rows = (id: string) => MASTER_COLLECTIONS.find((m) => m.id === id)!.records;
-const all = () => Object.fromEntries(Object.values(THD_MASTER_IDS).map((id) => [id, rows(id)]));
+const all = () => Object.fromEntries([...Object.values(THD_MASTER_IDS), COMMON_LOV_ID].map((id) => [id, rows(id)]));
+const lov = rows(COMMON_LOV_ID);
 const triggers = rows(THD_MASTER_IDS.triggers);
 const critical = rows(THD_MASTER_IDS.critical);
 const fired = (e: Parameters<typeof evaluateAutoThd>[2]) => evaluateAutoThd(triggers, critical, e).fired.map((f) => f.rule.ruleNo);
@@ -24,28 +27,28 @@ const nexonE32 = [{ id: 'C1', ppl: 'Nexon', complaintCode: 'E32', aggregate: 'El
 
 describe('THD masters match the BA workbook "THD Masters List"', () => {
   it.each([
-    [THD_MASTER_IDS.complaintType, 2, 'Technical Query'],
-    [THD_MASTER_IDS.shortDescription, 26, 'Abnormal noise'],
-    [THD_MASTER_IDS.actionTaken, 7, 'Issue concluded and proceeded as per Field Investigation'],
-    [THD_MASTER_IDS.delayReason, 10, 'Diagnosis and investigation'],
-    [THD_MASTER_IDS.closureAction, 3, 'Closed'],
-    [THD_MASTER_IDS.progress, 6, 'Under Diagnosis'],
-    [THD_MASTER_IDS.attachmentType, 1, 'DIR Report'],
-  ])('%s has %i values starting with "%s"', (id, count, first) => {
-    expect(dropdownValues(rows(id))).toHaveLength(count);
-    expect(dropdownValues(rows(id))[0]).toBe(first);
+    [THD_LOV.complaintType, 2, 'Technical Query'],
+    [THD_LOV.shortDescription, 26, 'Abnormal noise'],
+    [THD_LOV.actionTaken, 7, 'Issue concluded and proceeded as per Field Investigation'],
+    [THD_LOV.delayReason, 10, 'Diagnosis and investigation'],
+    [THD_LOV.closureAction, 3, 'Closed'],
+    [THD_LOV.progress, 6, 'Under Diagnosis'],
+    [THD_LOV.attachmentType, 1, 'DIR Report'],
+  ])('%s has %i values starting with "%s"', (code, count, first) => {
+    expect(lovValues(lov, code)).toHaveLength(count);
+    expect(lovValues(lov, code)[0]).toBe(first);
   });
 
   it('keeps the last values of the longer lists', () => {
-    expect(dropdownValues(rows(THD_MASTER_IDS.shortDescription)).at(-1)).toBe('Water entry in cabin');
-    expect(dropdownValues(rows(THD_MASTER_IDS.delayReason)).at(-1)).toBe('Dealer not responding');
-    expect(dropdownValues(rows(THD_MASTER_IDS.closureAction))).toEqual(['Closed', 'Closed With Feedback', 'Closed With Early Warning']);
+    expect(lovValues(lov, THD_LOV.shortDescription).at(-1)).toBe('Water entry in cabin');
+    expect(lovValues(lov, THD_LOV.delayReason).at(-1)).toBe('Dealer not responding');
+    expect(lovValues(lov, THD_LOV.closureAction)).toEqual(['Closed', 'Closed With Feedback', 'Closed With Early Warning']);
   });
 
   it('fills the merged Progress cells down: 16 sub-statuses, linked to their progress', () => {
-    expect(rows(THD_MASTER_IDS.subStatus)).toHaveLength(16);
-    expect(subStatusesFor(rows(THD_MASTER_IDS.subStatus), 'Under Diagnosis')).toEqual(['U/I DET', 'U/I COC', 'U/I Vendor', 'U/I Plant Team']);
-    expect(subStatusesFor(rows(THD_MASTER_IDS.subStatus), 'Pending for Vehicle availability')).toEqual(['Expected date', 'Status as on date']);
+    expect(lovRows(lov, THD_LOV.subStatus)).toHaveLength(16);
+    expect(subStatusesFor(lov, 'Under Diagnosis')).toEqual(['U/I DET', 'U/I COC', 'U/I Vendor', 'U/I Plant Team']);
+    expect(subStatusesFor(lov, 'Pending for Vehicle availability')).toEqual(['Expected date', 'Status as on date']);
   });
 
   it('has the critical complaint, the filter ranges and one user per BA user sheet', () => {
@@ -132,19 +135,12 @@ describe('THD validation', () => {
     });
   });
 
-  it('rejects duplicate dropdown values and sub-statuses', () => {
-    const progress = rows(THD_MASTER_IDS.progress);
-    expect(findThdConflict(THD_MASTER_IDS.progress, { id: 'NEW', value: ' under diagnosis ', status: 'Active' }, progress)).toMatch(/already exists in PRG-01/);
-    expect(findThdConflict(THD_MASTER_IDS.progress, { id: 'NEW', value: 'Under Diagnosis', status: 'Inactive' }, progress)).toBeNull();
-    expect(findThdConflict(THD_MASTER_IDS.subStatus, { id: 'NEW', progress: 'Work in process', subStatus: 'WIP DET', status: 'Active' }, rows(THD_MASTER_IDS.subStatus))).toMatch(/already exists/);
-  });
-
-  it('health check finds orphan sub-statuses and a missing Tech Executive L1', () => {
+  it('health check finds a Progress without sub-statuses and a missing Tech Executive L1', () => {
     const data = all();
-    data[THD_MASTER_IDS.subStatus] = [...data[THD_MASTER_IDS.subStatus], { id: 'PSS-X', progress: 'Closed', subStatus: 'Done', status: 'Active', order: 1 }];
+    data[COMMON_LOV_ID] = lov.map((r) => (r.lovCode === THD_LOV.subStatus && r.parentValue === 'Under Diagnosis' ? { ...r, status: 'Inactive' } : r));
     data[THD_MASTER_IDS.users] = data[THD_MASTER_IDS.users].filter((u) => u.role !== 'Tech Executive L1');
     const issues = thdHealthCheck(data);
-    expect(issues.some((i) => i.includes('Progress "Closed" is not an active value'))).toBe(true);
+    expect(issues.some((i) => i.includes('Progress "Under Diagnosis" has no active sub-status'))).toBe(true);
     expect(issues.some((i) => i.includes('no active Tech Executive L1 user'))).toBe(true);
   });
 });

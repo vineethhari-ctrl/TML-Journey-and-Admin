@@ -1,21 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import { MASTER_COLLECTIONS } from '../../data/masterCatalogue';
-import { CLAIM_MASTER_IDS, claimHealthCheck, claimPendingItems, findClaimConflict, goodwillCategory, routeWarrantyRequest } from '../claimRules';
-import { dropdownValues } from '../thdRules';
+import { CLAIM_LOV, CLAIM_MASTER_IDS, claimHealthCheck, claimPendingItems, findClaimConflict, goodwillCategory, routeWarrantyRequest } from '../claimRules';
+import { COMMON_LOV_ID } from '../../data/commonLov';
+import { findCommonLovConflict, lovValues } from '../commonLov';
 import { validateMasterRecordRules } from '../recordRules';
 
 const rows = (id: string) => MASTER_COLLECTIONS.find((m) => m.id === id)!.records;
-const all = () => Object.fromEntries(Object.values(CLAIM_MASTER_IDS).map((id) => [id, rows(id)]));
+const all = () => Object.fromEntries([...Object.values(CLAIM_MASTER_IDS), COMMON_LOV_ID].map((id) => [id, rows(id)]));
+const lov = rows(COMMON_LOV_ID);
 const matrix = rows(CLAIM_MASTER_IDS.approvalMatrix);
 
 describe('Claims masters match the BA workbook "Claims Masters List"', () => {
   it.each([
-    [CLAIM_MASTER_IDS.budgetPurpose, ['Approved Yearly Budget', 'Special Budget']],
-    [CLAIM_MASTER_IDS.specialGoodwill, ['IUPR', 'Thrive']],
-    [CLAIM_MASTER_IDS.issueDescription, ['Thermal Incident', 'Engine Failure']],
-    [CLAIM_MASTER_IDS.complaintType, ['Transmission', 'Clutch']],
-  ])('%s', (id, values) => {
-    expect(dropdownValues(rows(id))).toEqual(values);
+    [CLAIM_LOV.budgetPurpose, ['Approved Yearly Budget', 'Special Budget']],
+    [CLAIM_LOV.specialGoodwill, ['IUPR', 'Thrive']],
+    [CLAIM_LOV.issueDescription, ['Thermal Incident', 'Engine Failure']],
+    [CLAIM_LOV.complaintType, ['Transmission', 'Clutch']],
+  ])('%s', (code, values) => {
+    expect(lovValues(lov, code)).toEqual(values);
   });
 
   it('maps each issue description to its type and category', () => {
@@ -83,13 +85,13 @@ describe('Claims validation', () => {
   });
 
   it('rejects duplicates', () => {
-    expect(findClaimConflict(CLAIM_MASTER_IDS.specialGoodwill, { id: 'N', value: 'iupr', status: 'Active' }, rows(CLAIM_MASTER_IDS.specialGoodwill))).toMatch(/SPC-01/);
+    expect(findCommonLovConflict(COMMON_LOV_ID, { id: 'N', lovCode: CLAIM_LOV.specialGoodwill, value: 'iupr', status: 'Active' }, lov)).toMatch(/CLAIM_SPECIAL_GOODWILL-01/);
     expect(findClaimConflict(CLAIM_MASTER_IDS.goodwillCategory, { id: 'N', issueDescription: 'Engine Failure', status: 'Active' }, rows(CLAIM_MASTER_IDS.goodwillCategory))).toMatch(/GWC-02/);
   });
 
   it('health check catches unmapped issues, orphan mappings and falling limits', () => {
     const data = all();
-    data[CLAIM_MASTER_IDS.issueDescription] = [...data[CLAIM_MASTER_IDS.issueDescription], { id: 'ISD-03', value: 'Flood Damage', status: 'Active', order: 3 }];
+    data[COMMON_LOV_ID] = [...lov, { id: 'CLAIM_ISSUE_DESCRIPTION-03', lovCode: CLAIM_LOV.issueDescription, module: 'CLAIM', fieldName: 'Issue Description', value: 'Flood Damage', status: 'Active', order: 3 }];
     data[CLAIM_MASTER_IDS.goodwillCategory] = [...data[CLAIM_MASTER_IDS.goodwillCategory], { id: 'GWC-03', issueDescription: 'Fire', issueType: 'X', requestCategory: 'Red', status: 'Active' }];
     data[CLAIM_MASTER_IDS.approvalMatrix] = matrix.map((m) => (m.persona === 'SHQ Lead 1' ? { ...m, approvesUpTo: 10000, forwardTo: 'SHQ Lead 2' } : m));
     const issues = claimHealthCheck(data);

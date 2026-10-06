@@ -8,36 +8,39 @@
  *    it is reported as pending instead.
  */
 
+import { COMMON_LOV_ID } from '../data/commonLov';
+import { lovValues } from './commonLov';
+
 type Rec = Record<string, any>;
 
 export const THD_MASTER_IDS = {
   triggers: 'thd_auto_trigger_rules',
   critical: 'thd_critical_complaints',
-  progress: 'thd_progress',
-  subStatus: 'thd_progress_sub_status',
-  complaintType: 'thd_complaint_type',
-  shortDescription: 'thd_complaint_short_desc',
-  actionTaken: 'thd_action_taken',
-  delayReason: 'thd_delay_reason',
-  closureAction: 'thd_closure_action',
-  attachmentType: 'thd_attachment_type',
   kmsRange: 'thd_kms_range',
   vehicleAge: 'thd_vehicle_age',
   users: 'thd_users',
 } as const;
 
+/** THD dropdown lists in the Common LOV Master (src/data/commonLov.ts). */
+export const THD_LOV = {
+  progress: 'THD_PROGRESS',
+  subStatus: 'THD_PROGRESS_SUB_STATUS',
+  complaintType: 'THD_COMPLAINT_TYPE',
+  shortDescription: 'THD_COMPLAINT_SHORT_DESC',
+  actionTaken: 'THD_ACTION_TAKEN',
+  delayReason: 'THD_DELAY_REASON',
+  closureAction: 'THD_CLOSURE_ACTION',
+  attachmentType: 'THD_ATTACHMENT_TYPE',
+} as const;
+
 const blank = (v: unknown) => v === undefined || v === null || String(v).trim() === '';
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
 export const isActive = (r: Rec) => norm(r.status || 'Active') === 'active';
-const byOrder = (a: Rec, b: Rec) => (Number(a.order) || 0) - (Number(b.order) || 0);
 const list = (text: unknown) => String(text ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 
-/** Active values of a dropdown master, in display order. */
-export const dropdownValues = (rows: Rec[], key = 'value'): string[] => rows.filter(isActive).sort(byOrder).map((r) => String(r[key]));
 
-/** Active sub-statuses for a progress, in order. */
-export const subStatusesFor = (rows: Rec[], progress: string): string[] =>
-  dropdownValues(rows.filter((r) => norm(r.progress) === norm(progress)), 'subStatus');
+/** Active sub-statuses for a progress, in order (`lov` = Common LOV Master rows). */
+export const subStatusesFor = (lov: Rec[], progress: string): string[] => lovValues(lov, THD_LOV.subStatus, progress);
 
 /** The active critical-complaint row for this PPL + code, or null. */
 export function criticalComplaint(rows: Rec[], q: { ppl: string; complaintCode: string }): Rec | null {
@@ -169,48 +172,43 @@ export const THD_RECORD_RULES: Record<string, (r: Rec) => Record<string, string>
 const KEYS: Record<string, { keys: string[]; what: (r: Rec) => string }> = {
   [THD_MASTER_IDS.triggers]: { keys: ['ruleNo'], what: (r) => `Rule ${r.ruleNo}` },
   [THD_MASTER_IDS.critical]: { keys: ['ppl', 'complaintCode'], what: (r) => `${r.complaintCode} (${r.ppl || 'all PPLs'})` },
-  [THD_MASTER_IDS.subStatus]: { keys: ['progress', 'subStatus'], what: (r) => `"${r.subStatus}" under ${r.progress}` },
   [THD_MASTER_IDS.users]: { keys: ['role', 'bu', 'userName'], what: (r) => `${r.userName} as ${r.role} (${r.bu})` },
 };
-const LIST_IDS: string[] = [
-  THD_MASTER_IDS.progress,
-  THD_MASTER_IDS.complaintType,
-  THD_MASTER_IDS.shortDescription,
-  THD_MASTER_IDS.actionTaken,
-  THD_MASTER_IDS.delayReason,
-  THD_MASTER_IDS.closureAction,
-  THD_MASTER_IDS.attachmentType,
-];
 
 /** An active row (other than `record`) that clashes with it in the same master. */
 export function findThdConflict(masterId: string, record: Rec, others: Rec[]): string | null {
   if (!isActive(record)) return null;
   const rest = others.filter((o) => o.id !== record.id && isActive(o));
-  const spec = LIST_IDS.includes(masterId) ? { keys: ['value'], what: (r: Rec) => `"${r.value}"` } : KEYS[masterId];
+  const spec = KEYS[masterId];
   if (!spec) return null;
   const key = (r: Rec) => spec.keys.map((k) => norm(r[k])).join('|');
   const clash = rest.find((o) => key(o) === key(record));
   return clash ? `${spec.what(record)} already exists in ${clash.id}.` : null;
 }
 
-/** Every problem across the THD masters, including data that arrived by bulk import. */
+/**
+ * Every problem across the THD masters, including data that arrived by bulk import.
+ * Pass the Common LOV Master rows under COMMON_LOV_ID to check the THD lists too.
+ */
 export function thdHealthCheck(records: Record<string, Rec[]>): string[] {
   const issues: string[] = [];
+  const lov = records[COMMON_LOV_ID] ?? [];
   Object.entries(records).forEach(([masterId, rows]) => {
+    if (masterId === COMMON_LOV_ID) return;
     rows.forEach((r, i) => {
       Object.values(THD_RECORD_RULES[masterId]?.(r) ?? {}).forEach((e) => issues.push(`${masterId} ${r.id}: ${e}`));
       const clash = findThdConflict(masterId, r, rows.slice(0, i));
       if (clash) issues.push(`${masterId} ${r.id}: ${clash}`);
     });
   });
-  const progress = new Set(dropdownValues(records[THD_MASTER_IDS.progress] ?? []).map(norm));
-  (records[THD_MASTER_IDS.subStatus] ?? []).filter(isActive).forEach((s) => {
-    if (!progress.has(norm(s.progress))) issues.push(`${THD_MASTER_IDS.subStatus} ${s.id}: Progress "${s.progress}" is not an active value in the Progress master.`);
-  });
-  progress.forEach((p) => {
-    if (!(records[THD_MASTER_IDS.subStatus] ?? []).some((s) => isActive(s) && norm(s.progress) === p))
-      issues.push(`${THD_MASTER_IDS.progress}: Progress "${p}" has no active sub-status.`);
-  });
+  if (lov.length) {
+    Object.values(THD_LOV).forEach((code) => {
+      if (!lovValues(lov, code).length) issues.push(`${code}: THD list has no active value in the Common LOV Master.`);
+    });
+    lovValues(lov, THD_LOV.progress).forEach((p) => {
+      if (!subStatusesFor(lov, p).length) issues.push(`${THD_LOV.progress}: Progress "${p}" has no active sub-status in ${THD_LOV.subStatus}.`);
+    });
+  }
   const users = records[THD_MASTER_IDS.users] ?? [];
   (records[THD_MASTER_IDS.triggers] ?? []).filter(isActive).forEach((t) => {
     const role = norm(t.assignedTo) === 'tech executive l1' ? 'tech executive l1' : null;

@@ -3,23 +3,29 @@
  * Only rows with Status = Active are used.
  */
 
+import { COMMON_LOV_ID } from '../data/commonLov';
+import { lovValues } from './commonLov';
+
 type Rec = Record<string, any>;
 
 export const CLAIM_MASTER_IDS = {
-  budgetPurpose: 'claim_budget_purpose',
-  specialGoodwill: 'claim_special_goodwill',
-  issueDescription: 'claim_issue_description',
   goodwillCategory: 'claim_goodwill_category',
-  complaintType: 'claim_complaint_type',
   approvalMatrix: 'claim_warranty_approval_matrix',
   guideline: 'claim_service_guideline',
   shqUsers: 'claim_shq_users',
 } as const;
 
+/** Claims dropdown lists in the Common LOV Master (src/data/commonLov.ts). */
+export const CLAIM_LOV = {
+  budgetPurpose: 'CLAIM_BUDGET_PURPOSE',
+  specialGoodwill: 'CLAIM_SPECIAL_GOODWILL',
+  issueDescription: 'CLAIM_ISSUE_DESCRIPTION',
+  complaintType: 'CLAIM_COMPLAINT_TYPE',
+} as const;
+
 const blank = (v: unknown) => v === undefined || v === null || String(v).trim() === '';
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
 const isActive = (r: Rec) => norm(r.status || 'Active') === 'active';
-const values = (rows: Rec[]) => rows.filter(isActive).map((r) => norm(r.value));
 const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 
 /** Issue Type and Request Category of a Goodwill Request for an Issue Description, or null when unmapped. */
@@ -67,7 +73,6 @@ export const CLAIM_RECORD_RULES: Record<string, (r: Rec) => Record<string, strin
   },
 };
 
-const LIST_IDS: string[] = [CLAIM_MASTER_IDS.budgetPurpose, CLAIM_MASTER_IDS.specialGoodwill, CLAIM_MASTER_IDS.issueDescription, CLAIM_MASTER_IDS.complaintType];
 const KEYS: Record<string, { keys: string[]; what: (r: Rec) => string }> = {
   [CLAIM_MASTER_IDS.goodwillCategory]: { keys: ['issueDescription'], what: (r) => `A category for "${r.issueDescription}"` },
   [CLAIM_MASTER_IDS.approvalMatrix]: { keys: ['level'], what: (r) => `Level ${r.level}` },
@@ -78,32 +83,35 @@ const KEYS: Record<string, { keys: string[]; what: (r: Rec) => string }> = {
 /** An active row (other than `record`) that clashes with it in the same master. */
 export function findClaimConflict(masterId: string, record: Rec, others: Rec[]): string | null {
   if (!isActive(record)) return null;
-  const spec = LIST_IDS.includes(masterId) ? { keys: ['value'], what: (r: Rec) => `"${r.value}"` } : KEYS[masterId];
+  const spec = KEYS[masterId];
   if (!spec) return null;
   const key = (r: Rec) => spec.keys.map((k) => norm(r[k])).join('|');
   const clash = others.find((o) => o.id !== record.id && isActive(o) && key(o) === key(record));
   return clash ? `${spec.what(record)} already exists in ${clash.id}.` : null;
 }
 
-/** Problems that make the Claims data wrong — fix before go-live. */
+/** Problems that make the Claims data wrong — fix before go-live. Pass the Common LOV rows under COMMON_LOV_ID. */
 export function claimHealthCheck(records: Record<string, Rec[]>): string[] {
   const issues: string[] = [];
+  const lov = records[COMMON_LOV_ID] ?? [];
   Object.entries(records).forEach(([masterId, rows]) => {
+    if (masterId === COMMON_LOV_ID) return;
     rows.forEach((r, i) => {
       Object.values(CLAIM_RECORD_RULES[masterId]?.(r) ?? {}).forEach((e) => issues.push(`${masterId} ${r.id}: ${e}`));
       const clash = findClaimConflict(masterId, r, rows.slice(0, i));
       if (clash) issues.push(`${masterId} ${r.id}: ${clash}`);
     });
   });
-  const issuesList = values(records[CLAIM_MASTER_IDS.issueDescription] ?? []);
+  const issueValues = lovValues(lov, CLAIM_LOV.issueDescription);
+  const issuesList = issueValues.map(norm);
   const mapping = (records[CLAIM_MASTER_IDS.goodwillCategory] ?? []).filter(isActive);
   mapping.forEach((m) => {
     if (!issuesList.includes(norm(m.issueDescription)))
       issues.push(`${CLAIM_MASTER_IDS.goodwillCategory} ${m.id}: "${m.issueDescription}" is not an active Issue Description.`);
   });
-  (records[CLAIM_MASTER_IDS.issueDescription] ?? []).filter(isActive).forEach((d) => {
-    if (!mapping.some((m) => norm(m.issueDescription) === norm(d.value)))
-      issues.push(`${CLAIM_MASTER_IDS.issueDescription} ${d.id}: "${d.value}" has no Request Category mapping.`);
+  issueValues.forEach((d) => {
+    if (!mapping.some((m) => norm(m.issueDescription) === norm(d)))
+      issues.push(`${CLAIM_LOV.issueDescription}: "${d}" has no Request Category mapping.`);
   });
   const levels = (records[CLAIM_MASTER_IDS.approvalMatrix] ?? []).filter(isActive).sort((a, b) => Number(a.level) - Number(b.level));
   const approvers = levels.filter((l) => yes(l.canApprove));

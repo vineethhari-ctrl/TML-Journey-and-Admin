@@ -32,6 +32,13 @@ Allocation-driven bay governance with approvals (TML Network Manager / TML Admin
 policy switches — see [`docs/BAY_MANAGEMENT.md`](docs/BAY_MANAGEMENT.md). Rules: `src/utils/bayGovernance.ts` (pure, unit-tested);
 state: `src/context/BayContext.tsx`; UI: `BayManagementConsole.tsx`, `pages/BayApprovalsPage.tsx`.
 
+## Common Masters (shared by every module)
+
+Every dropdown list of every module lives in **one Common LOV Master**, one row per value, named by a Parameter
+`<MODULE>_<FIELD>` (e.g. `THD_COMPLAINT_TYPE`; `COMMON_` for shared lists such as `COMMON_BU`). Master fields point to a
+list with `lovCode`. PPL, complaint codes and the dealer registry are Common Masters too — see
+[`docs/COMMON_MASTERS.md`](docs/COMMON_MASTERS.md). Data: `src/data/commonLov.ts`; rules: `src/utils/commonLov.ts`.
+
 ## Electronic Quality Check (EQC) masters
 
 Six EQC rule masters (GC & road test mandate, GC steps, PTD risk, DID thresholds, general and schedule checklists) with
@@ -48,8 +55,8 @@ masters are registered in `src/utils/recordRules.ts`.
 
 ## THD masters
 
-13 masters from the BA workbooks *THD Masters List* and *Conditions 4*: the auto-THD trigger rules, critical complaints,
-closure dropdowns, Progress → Sub-Status, search filters and assignment users. They come with a **THD Rule Tester** and a
+Masters from the BA workbooks *THD Masters List* and *Conditions 4*: the auto-THD trigger rules, critical complaints,
+closure dropdowns (in the Common LOV Master), Progress → Sub-Status, search filters and assignment users. They come with a **THD Rule Tester** and a
 list of questions for the BA — see [`docs/THD_MASTERS.md`](docs/THD_MASTERS.md). Data: `src/data/thdMasters.ts`;
 rules: `src/utils/thdRules.ts`.
 

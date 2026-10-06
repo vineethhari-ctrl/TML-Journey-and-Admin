@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ChevronUp, Clock, FlaskConical } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { CLAIM_MASTER_IDS, claimHealthCheck, claimPendingItems, goodwillCategory, routeWarrantyRequest } from '../../utils/claimRules';
-import { dropdownValues } from '../../utils/thdRules';
+import { COMMON_LOV_ID } from '../../data/commonLov';
+import { lovValues } from '../../utils/commonLov';
+import { CLAIM_LOV, CLAIM_MASTER_IDS, claimHealthCheck, claimPendingItems, goodwillCategory, routeWarrantyRequest } from '../../utils/claimRules';
 
 const input = 'w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs focus:border-rose-500 focus:outline-hidden';
 const CATEGORY_STYLE: Record<string, string> = {
@@ -16,13 +17,13 @@ export const ClaimRuleTester: React.FC = () => {
   const { masterConfigs } = useApp();
   const rows = useMemo(() => {
     const out: Record<string, Array<Record<string, any>>> = {};
-    Object.values(CLAIM_MASTER_IDS).forEach((id) => (out[id] = masterConfigs.find((m) => m.id === id)?.records ?? []));
+    [...Object.values(CLAIM_MASTER_IDS), COMMON_LOV_ID].forEach((id) => (out[id] = masterConfigs.find((m) => m.id === id)?.records ?? []));
     return out;
   }, [masterConfigs]);
 
   const [open, setOpen] = useState(true);
   const [amount, setAmount] = useState('15000');
-  const issues = dropdownValues(rows[CLAIM_MASTER_IDS.issueDescription]);
+  const issues = lovValues(rows[COMMON_LOV_ID], CLAIM_LOV.issueDescription);
   const [issue, setIssue] = useState(issues[0] ?? '');
 
   const route = routeWarrantyRequest(rows[CLAIM_MASTER_IDS.approvalMatrix], Number(amount) || 0);
@@ -30,9 +31,9 @@ export const ClaimRuleTester: React.FC = () => {
   const health = claimHealthCheck(rows);
   const pending = claimPendingItems(rows);
   const lists: Array<[string, string[]]> = [
-    ['Budget Allocation Purpose', dropdownValues(rows[CLAIM_MASTER_IDS.budgetPurpose])],
-    ['Special Goodwill Claim', dropdownValues(rows[CLAIM_MASTER_IDS.specialGoodwill])],
-    ['AMC / EW Complaint Type', dropdownValues(rows[CLAIM_MASTER_IDS.complaintType])],
+    ['Budget Allocation Purpose', lovValues(rows[COMMON_LOV_ID], CLAIM_LOV.budgetPurpose)],
+    ['Special Goodwill Claim', lovValues(rows[COMMON_LOV_ID], CLAIM_LOV.specialGoodwill)],
+    ['AMC / EW Complaint Type', lovValues(rows[COMMON_LOV_ID], CLAIM_LOV.complaintType)],
   ];
 
   return (

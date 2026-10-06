@@ -27,6 +27,8 @@ import {
   MasterConfig,
   MasterFieldDef,
 } from '../data/masterCatalogue';
+import { RETIRED_LOV_MASTER_IDS } from '../data/commonLov';
+import { resolveLovFields } from '../utils/commonLov';
 
 export type PlatformRoleId =
   | 'superAdmin'
@@ -156,16 +158,21 @@ const readRouteFromHash = (): string => {
  * Saved master configs are merged with the built-in catalogue so masters (and
  * fields) shipped in newer builds show up for users who already have saved data.
  */
-const mergeWithCatalogue = (saved: MasterConfig[]): MasterConfig[] => {
+const mergeWithCatalogue = (savedAll: MasterConfig[]): MasterConfig[] => {
+  // Per-module dropdown masters were merged into the Common LOV Master
+  const saved = savedAll.filter((m) => !RETIRED_LOV_MASTER_IDS.includes(m.id));
   const savedById = new Map(saved.map((m) => [m.id, m]));
   const merged = MASTER_COLLECTIONS.map((builtIn) => {
     const existing = savedById.get(builtIn.id);
     if (!existing) return builtIn;
     const knownKeys = new Set(existing.fields.map((f) => f.key));
     const missingFields = builtIn.fields.filter((f) => !knownKeys.has(f.key));
+    // Which Common LOV list a field uses is owned by the product too
+    const lovByKey = new Map(builtIn.fields.filter((f) => f.lovCode).map((f) => [f.key, f.lovCode]));
+    const fields = existing.fields.map((f) => (lovByKey.has(f.key) ? { ...f, lovCode: lovByKey.get(f.key) } : f));
     // Where a master sits in the catalogue (group / module) is owned by the product, not by saved edits
-    const placed = { ...existing, logicalGroup: builtIn.logicalGroup, moduleCode: builtIn.moduleCode, moduleName: builtIn.moduleName };
-    return missingFields.length ? { ...placed, fields: [...existing.fields, ...missingFields] } : placed;
+    const placed = { ...existing, fields, logicalGroup: builtIn.logicalGroup, moduleCode: builtIn.moduleCode, moduleName: builtIn.moduleName };
+    return missingFields.length ? { ...placed, fields: [...fields, ...missingFields] } : placed;
   });
   const builtInIds = new Set(MASTER_COLLECTIONS.map((m) => m.id));
   return [...merged, ...saved.filter((m) => !builtInIds.has(m.id))];
@@ -215,7 +222,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [toast, setToast] = useState<ToastInfo | null>(null);
 
   // Master Data & Custom Field Schema Configuration (persisted across sessions)
-  const [masterConfigs, setMasterConfigs] = useState<MasterConfig[]>(() => {
+  const [storedMasterConfigs, setMasterConfigs] = useState<MasterConfig[]>(() => {
     try {
       const saved = localStorage.getItem(MASTER_CONFIG_STORAGE_KEY);
       if (saved) {
@@ -227,6 +234,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return MASTER_COLLECTIONS;
   });
+  // Fields that name a Common LOV list (lovCode) always offer that list's current Active values
+  const masterConfigs = useMemo(() => resolveLovFields(storedMasterConfigs), [storedMasterConfigs]);
 
   // Active Role State for Dynamic RBAC simulation
   const [activeRoleId, setActiveRoleIdState] = useState<PlatformRoleId>(() => {

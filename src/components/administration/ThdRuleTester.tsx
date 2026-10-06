@@ -2,7 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clock, FlaskConical, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { EQC_PPLS } from '../../data/masterCatalogue';
-import { THD_MASTER_IDS, criticalComplaint, criticalWithoutPpl, dropdownValues, evaluateAutoThd, pendingTriggerRules, subStatusesFor, thdHealthCheck } from '../../utils/thdRules';
+import { COMMON_LOV_ID } from '../../data/commonLov';
+import { lovValues } from '../../utils/commonLov';
+import { THD_LOV, THD_MASTER_IDS, criticalComplaint, criticalWithoutPpl, evaluateAutoThd, pendingTriggerRules, subStatusesFor, thdHealthCheck } from '../../utils/thdRules';
 
 const input = 'w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs focus:border-orange-500 focus:outline-hidden';
 const num = (v: string) => (v.trim() === '' ? undefined : Number(v));
@@ -19,7 +21,7 @@ export const ThdRuleTester: React.FC = () => {
   const { masterConfigs } = useApp();
   const rows = useMemo(() => {
     const out: Record<string, Array<Record<string, any>>> = {};
-    Object.values(THD_MASTER_IDS).forEach((id) => (out[id] = masterConfigs.find((m) => m.id === id)?.records ?? []));
+    [...Object.values(THD_MASTER_IDS), COMMON_LOV_ID].forEach((id) => (out[id] = masterConfigs.find((m) => m.id === id)?.records ?? []));
     return out;
   }, [masterConfigs]);
 
@@ -36,6 +38,7 @@ export const ThdRuleTester: React.FC = () => {
   const [unattended, setUnattended] = useState('');
   const [progress, setProgress] = useState('');
 
+  const lov = rows[COMMON_LOV_ID];
   const triggers = rows[THD_MASTER_IDS.triggers];
   const critical = criticalComplaint(rows[THD_MASTER_IDS.critical], { ppl, complaintCode: code.trim() });
   const listed = rows[THD_MASTER_IDS.critical].filter((r) => String(r.complaintCode).toLowerCase() === code.trim().toLowerCase());
@@ -59,13 +62,13 @@ export const ThdRuleTester: React.FC = () => {
   const pendingCount = pendingRules.length + unmapped.length;
   const issues = thdHealthCheck(rows);
   const delayReasons = [...new Set(triggers.flatMap((t) => String(t.triggerValues ?? '').split(',').map((s) => s.trim()).filter(Boolean)))];
-  const progressValues = dropdownValues(rows[THD_MASTER_IDS.progress]);
+  const progressValues = lovValues(lov, THD_LOV.progress);
   const closureLists: Array<[string, string[]]> = [
-    ['Type of Complaint', dropdownValues(rows[THD_MASTER_IDS.complaintType])],
-    ['Complaint Short Description', dropdownValues(rows[THD_MASTER_IDS.shortDescription])],
-    ['Action Taken', dropdownValues(rows[THD_MASTER_IDS.actionTaken])],
-    ['Reason for Delay', dropdownValues(rows[THD_MASTER_IDS.delayReason])],
-    ['Closure Action', dropdownValues(rows[THD_MASTER_IDS.closureAction])],
+    ['Type of Complaint', lovValues(lov, THD_LOV.complaintType)],
+    ['Complaint Short Description', lovValues(lov, THD_LOV.shortDescription)],
+    ['Action Taken', lovValues(lov, THD_LOV.actionTaken)],
+    ['Reason for Delay', lovValues(lov, THD_LOV.delayReason)],
+    ['Closure Action', lovValues(lov, THD_LOV.closureAction)],
   ];
 
   return (
@@ -172,7 +175,7 @@ export const ThdRuleTester: React.FC = () => {
               </Field>
               <Field id="thd-substatus" label="Progress sub-status">
                 <select id="thd-substatus" className={input} disabled={!progress}>
-                  {(progress ? subStatusesFor(rows[THD_MASTER_IDS.subStatus], progress) : []).map((s) => <option key={s}>{s}</option>)}
+                  {(progress ? subStatusesFor(lov, progress) : []).map((s) => <option key={s}>{s}</option>)}
                 </select>
               </Field>
               {closureLists.map(([label, values]) => (

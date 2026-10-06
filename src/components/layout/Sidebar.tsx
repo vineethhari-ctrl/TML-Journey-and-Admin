@@ -30,8 +30,9 @@ export const Sidebar: React.FC = () => {
 
   const eqcOpen = currentRoute.startsWith('/admin/masters?') && currentRoute.includes('open=eqc');
   const bodyshopOpen = currentRoute.startsWith('/admin/masters?') && currentRoute.includes('open=bodyshop');
+  const commonOpen = currentRoute.startsWith('/admin/masters?') && currentRoute.includes('open=common');
   const isCurrent = (route: string) => {
-    if (route === '/admin/masters' && (eqcOpen || bodyshopOpen)) return false;
+    if (route === '/admin/masters' && (eqcOpen || bodyshopOpen || commonOpen)) return false;
     if (route === '/journey' && (currentRoute === '/journey' || currentRoute.startsWith('/journey?'))) return true;
     if (route === '/journey/JC20260930001234' && currentRoute.startsWith('/journey/')) return true;
     return currentRoute.split('?')[0] === route;
@@ -146,6 +147,20 @@ export const Sidebar: React.FC = () => {
                 <span className="text-[9px] font-bold px-1.5 py-0.2 bg-blue-100 text-blue-900 rounded">
                   OEM/DLR
                 </span>
+              </button>
+            )}
+
+            {canAccessRoute('/admin/masters') && (
+              <button
+                onClick={() => {
+                  navigate('/admin/masters?open=common');
+                  window.dispatchEvent(new CustomEvent('tml:open-masters', { detail: 'common' }));
+                }}
+                className={`w-full cursor-pointer ${navItemClass(commonOpen)}`}
+              >
+                <Layers className="h-4 w-4" />
+                <span className="flex-1 text-left">Common Masters</span>
+                <span className="text-[9px] font-bold px-1.5 py-0.2 bg-slate-200 text-slate-800 rounded">LOV</span>
               </button>
             )}
 

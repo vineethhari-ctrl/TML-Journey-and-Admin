@@ -21,6 +21,8 @@ import { EqcRuleTester } from '../components/administration/EqcRuleTester';
 import { BodyshopCapturePreview } from '../components/administration/BodyshopCapturePreview';
 import { ThdRuleTester } from '../components/administration/ThdRuleTester';
 import { ClaimRuleTester } from '../components/administration/ClaimRuleTester';
+import { CommonLovPanel } from '../components/administration/CommonLovPanel';
+import { COMMON_LOV_ID } from '../data/commonLov';
 import { HolidayCalendarConsole } from '../components/administration/HolidayCalendarConsole';
 import { BodyshopMaster } from '../components/administration/BodyshopMaster';
 import { ServiceTransformationPortal } from '../components/common/ServiceTransformationPortal';
@@ -231,6 +233,17 @@ export const MastersMaintenancePage: React.FC = () => {
   const [isWorkbookImportOpen, setIsWorkbookImportOpen] = useState(false);
   const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
 
+  /** Shared masters (Common LOV, PPL, complaint codes, dealer registry) sit in the Common Masters domain. */
+  const openCommon = () => {
+    setActiveMainTab('catalogues');
+    setAlignmentMode('by_domain');
+    setActiveLogicalGroup('Common Masters');
+    setSelectedMasterId(COMMON_LOV_ID);
+    setActiveLayout('workspace');
+    setSearchQuery('');
+    setOwnerFilter('ALL');
+  };
+
   const openEqc = () => {
     setActiveMainTab('catalogues');
     setActiveLogicalGroup('Electronic Quality Check');
@@ -257,12 +270,13 @@ export const MastersMaintenancePage: React.FC = () => {
       const detail = (e as CustomEvent).detail;
       if (detail === 'eqc') openEqc();
       if (detail === 'bodyshop') openBodyshop();
+      if (detail === 'common') openCommon();
     };
     window.addEventListener('tml:open-masters', onOpen);
     return () => window.removeEventListener('tml:open-masters', onOpen);
   }, []);
 
-  // Deep links from the BA guide: #/admin/masters?open=create | ?open=import | ?open=bays | ?open=eqc | ?open=bodyshop
+  // Deep links from the BA guide: #/admin/masters?open=create | ?open=import | ?open=bays | ?open=eqc | ?open=bodyshop | ?open=common
   useEffect(() => {
     const open = new URLSearchParams(currentRoute.split('?')[1] || '').get('open');
     if (open === 'create') setIsCreateMasterOpen(true);
@@ -275,6 +289,7 @@ export const MastersMaintenancePage: React.FC = () => {
     }
     if (open === 'bodyshop') openBodyshop();
     if (open === 'eqc') openEqc();
+    if (open === 'common') openCommon();
     if (open === 'smart-import') {
       if (activeRoleId === 'dealerAdmin') {
         showToast('Importing BA Excel files is a TML Admin task', 'error');
@@ -1174,6 +1189,21 @@ export const MastersMaintenancePage: React.FC = () => {
         </div>
 
         {/* Tab Cards Grid: Official 3x4 Transformation Cards vs Compact vs 6 Logical Domains */}
+        {alignmentMode === 'by_module' && (
+          <button
+            type="button"
+            onClick={openCommon}
+            data-testid="open-common-masters"
+            className="w-full flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-left hover:bg-slate-100 cursor-pointer"
+          >
+            <span className="text-xs text-slate-700">
+              <span className="font-bold text-slate-900">Common Masters</span> — shared by all modules: every dropdown list (Common LOV Master), PPL, complaint codes, dealer registry.
+            </span>
+            <span className="text-[11px] font-bold text-slate-700">
+              {masterConfigs.filter((m) => m.logicalGroup === 'Common Masters').length} masters · Open →
+            </span>
+          </button>
+        )}
         {alignmentMode === 'by_module' ? (
           moduleDisplayStyle === 'portal' ? (
             <ServiceTransformationPortal
@@ -2012,6 +2042,7 @@ export const MastersMaintenancePage: React.FC = () => {
                 {currentMaster.logicalGroup === 'Bodyshop' && <BodyshopCapturePreview />}
                 {currentMaster.moduleCode === 'thd' && <ThdRuleTester />}
                 {currentMaster.moduleCode === 'claim' && <ClaimRuleTester />}
+                {currentMaster.id === COMMON_LOV_ID && <CommonLovPanel />}
                 <MasterTableEditor
                   master={currentMaster}
                   isAdminTml={adminRole === 'TML Admin'}

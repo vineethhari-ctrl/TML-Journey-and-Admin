@@ -12,11 +12,11 @@ describe('Project Modules and Masters Alignment', () => {
     localStorage.clear();
   });
 
-  it('all 41 masters have valid moduleCode matching WORKSHOP_MODULES and no orphans', () => {
-    const validCodes = new Set(WORKSHOP_MODULES.map((m) => m.code));
+  it('every master sits in one of the 12 modules or in Common Masters, with no orphans', () => {
+    const validCodes = new Set<string>([...WORKSHOP_MODULES.map((m) => m.code), 'common']);
     const validGroups = new Set(LOGICAL_MODULES.map((g) => g.id));
 
-    expect(MASTER_COLLECTIONS.length).toBe(62);
+    expect(MASTER_COLLECTIONS.length).toBe(51);
 
     MASTER_COLLECTIONS.forEach((m) => {
       expect(validCodes.has(m.moduleCode)).toBe(true);
@@ -45,7 +45,7 @@ describe('Project Modules and Masters Alignment', () => {
     expect(WORKSHOP_MODULES.map((m) => m.code)).toEqual(expectedOrder);
   });
 
-  it('correctly maps all 41 masters to their dedicated project modules in the official order', () => {
+  it('maps every master to its project module, shared masters to Common Masters', () => {
     const byModule: Record<string, string[]> = {};
     MASTER_COLLECTIONS.forEach((m) => {
       byModule[m.moduleCode] = byModule[m.moduleCode] || [];
@@ -71,13 +71,15 @@ describe('Project Modules and Masters Alignment', () => {
     expect(byModule['security']).toContain('gate_denial_reasons');
     expect(byModule['security'].length).toBe(2);
 
-    // 5. JC Creation- Mechanical: PPL, complaint codes, job codes, complaint linkage, repeat revisit (5)
-    expect(byModule['jc_creation']).toContain('ppl_master');
-    expect(byModule['jc_creation']).toContain('complaint_codes');
+    // Common Masters: shared by every module — all dropdown lists (Common LOV), PPL, complaint codes, dealer registry (4)
+    expect(byModule['common']).toEqual(expect.arrayContaining(['common_lov', 'ppl_master', 'complaint_codes', 'dealer_details_registry']));
+    expect(byModule['common'].length).toBe(4);
+
+    // 5. JC Creation- Mechanical: job codes, complaint linkage, repeat revisit (3)
     expect(byModule['jc_creation']).toContain('job_codes');
     expect(byModule['jc_creation']).toContain('complaint_job_linkage');
     expect(byModule['jc_creation']).toContain('revisit_reasons');
-    expect(byModule['jc_creation'].length).toBe(5);
+    expect(byModule['jc_creation'].length).toBe(3);
 
     // 6. JC Creation- Bodyshop: all 6 bodyshop & paint masters (6)
     expect(byModule['bodyshop']).toContain('bodyshop_facility_master');
@@ -100,13 +102,13 @@ describe('Project Modules and Masters Alignment', () => {
     expect(byModule['eqc'].length).toBe(9);
     expect(byModule['eqc']).toContain('ev_safety_protocols');
 
-    // 9. THD: plant helpdesk & telematics alerts (3) + 13 masters from the BA THD workbooks
+    // 9. THD: plant helpdesk & telematics alerts (3) + 5 rule masters from the BA THD workbooks (its lists are in the Common LOV)
     expect(byModule['thd']).toContain('thd_escalation_categories');
     expect(byModule['thd']).toContain('tib_bulletin_codes');
     expect(byModule['thd']).toContain('dtc_telematics_alerts');
     expect(byModule['thd']).toContain('thd_auto_trigger_rules');
-    expect(byModule['thd']).toContain('thd_progress_sub_status');
-    expect(byModule['thd'].length).toBe(16);
+    expect(byModule['thd']).toContain('thd_users');
+    expect(byModule['thd'].length).toBe(8);
 
     // 10. SPD: 2 spare parts masters (2)
     expect(byModule['spd']).toContain('spd_issuance_priority');
@@ -118,15 +120,14 @@ describe('Project Modules and Masters Alignment', () => {
     expect(byModule['claim']).toContain('warranty_defect_codes');
     expect(byModule['claim']).toContain('goodwill_approval_limits');
     expect(byModule['claim']).toContain('claim_warranty_approval_matrix');
-    expect(byModule['claim'].length).toBe(11);
+    expect(byModule['claim'].length).toBe(7);
 
-    // 12. Customer Journey: dealer details & network facility registry (1)
-    expect(byModule['customer_journey']).toContain('dealer_details_registry');
-    expect(byModule['customer_journey'].length).toBe(1);
+    // 12. Customer Journey: its dealer registry is a Common Master
+    expect(byModule['customer_journey']).toBeUndefined();
 
-    // Total = 41 masters accounted for
+    // Every master accounted for
     const totalAssigned = Object.values(byModule).reduce((acc, list) => acc + list.length, 0);
-    expect(totalAssigned).toBe(62);
+    expect(totalAssigned).toBe(51);
   });
 
   it('renders 12 Project Modules alignment view and allows switching between modules and domains', async () => {
