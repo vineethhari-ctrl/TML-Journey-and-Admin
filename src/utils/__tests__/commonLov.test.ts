@@ -53,4 +53,12 @@ describe('Common LOV Master', () => {
     expect(bu.usedIn.some((u) => u.includes('PPL'))).toBe(true);
     expect(lovCatalogue(lov).find((l) => l.code === 'THD_PROGRESS_SUB_STATUS')!.parentCode).toBe('THD_PROGRESS');
   });
+
+  it('has PV and EV as separate BU values, never a combined "PV + EV"', () => {
+    expect(lovValues(lov, 'COMMON_BU')).toEqual(['PV', 'EV', 'CV']);
+    MASTER_COLLECTIONS.forEach((m) => {
+      m.fields.filter((f) => f.key === 'bu').forEach((f) => expect(f.lovCode, `${m.id}.bu`).toBe('COMMON_BU'));
+      m.records.forEach((r) => expect(String(r.bu ?? ''), `${m.id} ${r.id}`).not.toMatch(/\+/));
+    });
+  });
 });

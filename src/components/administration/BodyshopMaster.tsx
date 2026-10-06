@@ -44,7 +44,7 @@ export interface BodyshopFacility {
   dealerId: string;
   dealerName: string;
   divisionName: string;
-  bu: 'PV' | 'EV' | 'PV + EV' | 'CV';
+  bu: 'PV' | 'EV' | 'CV';
   totalBays: number;
   dentingStalls: number;
   paintBooths: number;
@@ -116,7 +116,7 @@ const SEED_FACILITIES: BodyshopFacility[] = [
     dealerId: 'DLR-1001',
     dealerName: 'Sample Motors Hyderabad',
     divisionName: 'D1 - South Main Workshop (Basement Bodyshop Complex)',
-    bu: 'PV + EV',
+    bu: 'PV',
     totalBays: 8,
     dentingStalls: 4,
     paintBooths: 2,
@@ -154,7 +154,7 @@ const SEED_FACILITIES: BodyshopFacility[] = [
     dealerId: 'DLR-MUM-01',
     dealerName: 'Fortune Cars Worli',
     divisionName: 'Central Mumbai Crash Repair Center',
-    bu: 'PV + EV',
+    bu: 'EV',
     totalBays: 12,
     dentingStalls: 6,
     paintBooths: 3,
@@ -662,7 +662,7 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
           onClick={() => {
             if (activeTab === 'facilities') {
               setFacilityFormData({
-                bu: 'PV + EV',
+                bu: 'PV',
                 totalBays: 6,
                 dentingStalls: 3,
                 paintBooths: 1,
@@ -1064,7 +1064,7 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
                       dealerId: facilityFormData.dealerId || 'DLR-1001',
                       dealerName: facilityFormData.dealerName || 'Sample Motors Hyderabad',
                       divisionName: facilityFormData.divisionName || 'Bodyshop Division',
-                      bu: facilityFormData.bu || 'PV + EV',
+                      bu: facilityFormData.bu || 'PV',
                       totalBays: Number(facilityFormData.totalBays || 6),
                       dentingStalls: Number(facilityFormData.dentingStalls || 3),
                       paintBooths: Number(facilityFormData.paintBooths || 1),
@@ -1102,9 +1102,9 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">BU Scope</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">BU</label>
                     <select
-                      value={facilityFormData.bu || 'PV + EV'}
+                      value={facilityFormData.bu || 'PV'}
                       onChange={(e) =>
                         setFacilityFormData({ ...facilityFormData, bu: e.target.value as any })
                       }
@@ -1112,7 +1112,6 @@ export const BodyshopMaster: React.FC<{ onOpenCatalogues?: () => void }> = () =>
                     >
                       <option value="PV">PV (Passenger Vehicles)</option>
                       <option value="EV">EV (Electric Vehicles)</option>
-                      <option value="PV + EV">PV + EV (Composite)</option>
                       <option value="CV">CV (Commercial Vehicles)</option>
                     </select>
                   </div>

@@ -32,8 +32,8 @@ Example from the request: field **ABC** of the **THD** module with values 1, 2, 
 - Parameter = `<MODULE>_<FIELD>`, capitals, digits and `_` only, and it must start with the Module
   (`THD_…` for module THD). Modules: COMMON, APPOINTMENT, PND, RECEPTION, SECURITY, JC, BODYSHOP, JCT, EQC, THD, SPD,
   CLAIM, JOURNEY, IRA, ADMIN.
-- A list several modules use gets the `COMMON_` prefix, e.g. `COMMON_BU` (PV, EV, CV) and `COMMON_BU_SCOPE`
-  (PV + EV, PV, EV, CV).
+- A list several modules use gets the `COMMON_` prefix, e.g. `COMMON_BU` (PV, EV, CV). There is no combined
+  "PV + EV" value: PV and EV are separate, so a row that applies to both BUs is entered once for PV and once for EV.
 - One value once per list (per parent value for dependent lists). One Field Name and one Module per list.
 - Dependent list: every row names the Parent LOV Code and a Parent Value that exists and is Active,
   e.g. `THD_PROGRESS_SUB_STATUS` rows under `THD_PROGRESS` = "Under Diagnosis".
@@ -52,7 +52,7 @@ A master field names its list with `lovCode`, e.g. `{ key: 'bu', type: 'select',
 dropdown then always shows that list's Active values in Order, so a change in the Common LOV Master reaches every
 master and screen that uses it. The health check reports a field whose list does not exist.
 
-Lists today: `COMMON_BU`, `COMMON_BU_SCOPE`, 8 THD lists (`THD_PROGRESS`, `THD_PROGRESS_SUB_STATUS`,
+Lists today: `COMMON_BU`, 8 THD lists (`THD_PROGRESS`, `THD_PROGRESS_SUB_STATUS`,
 `THD_COMPLAINT_TYPE`, `THD_COMPLAINT_SHORT_DESC`, `THD_ACTION_TAKEN`, `THD_DELAY_REASON`, `THD_CLOSURE_ACTION`,
 `THD_ATTACHMENT_TYPE`) and 4 Claims lists (`CLAIM_BUDGET_PURPOSE`, `CLAIM_SPECIAL_GOODWILL`,
 `CLAIM_ISSUE_DESCRIPTION`, `CLAIM_COMPLAINT_TYPE`). They replace the 12 separate THD / Claims list masters.
