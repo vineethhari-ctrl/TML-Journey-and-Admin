@@ -9,6 +9,8 @@ export interface TabDef {
   label: string;
   /** Count shown on the tab (kept on tabs collapsed into "More"). */
   badge?: number;
+  /** Colour of the count, as in the BU design. */
+  tone?: 'blue' | 'purple' | 'amber' | 'red' | 'green';
 }
 
 interface Options {

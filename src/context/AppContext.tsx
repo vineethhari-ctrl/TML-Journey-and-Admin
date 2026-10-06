@@ -453,7 +453,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         route === '/admin/users' ||
         route === '/admin/devices' ||
         route === '/admin/sessions' ||
-        route === '/admin/config'
+        route === '/admin/config' ||
+        route === '/admin/workshop-policy'
       ) {
         return ['superAdmin', 'dealerAdmin'].includes(activeRoleId);
       }

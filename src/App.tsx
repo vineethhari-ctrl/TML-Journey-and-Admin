@@ -20,6 +20,7 @@ import { MastersMaintenancePage } from './pages/MastersMaintenancePage';
 import { MasterGuidePage } from './pages/MasterGuidePage';
 import { BayApprovalsPage } from './pages/BayApprovalsPage';
 import { WorkshopWorklistPage } from './pages/WorkshopWorklistPage';
+import { WorkshopPolicyPage } from './pages/WorkshopPolicyPage';
 
 const AppRouter: React.FC = () => {
   const { currentRoute } = useApp();
@@ -39,6 +40,9 @@ const AppRouter: React.FC = () => {
     }
     if (path === '/workshop') {
       return <WorkshopWorklistPage />;
+    }
+    if (path === '/admin/workshop-policy') {
+      return <WorkshopPolicyPage />;
     }
     if (path === '/admin/bay-approvals') {
       return <BayApprovalsPage />;

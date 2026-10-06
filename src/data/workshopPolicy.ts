@@ -1,0 +1,186 @@
+import { useCallback, useEffect, useState } from 'react';
+import type { TabPreference, ColumnPreference } from '../utils/viewPreferences';
+
+/**
+ * Admin-controlled workshop worklist policy (Admin Portal → Workshop Tabs & Columns).
+ * Per role: which tabs the role may see at all, the default tab layout, and the default (lean) columns per grid tab.
+ * Users personalise within this policy; a tab not allowed for the role never appears, not even under "More".
+ */
+
+export type WorkshopTone = 'blue' | 'purple' | 'amber' | 'red' | 'green';
+
+export interface WorkshopTab {
+  id: string;
+  label: string;
+  tone: WorkshopTone;
+}
+
+/** The workflow tabs from the BU-accepted design, left to right. */
+export const WORKSHOP_TABS: WorkshopTab[] = [
+  { id: 'gate_in', label: "Today's Total Gate-In", tone: 'blue' },
+  { id: 'my_assignment', label: 'My Assignment', tone: 'blue' },
+  { id: 'pre_inspection', label: 'Pre Inspection', tone: 'purple' },
+  { id: 'estimate_approvals', label: 'Pending Estimate Approvals', tone: 'purple' },
+  { id: 'active_job_cards', label: 'My Active Job Cards', tone: 'amber' },
+  { id: 'mr_details', label: 'MR Details', tone: 'red' },
+  { id: 'thd', label: 'THD', tone: 'red' },
+  { id: 'additional_jobs', label: 'Additional Jobs & Parts', tone: 'purple' },
+  { id: 'quality_inspection', label: 'Quality Inspection', tone: 'amber' },
+];
+
+export interface GridColumn {
+  key: string;
+  label: string;
+}
+
+/** Every column each sample grid can show (the full set in the BU screenshots); the policy picks the lean default. */
+export const GRID_COLUMNS: Record<string, GridColumn[]> = {
+  gate_in: [
+    { key: 'action', label: 'Action' },
+    { key: 'vehicleNo', label: 'Vehicle No.' },
+    { key: 'model', label: 'Model' },
+    { key: 'assignedSa', label: 'Assigned SA' },
+    { key: 'customerName', label: 'Customer Name' },
+    { key: 'maskedPhone', label: 'Phone No.' },
+    { key: 'customerType', label: 'Customer Type' },
+    { key: 'customerSeverity', label: 'Customer Severity' },
+    { key: 'revisit', label: 'Revisit' },
+    { key: 'criticalCustomer', label: 'Critical Customer' },
+    { key: 'status', label: 'Status' },
+    { key: 'waitingTime', label: 'Waiting Time (HH:MM)' },
+    { key: 'workshopElapsed', label: 'Workshop Elapsed Time' },
+    { key: 'appointmentId', label: 'Appointment ID' },
+  ],
+  my_assignment: [
+    { key: 'action', label: 'Action' },
+    { key: 'vehicleNo', label: 'Vehicle No.' },
+    { key: 'model', label: 'Model' },
+    { key: 'customerName', label: 'Customer Name' },
+    { key: 'maskedPhone', label: 'Phone No.' },
+    { key: 'customerType', label: 'Customer Type' },
+    { key: 'customerSeverity', label: 'Customer Severity' },
+    { key: 'revisit', label: 'Revisit' },
+    { key: 'criticalCustomer', label: 'Critical Customer' },
+    { key: 'status', label: 'Status' },
+    { key: 'stageAging', label: 'Stage Aging (HH:MM)' },
+    { key: 'workshopElapsed', label: 'Workshop Elapsed Time' },
+    { key: 'visitorType', label: 'Visitor Type' },
+    { key: 'vehicleType', label: 'Vehicle Type' },
+  ],
+  mr_details: [
+    { key: 'action', label: 'Action' },
+    { key: 'requestId', label: 'Request ID' },
+    { key: 'jcNo', label: 'JC No.' },
+    { key: 'vehicleNo', label: 'Vehicle No.' },
+    { key: 'status', label: 'Status' },
+    { key: 'requestDateTime', label: 'Request Date & Time' },
+    { key: 'stageAging', label: 'Stage Ageing DD:HH:MM' },
+    { key: 'assignedTo', label: 'Assigned To' },
+  ],
+};
+
+export interface RoleWorkshopPolicy {
+  /** Tabs this role may use at all. */
+  allowedTabs: string[];
+  /** Default layout used until a user saves their own. */
+  tabs: TabPreference;
+  /** Lean default columns per grid tab. */
+  columns: Record<string, ColumnPreference>;
+}
+
+export type WorkshopPolicy = Record<string, RoleWorkshopPolicy>;
+
+const ALL_TABS = WORKSHOP_TABS.map((t) => t.id);
+
+/** Lean column presets from the spec (TASK-03); secondary columns sit in the hidden pool. */
+export const DEFAULT_COLUMNS: Record<string, ColumnPreference> = {
+  gate_in: {
+    pinnedLeft: ['vehicleNo'],
+    pinnedRight: ['action'],
+    visibleColumns: ['vehicleNo', 'model', 'assignedSa', 'status', 'waitingTime', 'action'],
+    hiddenColumns: ['customerSeverity', 'customerType', 'appointmentId', 'revisit', 'customerName', 'maskedPhone', 'criticalCustomer', 'workshopElapsed'],
+  },
+  my_assignment: {
+    pinnedLeft: ['action', 'vehicleNo'],
+    pinnedRight: [],
+    visibleColumns: ['action', 'vehicleNo', 'model', 'customerName', 'maskedPhone', 'status', 'stageAging', 'vehicleType'],
+    hiddenColumns: ['customerType', 'customerSeverity', 'visitorType', 'revisit', 'criticalCustomer', 'workshopElapsed'],
+  },
+  mr_details: {
+    pinnedLeft: ['action', 'requestId'],
+    pinnedRight: [],
+    visibleColumns: ['action', 'requestId', 'jcNo', 'vehicleNo', 'status', 'stageAging', 'assignedTo'],
+    hiddenColumns: ['requestDateTime'],
+  },
+};
+
+const generic: RoleWorkshopPolicy = {
+  allowedTabs: ALL_TABS,
+  tabs: { defaultLandingTab: 'gate_in', tabOrder: ALL_TABS, hiddenTabs: [] },
+  columns: DEFAULT_COLUMNS,
+};
+
+/** Built-in policy; the SA preset is the spec example. Roles not listed use `default`. */
+export const DEFAULT_WORKSHOP_POLICY: WorkshopPolicy = {
+  serviceAdvisor: {
+    allowedTabs: ALL_TABS,
+    tabs: {
+      defaultLandingTab: 'my_assignment',
+      tabOrder: ['my_assignment', 'gate_in', 'pre_inspection', 'estimate_approvals', 'active_job_cards', 'mr_details'],
+      hiddenTabs: ['thd', 'additional_jobs', 'quality_inspection'],
+    },
+    columns: DEFAULT_COLUMNS,
+  },
+  receptionist: {
+    allowedTabs: ['gate_in', 'my_assignment', 'pre_inspection'],
+    tabs: { defaultLandingTab: 'gate_in', tabOrder: ['gate_in', 'my_assignment', 'pre_inspection'], hiddenTabs: [] },
+    columns: DEFAULT_COLUMNS,
+  },
+  default: generic,
+};
+
+export const WORKSHOP_POLICY_STORAGE_KEY = 'tml_workshop_policy_v1';
+const CHANGE_EVENT = 'tml:workshop-policy';
+
+export const policyForRole = (policy: WorkshopPolicy, roleId: string): RoleWorkshopPolicy => policy[roleId] ?? policy.default ?? generic;
+
+function readPolicy(): WorkshopPolicy {
+  try {
+    const raw = localStorage.getItem(WORKSHOP_POLICY_STORAGE_KEY);
+    return raw ? { ...DEFAULT_WORKSHOP_POLICY, ...(JSON.parse(raw) as WorkshopPolicy) } : DEFAULT_WORKSHOP_POLICY;
+  } catch {
+    return DEFAULT_WORKSHOP_POLICY;
+  }
+}
+
+/** The admin policy, kept in sync across screens and browser tabs. */
+export function useWorkshopPolicy() {
+  const [policy, setPolicy] = useState<WorkshopPolicy>(readPolicy);
+  useEffect(() => {
+    const reload = () => setPolicy(readPolicy());
+    window.addEventListener(CHANGE_EVENT, reload);
+    window.addEventListener('storage', reload);
+    return () => {
+      window.removeEventListener(CHANGE_EVENT, reload);
+      window.removeEventListener('storage', reload);
+    };
+  }, []);
+
+  const saveRole = useCallback((roleId: string, rolePolicy: RoleWorkshopPolicy | null) => {
+    const next = { ...readPolicy() };
+    // null = back to the built-in policy for this role
+    if (rolePolicy) next[roleId] = rolePolicy;
+    else if (DEFAULT_WORKSHOP_POLICY[roleId]) next[roleId] = DEFAULT_WORKSHOP_POLICY[roleId];
+    else delete next[roleId];
+    try {
+      const custom = Object.fromEntries(Object.entries(next).filter(([id, p]) => JSON.stringify(p) !== JSON.stringify(DEFAULT_WORKSHOP_POLICY[id])));
+      localStorage.setItem(WORKSHOP_POLICY_STORAGE_KEY, JSON.stringify(custom));
+    } catch {
+      // Storage unavailable: the change still applies for this page view.
+    }
+    setPolicy(next);
+    window.dispatchEvent(new Event(CHANGE_EVENT));
+  }, []);
+
+  return { policy, saveRole };
+}

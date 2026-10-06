@@ -12,6 +12,32 @@ Everything here is reusable by the dealer-app team; the screen uses test data on
 
 The rules behind tabs and columns are pure functions in `src/utils/viewPreferences.ts`, so the backend can reuse them.
 
+The screen follows the BU-accepted design from the JC Creation walkthrough:
+- counter tabs, each with a coloured count, an icon and the label;
+- a filter bar: All / PV / EV, Reg. Number, Phone No., Status, Critical Customer, Revisit, search, and the
+  column (sliders) icon;
+- an Appointments / Walk-In switch on Gate-In;
+- sample grids for Today's Gate-In, My Assignment and MR Details.
+
+## Admin control (Admin Portal → Workshop Tabs & Columns, `#/admin/workshop-policy`)
+
+From the walkthrough: *"Needs to be in admin… which tabs should be visible to who"*. Per role, an admin sets:
+
+- **Allowed tabs:** a tab not allowed for the role never appears, not even under "More".
+- **Default layout:** which tabs are visible by default, their order, and the landing tab (★).
+- **Default columns** per worklist. Locked columns are always shown; the rest go into each user's "More columns" pool.
+
+Users personalise within this policy. A user who already personalised keeps their layout, minus any tab the admin
+disallows. The policy lives in `src/data/workshopPolicy.ts` (`useWorkshopPolicy`, `policyForRole`). In the prototype
+it is stored in the browser under `tml_workshop_policy_v1`; in production it comes from the backend. Every save or reset
+is written to the Audit Log.
+
+## DPDP access log (`#/admin/audit?module=DPDP`)
+
+From the walkthrough: *"this particular data was seen by this person on this date"*. The Audit Log has a **DPDP access
+log** button. It lists every `UNMASK_PII` (who revealed which vehicle's customer data, and when), every `CTI_CALL`, and
+every `EXPORT_WORKLIST`, with whether the export was masked.
+
 ## Tabs (TASK-01)
 
 - Saved under `user_pref_tabs:{userId}:{roleId}`. Until a user saves a layout, the **role preset** applies (the Service

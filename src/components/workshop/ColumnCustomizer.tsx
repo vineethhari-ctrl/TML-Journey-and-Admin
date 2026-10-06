@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Columns3, Lock, RotateCcw } from 'lucide-react';
+import { ArrowDown, ArrowUp, Lock, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { useColumnPreferences } from '../../hooks/useColumnPreferences';
 
 type ColumnPrefs = ReturnType<typeof useColumnPreferences<any>>;
@@ -25,9 +25,9 @@ export const ColumnCustomizer: React.FC<{ prefs: ColumnPrefs }> = ({ prefs }) =>
         aria-expanded={open}
         aria-label="Choose columns"
         title="Choose columns"
-        className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 cursor-pointer"
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-xs hover:bg-slate-50 cursor-pointer"
       >
-        <Columns3 className="h-4 w-4" />
+        <SlidersHorizontal className="h-4 w-4" />
       </button>
       {open && (
         <div role="dialog" aria-label="Choose columns" className="absolute right-0 z-40 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl" data-testid="column-customizer">
