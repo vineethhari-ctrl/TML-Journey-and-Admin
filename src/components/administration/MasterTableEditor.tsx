@@ -433,9 +433,14 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     showToast(`Copy of ${rec.id} ready: change the values that differ, then save.`, 'info');
   };
 
-  // Ctrl+B anywhere in the editor: copy the open record, else the single ticked row
+  // Ctrl+B anywhere in the editor: copy the open record, else the single ticked row. Ctrl+S saves the open record.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && isRecordModalOpen && canEdit) {
+        e.preventDefault();
+        handleSaveRecord({ preventDefault() {} } as React.FormEvent);
+        return;
+      }
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'b' || !canEdit) return;
       const target = e.target as HTMLElement;
       if (target.closest?.('[data-record-row]')) return; // the row handler deals with it
@@ -663,6 +668,14 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     }
 
     const others = master.records.filter((r) => r.id !== editingRecordId);
+    if (editingRecordId) {
+      const before = master.records.find((r) => r.id === editingRecordId);
+      if (before && master.fields.every((f) => String(before[f.key] ?? '').trim() === String(sanitizedData[f.key] ?? '').trim())) {
+        showToast(`${DUPLICATE_RECORD_MESSAGE}: no value was changed, so there is nothing to save.`, 'error');
+        setFormErrors({ _duplicate: DUPLICATE_RECORD_MESSAGE });
+        return;
+      }
+    }
     const identical = findIdenticalRecord(master.fields, sanitizedData, others);
     if (identical) {
       showToast(duplicateMessage(identical), 'error');
@@ -2085,6 +2098,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                 </button>
                 <button
                   type="submit"
+                  title="Save (Ctrl+S)"
                   className="px-4 py-1.5 rounded-lg bg-blue-900 text-white font-bold cursor-pointer hover:bg-blue-800 transition-colors shadow-xs"
                 >
                   {editingRecordId ? 'Update Row' : 'Insert Row'}

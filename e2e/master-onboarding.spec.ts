@@ -276,3 +276,46 @@ test('Ctrl+B duplicates a row in any master table; saving it unchanged shows "Du
   await page.getByRole('button', { name: 'Insert Row' }).click();
   await expect(rows).toHaveCount(before + 1);
 });
+
+test('Ctrl+S saves; unchanged copies are flagged live, on leaving the row, and never saved', async ({ page }) => {
+  await page.goto('/#/admin/masters?open=common');
+  const lov = page.getByTestId('lov-explorer');
+  await lov.getByTestId('lov-type-list').getByRole('button', { name: /CLAIM_BUDGET_PURPOSE/ }).click();
+  const values = lov.getByTestId('lov-values').getByRole('textbox', { name: 'Display Value' });
+
+  // Nothing changed → Ctrl+S is an error
+  await values.first().click();
+  await page.keyboard.press('Control+s');
+  await expect(page.getByText(/Duplicate record cannot exist: nothing was changed/)).toBeVisible();
+
+  // Copy the first row: flagged straight away
+  await page.keyboard.press('Control+b');
+  await expect(values).toHaveCount(3);
+  await expect(lov.getByTestId('lov-values').getByText(/Duplicate record cannot exist: "Approved Yearly Budget"/)).toBeVisible();
+
+  // Clicking anywhere else raises the error toast
+  await page.getByRole('heading', { name: 'List of Values' }).click();
+  await expect(page.getByText(/Duplicate record cannot exist\. Change this row/)).toBeVisible();
+
+  // Ctrl+S does not save it
+  await values.nth(1).click();
+  await page.keyboard.press('Control+s');
+  await expect(page.getByText(/saved \(/)).toHaveCount(0);
+  await expect(values).toHaveCount(3);
+
+  // Type over the copy → Ctrl+S saves
+  await values.nth(1).fill('Carry-forward Budget');
+  await page.keyboard.press('Control+s');
+  await expect(page.getByText('CLAIM_BUDGET_PURPOSE saved (3 values).')).toBeVisible();
+});
+
+test('Ctrl+S saves a master record; an unchanged edit is refused', async ({ page }) => {
+  await page.goto('/#/admin/masters?open=common');
+  await page.getByRole('button', { name: /Table \/ Excel view/ }).click();
+  await page.getByTitle('Edit Row').first().click();
+  await page.keyboard.press('Control+s');
+  await expect(page.getByTestId('duplicate-error')).toHaveText('Duplicate record cannot exist');
+  await page.getByLabel(/^Description/).fill('checked');
+  await page.keyboard.press('Control+s');
+  await expect(page.getByText('Update Row')).toHaveCount(0);
+});
