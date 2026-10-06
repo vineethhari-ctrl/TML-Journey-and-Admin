@@ -35,7 +35,7 @@ state: `src/context/BayContext.tsx`; UI: `BayManagementConsole.tsx`, `pages/BayA
 ## Common Masters (shared by every module)
 
 Every dropdown list of every module lives in **one Common LOV Master**, one row per value, named by a Parameter
-`<MODULE>_<FIELD>` (e.g. `THD_COMPLAINT_TYPE`; `COMMON_` for shared lists such as `COMMON_BU`: PV, EV and CV as separate values). Master fields point to a
+`<MODULE>_<FIELD>` (e.g. `THD_COMPLAINT_TYPE`; `COMMON_` for shared lists such as `COMMON_BU`: PV and EV as separate values). TML Admin maintains them in a Siebel-style **List of Values** screen. Master fields point to a
 list with `lovCode`. PPL, complaint codes and the dealer registry are Common Masters too — see
 [`docs/COMMON_MASTERS.md`](docs/COMMON_MASTERS.md). Data: `src/data/commonLov.ts`; rules: `src/utils/commonLov.ts`.
 

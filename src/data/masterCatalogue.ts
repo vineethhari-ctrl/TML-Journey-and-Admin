@@ -335,7 +335,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     ...COMMON_PLACEMENT,
     description: 'Parent Product Line (PPL) and Product Line (PL) variants defining OEM parts and service eligibility.',
     fields: [
-      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU', mandatory: true, isSystem: true },
+      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], lovCode: 'COMMON_BU', mandatory: true, isSystem: true },
       { key: 'pplCode', label: 'PPL Code', type: 'text', mandatory: true, isSystem: true },
       { key: 'pplName', label: 'PPL (Parent Line)', type: 'text', mandatory: true, isSystem: true },
       { key: 'plName', label: 'PL (Variant / Sub-Line)', type: 'text', mandatory: true, isSystem: true },
@@ -476,7 +476,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
       { key: 'categoryCode', label: 'Category Code', type: 'text', mandatory: true },
       { key: 'systemName', label: 'System Group', type: 'select', options: ['Engine & Powertrain', 'Brakes & Suspension', 'Electrical & Battery', 'HVAC & AC', 'Body & Interiors', 'Infotainment & Connected'] },
       { key: 'complaintDesc', label: 'Customer Voice Description', type: 'text', mandatory: true },
-      { key: 'bu', label: 'Applicable BU', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU' },
+      { key: 'bu', label: 'Applicable BU', type: 'select', options: ['PV', 'EV'], lovCode: 'COMMON_BU' },
       { key: 'severity', label: 'Default Severity', type: 'select', options: ['High', 'Medium', 'Low'] },
       { key: 'active', label: 'Active', type: 'select', options: ['Y', 'N'] },
     ],
@@ -651,7 +651,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     fields: [
       { key: 'divisionName', label: 'Division Name', type: 'text', mandatory: true },
       { key: 'dealerName', label: 'Dealer Name', type: 'text', mandatory: true },
-      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU' },
+      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], lovCode: 'COMMON_BU' },
       { key: 'bayCount', label: 'Total Bay Count', type: 'number', mandatory: true },
       { key: 'mechanical', label: 'Mechanical', type: 'number' },
       { key: 'bodyshop', label: 'Bodyshop', type: 'number' },
@@ -681,7 +681,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
       { key: 'facilityCode', label: 'Facility Code', type: 'text', mandatory: true },
       { key: 'dealerName', label: 'Dealership Name', type: 'text', mandatory: true },
       { key: 'divisionName', label: 'Division / Complex', type: 'text', mandatory: true },
-      { key: 'bu', label: 'BU Classification', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU', mandatory: true },
+      { key: 'bu', label: 'BU Classification', type: 'select', options: ['PV', 'EV'], lovCode: 'COMMON_BU', mandatory: true },
       { key: 'totalBays', label: 'Total Bodyshop Bays', type: 'number', mandatory: true },
       { key: 'dentingStalls', label: 'Denting Stalls', type: 'number', mandatory: true },
       { key: 'paintBooths', label: 'Heated Paint Booths', type: 'number', mandatory: true },
@@ -792,7 +792,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     moduleName: 'JC Tracking',
     description: 'Governs bay clocking pauses. Configures mandatory dependent fields (SAP Part No, THD No, Ticket ID).',
     fields: [
-      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU', mandatory: true },
+      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], lovCode: 'COMMON_BU', mandatory: true },
       { key: 'pauseReason', label: 'Pause Reason', type: 'text', mandatory: true },
       { key: 'dependantField1', label: 'Dependant Field 1 (Mandatory)', type: 'text', mandatory: true },
       { key: 'dependantField2', label: 'Dependant Field 2 (Mandatory)', type: 'text' },
@@ -1030,7 +1030,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     description:
       'EQC checklist items by BU and type. Blank PPL or blank Km range = every vehicle. The Not-OK flags decide what the technician must capture when an item is marked Not OK.',
     fields: [
-      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU', mandatory: true },
+      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], lovCode: 'COMMON_BU', mandatory: true },
       { key: 'checklistType', label: 'Checklist Type', type: 'select', options: EQC_CHECKLIST_TYPES, mandatory: true },
       { key: 'checklistItem', label: 'Checklist Item', type: 'text', mandatory: true },
       { key: 'rangeStartKm', label: 'Range Start Km', type: 'number', defaultValue: '', validation: { min: 0, max: 999999 } },
@@ -1060,7 +1060,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     description:
       'Service-schedule checklist grouped by Section and Sub-Section, filtered by BU, PPL and odometer Km. Blank PPL or Km range = every vehicle.',
     fields: [
-      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU', mandatory: true },
+      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], lovCode: 'COMMON_BU', mandatory: true },
       { key: 'section', label: 'Section', type: 'text', mandatory: true },
       { key: 'subSection', label: 'Sub-Section', type: 'text', mandatory: true },
       { key: 'ppl', label: 'PPL', type: 'select', options: EQC_PPLS, defaultValue: '', blankLabel: '(All PPLs)', description: 'Leave blank to apply to all PPLs.' },
@@ -1094,7 +1094,7 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
     description:
       'Sections of the vehicle inventory capture, per BU, in Sequence Priority order. Roles decide who sees the section; Service Type "Accident" shows it only for accident jobs.',
     fields: [
-      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU', mandatory: true },
+      { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], lovCode: 'COMMON_BU', mandatory: true },
       { key: 'section', label: 'Section', type: 'text', mandatory: true },
       { key: 'roles', label: 'Roles', type: 'text', mandatory: true, description: 'DSvAdv, Driver or both (comma separated).', validation: { pattern: BS_ROLES_PATTERN, customErrorMessage: 'Use DSvAdv, Driver or "DSvAdv, Driver".' } },
       { key: 'sequencePriority', label: 'Sequence Priority', type: 'number', mandatory: true, validation: { min: 1, max: 99 } },

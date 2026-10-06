@@ -82,7 +82,7 @@ describe('adding bays', () => {
   });
 
   it('no allocation defined counts as 0 allocated', () => {
-    const res = addBay(seed(), mechanical({ bayType: 'AC', bu: 'CV', bayName: 'CV AC', justification: 'x' }), dealer, URL, NOW);
+    const res = addBay(seed(), mechanical({ bayType: 'AC', bu: 'EV', bayName: 'EV AC', justification: 'x' }), dealer, URL, NOW);
     expect(res.request?.allocation).toEqual({ allocated: 0, used: 0 });
   });
 

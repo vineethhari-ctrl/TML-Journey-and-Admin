@@ -1495,7 +1495,6 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
                     <option value="All">All BUs</option>
                     <option value="PV">PV</option>
                     <option value="EV">EV</option>
-                    <option value="CV">CV</option>
                   </select>
                 </div>
               )}

@@ -71,7 +71,7 @@ export function buildClaimMasters(): MasterConfig[] {
         'Guideline file the Claim Manager downloads before submitting an AMC or Extended Warranty Authorization Request. The BA workbook lists this master as pending — add one active file per request type and BU.',
       fields: [
         { key: 'requestType', label: 'Request Type', type: 'select', options: GUIDELINE_REQUEST_TYPES, mandatory: true },
-        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU', mandatory: true },
+        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], lovCode: 'COMMON_BU', mandatory: true },
         { key: 'fileName', label: 'Guideline File', type: 'text', mandatory: true, description: 'File name or link of the PDF.' },
         { key: 'version', label: 'Version', type: 'text', mandatory: true },
         { key: 'effectiveFrom', label: 'Effective From', type: 'date', mandatory: true },
@@ -86,7 +86,7 @@ export function buildClaimMasters(): MasterConfig[] {
       category: 'Claim Users',
       description: 'SHQ users who approve Goodwill Requests on behalf of the Goodwill Committee (BA sheet "List of SHQ users").',
       fields: [
-        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU', mandatory: true },
+        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], lovCode: 'COMMON_BU', mandatory: true },
         { key: 'userName', label: 'User Name', type: 'text', mandatory: true },
         { key: 'crmUserId', label: 'CRM User ID', type: 'text', defaultValue: '' },
         STATUS_FIELD,

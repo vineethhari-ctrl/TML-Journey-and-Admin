@@ -12,14 +12,14 @@
  *     Rejected bays can be sent. Sending applies rule 2 (auto-approve within the allocation).
  */
 
-export type BU = 'PV' | 'EV' | 'CV';
+export type BU = 'PV' | 'EV';
 export type BayType = 'Mechanical' | 'Electrical' | 'EV' | 'Fleet' | 'Speedo' | 'AC' | 'BodyShop';
 export type BayStatus = 'Active' | 'Inactive';
 export type BayApprovalStatus = 'Draft' | 'Approved' | 'Pending Approval' | 'Rejected';
 export const APPROVAL_STATUSES: BayApprovalStatus[] = ['Draft', 'Approved', 'Pending Approval', 'Rejected'];
 export type Region = 'South' | 'North' | 'West' | 'East';
 
-export const BUS: BU[] = ['PV', 'EV', 'CV'];
+export const BUS: BU[] = ['PV', 'EV'];
 export const BAY_TYPES: BayType[] = ['Mechanical', 'Electrical', 'EV', 'Fleet', 'Speedo', 'AC', 'BodyShop'];
 export const FLOORS = ['Ground', 'Floor 1', 'Floor 2', 'Basement'] as const;
 export const LIFTS = ['No Lift', '2 post lift', '4 post lift'] as const;

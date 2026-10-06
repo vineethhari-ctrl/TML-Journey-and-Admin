@@ -35,6 +35,16 @@ export const LOV_MODULES: Array<[string, string]> = [
 ];
 
 export const LOV_CODE_PATTERN = '^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$';
+export const LIC_PATTERN = '^[A-Z0-9][A-Z0-9_]*$';
+
+/** Language-independent code (as in Siebel) proposed for a display value: "Work in process" → WORK_IN_PROCESS. */
+export const licFor = (value: string): string =>
+  value
+    .normalize('NFKD')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40);
 
 export interface LovDefinition {
   code: string;
@@ -59,7 +69,7 @@ const SUB_STATUS: Array<[string, string[]]> = [
 
 /** Lists transcribed from the BA workbooks (THD Masters List, Claims Masters List) plus shared lists. */
 export const LOV_DEFINITIONS: LovDefinition[] = [
-  { code: 'COMMON_BU', module: 'COMMON', fieldName: 'BU', usedIn: 'Every BU field of every module (PV and EV are separate values; a row for both BUs is entered once per BU)', values: ['PV', 'EV', 'CV'] },
+  { code: 'COMMON_BU', module: 'COMMON', fieldName: 'BU', usedIn: 'Every BU field of every module (PV and EV are separate values; a row for both BUs is entered once per BU)', values: ['PV', 'EV'] },
   {
     code: 'THD_PROGRESS',
     module: 'THD',
@@ -188,7 +198,7 @@ export function buildCommonLovMaster(): MasterConfig {
     fields: [
       {
         key: 'lovCode',
-        label: 'Parameter (LOV Code)',
+        label: 'LOV Type (Parameter)',
         type: 'text',
         mandatory: true,
         validation: { pattern: LOV_CODE_PATTERN, customErrorMessage: 'Use <MODULE>_<FIELD> in capitals, e.g. THD_COMPLAINT_TYPE.' },
@@ -196,10 +206,19 @@ export function buildCommonLovMaster(): MasterConfig {
       },
       { key: 'module', label: 'Module', type: 'select', options: LOV_MODULES.map(([m]) => m), mandatory: true, description: 'Owner of the list; COMMON = used by several modules.' },
       { key: 'fieldName', label: 'Field Name', type: 'text', mandatory: true, description: 'Label of the dropdown on the screen, e.g. "Type of Complaint".' },
-      { key: 'value', label: 'Value', type: 'text', mandatory: true },
+      { key: 'value', label: 'Display Value', type: 'text', mandatory: true, description: 'What users see in the dropdown.' },
+      {
+        key: 'lic',
+        label: 'Code (LIC)',
+        type: 'text',
+        defaultValue: '',
+        validation: { pattern: LIC_PATTERN, customErrorMessage: 'Capitals, digits and _ only, e.g. WORK_IN_PROCESS.' },
+        description: 'Language-independent code kept in records; stays the same when the Display Value wording changes.',
+      },
       { key: 'order', label: 'Order', type: 'number', mandatory: true, validation: { min: 1, max: 999 }, description: 'Position in the dropdown.' },
       { key: 'parentLovCode', label: 'Parent LOV Code', type: 'text', defaultValue: '', description: 'Dependent dropdowns only: the list this value depends on.' },
       { key: 'parentValue', label: 'Parent Value', type: 'text', defaultValue: '', description: 'Dependent dropdowns only: the parent list value that shows this value.' },
+      { key: 'description', label: 'Description', type: 'text', defaultValue: '' },
       { key: 'status', label: 'Status', type: 'select', options: ['Active', 'Inactive'], mandatory: true, defaultValue: 'Active' },
     ],
     records: LOV_DEFINITIONS.flatMap((d) =>
@@ -209,9 +228,11 @@ export function buildCommonLovMaster(): MasterConfig {
         module: d.module,
         fieldName: d.fieldName,
         value,
+        lic: licFor(value),
         order: i + 1,
         parentLovCode: d.parentCode ?? '',
         parentValue: d.parentValues?.[i] ?? '',
+        description: '',
         status: 'Active',
       })),
     ),

@@ -118,7 +118,7 @@ export function buildThdMasters(ppls: string[]): MasterConfig[] {
         'Users a THD request can be assigned to. One master for the five BA sheets (Tech Executive L1, RTSM, COC L2, Plant, Product Reliability) — the Role column says which list.',
       fields: [
         { key: 'role', label: 'Role', type: 'select', options: THD_USER_ROLES, mandatory: true },
-        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU', mandatory: true },
+        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], lovCode: 'COMMON_BU', mandatory: true },
         { key: 'userName', label: 'User Name', type: 'text', mandatory: true },
         { key: 'plantName', label: 'Plant Name', type: 'text', defaultValue: '', description: 'Required for Plant users.' },
         { key: 'zone', label: 'Zone', type: 'text', defaultValue: '' },

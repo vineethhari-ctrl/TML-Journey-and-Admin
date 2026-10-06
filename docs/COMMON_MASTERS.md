@@ -19,9 +19,11 @@ One row per dropdown value:
 | Parameter (LOV Code) | `THD_COMPLAINT_TYPE` | Which list this value belongs to: `<MODULE>_<FIELD>` in capitals |
 | Module | `THD` | Owner of the list; `COMMON` = shared by several modules |
 | Field Name | Type of Complaint | Label of the dropdown on the screen |
-| Value | Technical Query | What the user picks |
+| Display Value | Technical Query | What the user picks |
+| Code (LIC) | TECHNICAL_QUERY | Language-independent code kept in records (as in Siebel); proposed from the Display Value, stays fixed when the wording changes |
 | Order | 1 | Position in the dropdown |
 | Parent LOV Code / Parent Value | `THD_PROGRESS` / Under Diagnosis | Dependent dropdowns only |
+| Description | | Optional note |
 | Status | Active | Inactive values stay for history but are not offered |
 
 Example from the request: field **ABC** of the **THD** module with values 1, 2, 3 → three rows with Parameter
@@ -32,8 +34,8 @@ Example from the request: field **ABC** of the **THD** module with values 1, 2, 
 - Parameter = `<MODULE>_<FIELD>`, capitals, digits and `_` only, and it must start with the Module
   (`THD_…` for module THD). Modules: COMMON, APPOINTMENT, PND, RECEPTION, SECURITY, JC, BODYSHOP, JCT, EQC, THD, SPD,
   CLAIM, JOURNEY, IRA, ADMIN.
-- A list several modules use gets the `COMMON_` prefix, e.g. `COMMON_BU` (PV, EV, CV). There is no combined
-  "PV + EV" value: PV and EV are separate, so a row that applies to both BUs is entered once for PV and once for EV.
+- A list several modules use gets the `COMMON_` prefix, e.g. `COMMON_BU` (PV, EV). There is no combined "PV + EV"
+  value and no CV: PV and EV are separate, so a row that applies to both BUs is entered once for PV and once for EV.
 - One value once per list (per parent value for dependent lists). One Field Name and one Module per list.
 - Dependent list: every row names the Parent LOV Code and a Parent Value that exists and is Active,
   e.g. `THD_PROGRESS_SUB_STATUS` rows under `THD_PROGRESS` = "Under Diagnosis".
@@ -41,8 +43,17 @@ Example from the request: field **ABC** of the **THD** module with values 1, 2, 
 
 ### Adding values or a new list
 
-- **On screen:** open the Common LOV Master, add a row. The **LOV Catalogue** above the table lists every list with
-  its values, parent and where it is used, and flags problems ("All lists OK" when clean).
+- **On screen — the List of Values screen (Siebel style):** Common Masters → Common LOV Master.
+  1. Left: find the LOV Type by typing part of its name, field or a value, or filter by module.
+  2. Right: the type's values in a grid — Order (arrows to move), Display Value, Code (LIC), Parent Value (dependent
+     lists), Active tick box, Description. **New Value** adds a row, **Add several** takes values pasted one per line
+     (e.g. from Excel), the copy icon duplicates a row. Untick **Active** to retire a value.
+  3. **Save**. Mistakes (duplicate value or code, missing parent value, bad name) are highlighted on the cell and
+     nothing is saved until fixed. **Undo changes** goes back to the saved list.
+  4. **New LOV Type**: choose the Module and type the Field Name — the Parameter is proposed (`THD` + "ABC" →
+     `THD_ABC`); pick "Depends on" for a dependent list; add values; Save.
+  The **All lists OK** badge runs the health check over every list. **Table / Excel view** shows the plain table used
+  for Excel import and export.
 - **BA Excel:** the `common_lov` sheet of *TML_Existing_Masters_Catalogue.xlsx* (Masters Maintenance → Import) has
   these columns — one row per value; several lists can go in the same sheet. Import it with "Update existing masters".
 
