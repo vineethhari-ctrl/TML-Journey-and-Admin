@@ -19,6 +19,7 @@ export const NAV_PAGES: NavPage[] = [
   { route: '/admin/bay-approvals', label: 'Bay Approvals', group: 'Administration', keywords: 'bay approve reject network manager allocation inactive request' },
   { route: '/admin/masters-guide', label: 'BA Guide: Adding Masters', group: 'Administration', keywords: 'help guide template workbook import excel ba how to' },
   { route: '/admin/masters?open=smart-import', label: 'Smart Excel Import (BA Excel → masters)', group: 'Administration', keywords: 'upload excel ba sheet any format new master import xlsx auto detect' },
+  { route: '/admin/masters?open=common', label: 'Common Masters (Common LOV: all dropdown lists)', group: 'Administration', keywords: 'lov list of values dropdown common shared parameter code values ppl complaint codes dealer registry' },
   { route: '/admin/masters?open=eqc', label: 'EQC Masters (Electronic Quality Check)', group: 'Administration', keywords: 'eqc quality check guided gc road test ptd risk did threshold checklist schedule' },
   { route: '/admin/masters?open=bodyshop', label: 'Bodyshop Masters', group: 'Administration', keywords: 'bodyshop inventory capture checkpoint section insurance document facility tools technician paint denting' },
   { route: '/admin/workshop-policy', label: 'Default Views (tabs, cards, fields per role)', group: 'Administration', keywords: 'default views tabs columns fields cards worklist role landing visible personalise preference policy' },

@@ -6,13 +6,15 @@ Data: `src/data/claimMasters.ts` · Rules: `src/utils/claimRules.ts` (unit-teste
 
 ## Masters
 
+The dropdown lists are kept in the **Common LOV Master** (see [`COMMON_MASTERS.md`](COMMON_MASTERS.md)).
+
 | Master | Excel source | Rows |
 | --- | --- | --- |
-| Goodwill Budget Allocation Purpose Master | *Budget Allocation LOV* | 2 |
-| Special Goodwill Claim Master | *Special claim* | 2 |
-| Goodwill Issue Description Master | *Issue Description LOV* | 2 |
+| Common LOV `CLAIM_BUDGET_PURPOSE` | *Budget Allocation LOV* | 2 |
+| Common LOV `CLAIM_SPECIAL_GOODWILL` | *Special claim* | 2 |
+| Common LOV `CLAIM_ISSUE_DESCRIPTION` | *Issue Description LOV* | 2 |
 | Goodwill Request Category Mapping | *Goodwill Req Catagory Mapping* | 2 |
-| AMC / EW Complaint Type Master | *Complaint Type LOV* | 2 |
+| Common LOV `CLAIM_COMPLAINT_TYPE` | *Complaint Type LOV* | 2 |
 | AMC / Warranty Authorization Approval Matrix | *Warranty Approval Matrix* + BA answers | 3 |
 | AMC / EW Service Guideline File Master | *Master List* row 5 (no sheet yet) | 0 — pending |
 | Goodwill SHQ Approver Users Master | *List of SHQ users* | 1 (test user) |

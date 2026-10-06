@@ -1,8 +1,9 @@
 import type { MasterConfig } from './masterCatalogue';
-import { STATUS_FIELD, lovMaster } from './lovMaster';
+import { STATUS_FIELD } from './lovMaster';
 
 /**
  * Claims masters (Goodwill, Warranty / AMC / EW authorisation), built from the BA workbook "Claims Masters List".
+ * The Claims dropdown lists live in the Common LOV Master as CLAIM_* lists (src/data/commonLov.ts).
  * Not masters, as the BA remarks say: Division-wise CCM/ACCM mapping and KAM users are handled in User Management.
  * User names in the BA sheet are replaced with test users because this repository is public.
  */
@@ -19,33 +20,6 @@ export const GUIDELINE_REQUEST_TYPES = ['AMC', 'Extended Warranty'];
 
 export function buildClaimMasters(): MasterConfig[] {
   return [
-    lovMaster(base, 'Claim Dropdown Lists', {
-      id: 'claim_budget_purpose',
-      prefix: 'BAP',
-      name: 'Goodwill Budget Allocation Purpose Master',
-      label: 'Allocation Purpose',
-      sheet: 'Budget Allocation LOV',
-      use: 'Selected during the yearly goodwill budget allocation',
-      values: ['Approved Yearly Budget', 'Special Budget'],
-    }),
-    lovMaster(base, 'Claim Dropdown Lists', {
-      id: 'claim_special_goodwill',
-      prefix: 'SPC',
-      name: 'Special Goodwill Claim Master',
-      label: 'Special Claim',
-      sheet: 'Special claim',
-      use: 'Identification tag on a Goodwill Authorization Request (does not change the approval path)',
-      values: ['IUPR', 'Thrive'],
-    }),
-    lovMaster(base, 'Claim Dropdown Lists', {
-      id: 'claim_issue_description',
-      prefix: 'ISD',
-      name: 'Goodwill Issue Description Master',
-      label: 'Issue Description',
-      sheet: 'Issue Description LOV',
-      use: 'Selected by the Claim Manager in a Goodwill Request; decides the request category',
-      values: ['Thermal Incident', 'Engine Failure'],
-    }),
     {
       ...base,
       id: 'claim_goodwill_category',
@@ -54,7 +28,7 @@ export function buildClaimMasters(): MasterConfig[] {
       description:
         'Issue Description → Issue Type and Request Category (Red / Amber / Green) of a Goodwill Request (BA sheet "Goodwill Req Catagory Mapping"). One row per Issue Description.',
       fields: [
-        { key: 'issueDescription', label: 'Issue Description', type: 'text', mandatory: true, description: 'Must be an Active value of the Goodwill Issue Description Master.' },
+        { key: 'issueDescription', label: 'Issue Description', type: 'select', lovCode: 'CLAIM_ISSUE_DESCRIPTION', options: ['Thermal Incident', 'Engine Failure'], mandatory: true, description: 'Values come from the Common LOV Master list CLAIM_ISSUE_DESCRIPTION.' },
         { key: 'issueType', label: 'Issue Type', type: 'text', mandatory: true },
         { key: 'requestCategory', label: 'Request Category', type: 'select', options: GOODWILL_CATEGORIES, mandatory: true },
         STATUS_FIELD,
@@ -64,15 +38,6 @@ export function buildClaimMasters(): MasterConfig[] {
         { id: 'GWC-02', issueDescription: 'Engine Failure', issueType: 'Minor Product Failure', requestCategory: 'Amber', status: 'Active' },
       ],
     },
-    lovMaster(base, 'Claim Dropdown Lists', {
-      id: 'claim_complaint_type',
-      prefix: 'CMT',
-      name: 'AMC / EW Complaint Type Master',
-      label: 'Complaint Type',
-      sheet: 'Complaint Type LOV',
-      use: 'Selected by the Claim Manager in an AMC or Extended Warranty Authorization Request',
-      values: ['Transmission', 'Clutch'],
-    }),
     {
       ...base,
       id: 'claim_warranty_approval_matrix',
@@ -106,7 +71,7 @@ export function buildClaimMasters(): MasterConfig[] {
         'Guideline file the Claim Manager downloads before submitting an AMC or Extended Warranty Authorization Request. The BA workbook lists this master as pending — add one active file per request type and BU.',
       fields: [
         { key: 'requestType', label: 'Request Type', type: 'select', options: GUIDELINE_REQUEST_TYPES, mandatory: true },
-        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], mandatory: true },
+        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU', mandatory: true },
         { key: 'fileName', label: 'Guideline File', type: 'text', mandatory: true, description: 'File name or link of the PDF.' },
         { key: 'version', label: 'Version', type: 'text', mandatory: true },
         { key: 'effectiveFrom', label: 'Effective From', type: 'date', mandatory: true },
@@ -121,7 +86,7 @@ export function buildClaimMasters(): MasterConfig[] {
       category: 'Claim Users',
       description: 'SHQ users who approve Goodwill Requests on behalf of the Goodwill Committee (BA sheet "List of SHQ users").',
       fields: [
-        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], mandatory: true },
+        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU', mandatory: true },
         { key: 'userName', label: 'User Name', type: 'text', mandatory: true },
         { key: 'crmUserId', label: 'CRM User ID', type: 'text', defaultValue: '' },
         STATUS_FIELD,

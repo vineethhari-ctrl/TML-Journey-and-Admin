@@ -137,8 +137,8 @@ test('BA workbook import creates new masters and fills a missed field in an exis
   // New master is open with its rows
   await expect(page.getByRole('cell', { name: 'MH01ZZ0001' })).toBeVisible();
 
-  // Existing master gained the field, with the value for PPL-01
-  await page.getByRole('button', { name: /JC Creation- Mechanical/ }).first().click();
+  // Existing master gained the field, with the value for PPL-01 (PPL is a Common Master)
+  await page.getByRole('button', { name: /^Common Masters/ }).first().click();
   await page.getByRole('button', { name: /^PPL & PL \(Product Line\) Master/ }).click();
   await expect(page.locator('thead').getByText('ADAS Level')).toBeVisible();
   await expect(page.locator('tbody tr', { hasText: 'PPL-NEXON-EV' })).toContainText('L2');
@@ -176,4 +176,20 @@ test('BA workbook with mistakes is rejected with row-level errors and nothing is
   await expect(alert).toContainText('loaner_master row 2');
   await expect(alert).toContainText('cannot be greater than 7');
   await expect(page.getByRole('button', { name: /^Import \d+ Master/ })).toBeDisabled();
+});
+
+test('Common Masters hold every dropdown list in one LOV master, named <MODULE>_<FIELD>', async ({ page }) => {
+  await page.goto('/#/admin/masters?open=common');
+  const panel = page.getByTestId('common-lov-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText('All lists OK')).toBeVisible();
+  const catalogue = page.getByTestId('common-lov-catalogue');
+  await expect(catalogue.getByRole('cell', { name: 'THD_COMPLAINT_TYPE', exact: true })).toBeVisible();
+  await expect(catalogue.getByRole('cell', { name: 'CLAIM_ISSUE_DESCRIPTION', exact: true })).toBeVisible();
+  await expect(catalogue.getByRole('cell', { name: 'COMMON_BU', exact: true })).toBeVisible();
+
+  // Filter to one module
+  await panel.getByLabel('Module').selectOption('CLAIM');
+  await expect(catalogue.getByRole('cell', { name: 'THD_COMPLAINT_TYPE', exact: true })).toHaveCount(0);
+  await expect(catalogue.getByRole('cell', { name: 'CLAIM_SPECIAL_GOODWILL', exact: true })).toBeVisible();
 });

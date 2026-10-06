@@ -48,6 +48,7 @@ import { masterExportUtil } from '../../utils/masterExportUtil';
 import { findEqcConflict } from '../../utils/eqcRules';
 import { findThdConflict } from '../../utils/thdRules';
 import { findClaimConflict } from '../../utils/claimRules';
+import { findCommonLovConflict } from '../../utils/commonLov';
 import { masterValidationSchema } from '../../utils/masterValidationSchema';
 import { MasterDataImportModal } from './MasterDataImportModal';
 import { BatchUndoModal, MasterChangeSnapshot } from './BatchUndoModal';
@@ -629,7 +630,7 @@ export const MasterTableEditor: React.FC<MasterTableEditorProps> = ({
     }
 
     const others = master.records.filter((r) => r.id !== editingRecordId);
-    const conflict = findEqcConflict(master.id, sanitizedData, others) ?? findThdConflict(master.id, sanitizedData, others) ?? findClaimConflict(master.id, sanitizedData, others);
+    const conflict = findEqcConflict(master.id, sanitizedData, others) ?? findThdConflict(master.id, sanitizedData, others) ?? findClaimConflict(master.id, sanitizedData, others) ?? findCommonLovConflict(master.id, sanitizedData, others);
     if (conflict) {
       showToast(conflict, 'error');
       return;

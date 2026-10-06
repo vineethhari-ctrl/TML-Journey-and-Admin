@@ -1,14 +1,14 @@
 import type { MasterConfig, MasterFieldDef } from './masterCatalogue';
-import { ORDER_FIELD, STATUS_FIELD, lovMaster } from './lovMaster';
+import { STATUS_FIELD } from './lovMaster';
 
 /**
  * THD (Technical Help Desk) masters, built from the BA workbooks
- * "THD Masters List" (one sheet per list) and "Conditions 4" (auto-THD trigger rules).
+ * "THD Masters List" and "Conditions 4" (auto-THD trigger rules). The THD dropdown lists (progress, sub-status, closure
+ * lists, attachment type) live in the Common LOV Master as THD_* lists (src/data/commonLov.ts).
  * User names in the BA sheet are replaced with test users because this repository is public.
  */
 
 const STATUS = STATUS_FIELD;
-const ORDER = ORDER_FIELD;
 
 const base = {
   owner: 'TML_ADMIN' as const,
@@ -16,27 +16,6 @@ const base = {
   moduleCode: 'thd' as const,
   moduleName: 'THD',
 };
-
-const lov = (id: string, prefix: string, name: string, label: string, sheet: string, use: string, values: string[]): MasterConfig =>
-  lovMaster(base, 'THD Dropdown Lists', { id, prefix, name, label, sheet, use, values });
-
-export const THD_PROGRESS = [
-  'Under Diagnosis',
-  'Work in process',
-  'Pending for parts',
-  'Pending for vendor support',
-  'Pending for commercial decision',
-  'Pending for Vehicle availability',
-];
-
-const SUB_STATUS: Array<[string, string[]]> = [
-  ['Under Diagnosis', ['U/I DET', 'U/I COC', 'U/I Vendor', 'U/I Plant Team']],
-  ['Work in process', ['WIP DET', 'WIP W/S Team', 'WIP Vendor']],
-  ['Pending for parts', ['Order status', 'Part receipt status']],
-  ['Pending for vendor support', ['Vendor details', 'Request raised', 'Status']],
-  ['Pending for commercial decision', ['Pending for approval', 'Approval received']],
-  ['Pending for Vehicle availability', ['Expected date', 'Status as on date']],
-];
 
 export const THD_USER_ROLES = ['Tech Executive L1', 'RTSM', 'COC L2', 'Plant', 'Product Reliability'];
 
@@ -108,91 +87,6 @@ export function buildThdMasters(ppls: string[]): MasterConfig[] {
     },
     {
       ...base,
-      id: 'thd_progress',
-      name: 'THD Progress Master',
-      category: 'THD Dropdown Lists',
-      description: 'Progress of a THD case (BA sheet "Progress LOV"). Each progress has its own sub-statuses.',
-      fields: [{ key: 'value', label: 'Progress', type: 'text', mandatory: true }, STATUS, ORDER],
-      records: THD_PROGRESS.map((value, i) => ({ id: `PRG-${String(i + 1).padStart(2, '0')}`, value, status: 'Active', order: i + 1 })),
-    },
-    {
-      ...base,
-      id: 'thd_progress_sub_status',
-      name: 'THD Progress Sub-Status Master',
-      category: 'THD Dropdown Lists',
-      description: 'Sub-statuses shown after a Progress is chosen (BA sheet "Progress Sub Status"). Order restarts for each Progress.',
-      fields: [
-        { key: 'progress', label: 'Progress', type: 'select', options: THD_PROGRESS, mandatory: true },
-        { key: 'subStatus', label: 'Progress Sub Status', type: 'text', mandatory: true },
-        STATUS,
-        ORDER,
-      ],
-      records: SUB_STATUS.flatMap(([progress, subs], p) =>
-        subs.map((subStatus, i) => ({ id: `PSS-${p + 1}${String(i + 1).padStart(2, '0')}`, progress, subStatus, status: 'Active', order: i + 1 })),
-      ),
-    },
-    lov('thd_complaint_type', 'TOC', 'THD Type of Complaint Master', 'Type of Complaint', 'Type of Complaint LOV', 'Selected when the THD request is closed', ['Technical Query', 'Technical Support']),
-    lov('thd_complaint_short_desc', 'CSD', 'THD Complaint Short Description Master', 'Complaint Short Description', 'Complaint Shot Description LOV', 'Selected when the THD request is closed', [
-      'Abnormal noise',
-      'Warning lamps ON',
-      'Oil leakage',
-      'Coolant leakage',
-      'Engine overheating',
-      'Smell – burning, fuel, foul odor from outside, etc.',
-      'Smoke issues',
-      'Oil-Coolant mix',
-      'Gear shifting issues',
-      'AC cooling issues',
-      'Jerking / vibration / misfiring',
-      'Steering hard',
-      'Vehicle pulling',
-      'Starting problem',
-      'Tyre wear / cut',
-      'Damaged / broken / cracked / soiled',
-      'Part missing / fallen-off',
-      'Uneven gaps / flushness issues',
-      'Paint / rust issues',
-      'Not working / functioning issues / system malfunction',
-      'Crash / airbag related issues',
-      'Thermal issues',
-      'Brake ineffective',
-      'Poor pick-up',
-      'Infotainment system issues',
-      'Water entry in cabin',
-    ]),
-    lov('thd_action_taken', 'ACT', 'THD Action Taken Master', 'Action Taken', 'Action Taken LOV', 'Selected when the THD request is closed', [
-      'Issue concluded and proceeded as per Field Investigation',
-      'Suggested checks based on observations',
-      'Known issue – suggested part replacement',
-      'Updated software / parameterization',
-      'Suggested part replacement based on observation',
-      'Vehicle ready for delivery',
-      'Vehicle not available; is with Customer',
-    ]),
-    lov('thd_delay_reason', 'DLY', 'THD Reason for Delay Master', 'Reason for Delay', 'Reason for Delay LOV', 'Selected when the THD request is closed', [
-      'Diagnosis and investigation',
-      'Work content',
-      'Non-availability of spare parts',
-      'Non-availability of vehicle',
-      'Dealer response',
-      'Plant / ERC / vendor intervention',
-      'Software / server / TDS Tool issue',
-      'Solution not available',
-      'Pending for Commercial Decision / Customer Approval',
-      'Dealer not responding',
-    ]),
-    lov('thd_closure_action', 'CLS', 'THD Closure Action Master', 'Closure Action', 'Closure Action LOV', 'Selected when the THD request is closed', ['Closed', 'Closed With Feedback', 'Closed With Early Warning']),
-    {
-      ...base,
-      id: 'thd_attachment_type',
-      name: 'THD Attachment Type Master',
-      category: 'THD Dropdown Lists',
-      description: 'Type of attachment uploaded against a THD case (BA sheet "Attachment LOV").',
-      fields: [{ key: 'value', label: 'Attachment Type', type: 'text', mandatory: true }, STATUS],
-      records: [{ id: 'ATT-01', value: 'DIR Report', status: 'Active' }],
-    },
-    {
-      ...base,
       id: 'thd_kms_range',
       name: 'THD Kms Range Filter Master',
       category: 'THD Search Filters',
@@ -224,7 +118,7 @@ export function buildThdMasters(ppls: string[]): MasterConfig[] {
         'Users a THD request can be assigned to. One master for the five BA sheets (Tech Executive L1, RTSM, COC L2, Plant, Product Reliability) — the Role column says which list.',
       fields: [
         { key: 'role', label: 'Role', type: 'select', options: THD_USER_ROLES, mandatory: true },
-        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV'], mandatory: true },
+        { key: 'bu', label: 'BU', type: 'select', options: ['PV', 'EV', 'CV'], lovCode: 'COMMON_BU', mandatory: true },
         { key: 'userName', label: 'User Name', type: 'text', mandatory: true },
         { key: 'plantName', label: 'Plant Name', type: 'text', defaultValue: '', description: 'Required for Plant users.' },
         { key: 'zone', label: 'Zone', type: 'text', defaultValue: '' },

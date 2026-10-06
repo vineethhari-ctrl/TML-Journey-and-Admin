@@ -6,18 +6,20 @@ Data: `src/data/thdMasters.ts` · Rules: `src/utils/thdRules.ts` (unit-tested in
 
 ## Masters
 
+The dropdown lists are kept in the **Common LOV Master** (see [`COMMON_MASTERS.md`](COMMON_MASTERS.md)); the rest are THD masters.
+
 | Master | Excel source | Rows |
 | --- | --- | --- |
 | THD Auto-Trigger Rules | *Conditions 4* | 8 |
 | THD Critical Complaints Master | *Critical Complaints* | 1 |
-| THD Progress Master | *Progress LOV* | 6 |
-| THD Progress Sub-Status Master | *Progress Sub Status* (merged Progress cells filled down) | 16 |
-| THD Type of Complaint Master | *Type of Complaint LOV* | 2 |
-| THD Complaint Short Description Master | *Complaint Shot Description LOV* | 26 |
-| THD Action Taken Master | *Action Taken LOV* | 7 |
-| THD Reason for Delay Master | *Reason for Delay LOV* | 10 |
-| THD Closure Action Master | *Closure Action LOV* | 3 |
-| THD Attachment Type Master | *Attachment LOV* | 1 |
+| Common LOV `THD_PROGRESS` | *Progress LOV* | 6 |
+| Common LOV `THD_PROGRESS_SUB_STATUS` (parent `THD_PROGRESS`) | *Progress Sub Status* (merged Progress cells filled down) | 16 |
+| Common LOV `THD_COMPLAINT_TYPE` | *Type of Complaint LOV* | 2 |
+| Common LOV `THD_COMPLAINT_SHORT_DESC` | *Complaint Shot Description LOV* | 26 |
+| Common LOV `THD_ACTION_TAKEN` | *Action Taken LOV* | 7 |
+| Common LOV `THD_DELAY_REASON` | *Reason for Delay LOV* | 10 |
+| Common LOV `THD_CLOSURE_ACTION` | *Closure Action LOV* | 3 |
+| Common LOV `THD_ATTACHMENT_TYPE` | *Attachment LOV* | 1 |
 | THD Kms Range Filter Master | *Kms Range* (text split into From / To Km) | 2 |
 | THD Vehicle Age Filter Master | *Vehicle Age* (text split into From / To years) | 2 |
 | THD Assignment Users Master | the 5 user sheets, one row per user with a **Role** column | 5 (test users) |
