@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { ModuleType } from '../types';
+import { MaskedName, MaskedPhone } from '../components/dpdp/MaskedPii';
 
 export const JourneySearchPage: React.FC = () => {
   const { serviceCases, vehicles, navigate, currentRoute } = useApp();
@@ -672,8 +673,10 @@ export const JourneySearchPage: React.FC = () => {
 
                       <td className="py-3.5 px-4">
                         <div>
-                          <p className="font-semibold text-slate-900">{c.customerName}</p>
-                          <p className="text-[11px] text-slate-500 font-mono">{c.customerMobile}</p>
+                          <p className="font-semibold text-slate-900">
+                            <MaskedName name={c.customerName} vehicleRegNo={c.vehicleRegistration} assignedSa={{ name: c.serviceAdvisor }} />
+                          </p>
+                          <MaskedPhone phone={c.customerMobile} vehicleRegNo={c.vehicleRegistration} />
                         </div>
                       </td>
 
