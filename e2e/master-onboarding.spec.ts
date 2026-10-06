@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import * as XLSX from 'xlsx';
+import * as fs from 'fs';
 
 /**
  * End-to-end: masters missed during requirements can be added on the fly —
@@ -383,4 +384,50 @@ test('Esc removes an unsaved row on the List of Values screen', async ({ page })
   await values.first().click();
   await page.keyboard.press('Escape');
   await expect(values).toHaveCount(3);
+});
+
+test.describe('Upload a Master page', () => {
+  const sample = (name: string) => ({ name, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: fs.readFileSync(`public/downloads/${name}`) });
+
+  test('existing master: own template is imported; wrong columns are refused with the difference', async ({ page }) => {
+    await page.goto('/#/admin/upload-master');
+    const input = page.getByLabel('Master Excel file');
+
+    // Wrong columns → error, Import disabled, correct template offered
+    await input.setInputFiles(sample('Sample_Upload_2_LOV_WrongColumns.xlsx'));
+    const problems = page.getByTestId('header-problems');
+    await expect(problems).toContainText('Missing columns');
+    await expect(problems).toContainText('not in the Common LOV Master');
+    await expect(problems.getByRole('button', { name: /Download the correct template/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Import', exact: true })).toBeDisabled();
+
+    // Correct file → ready, import adds 3 rows
+    await input.setInputFiles(sample('Sample_Upload_1_LOV_Correct.xlsx'));
+    await expect(page.getByText('Ready to import')).toBeVisible();
+    await expect(page.getByTestId('sheet-result')).toContainText('3 to add');
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
+    await expect(page.getByTestId('upload-done')).toContainText('3 row(s) saved');
+
+    // The same file again is now a duplicate → refused
+    await input.setInputFiles(sample('Sample_Upload_1_LOV_Correct.xlsx'));
+    await expect(page.getByTestId('row-issues')).toContainText('Duplicate record cannot exist');
+    await expect(page.getByRole('button', { name: 'Import', exact: true })).toBeDisabled();
+
+    // The new list is in the List of Values screen
+    await page.goto('/#/admin/masters?open=common');
+    await expect(page.getByTestId('lov-type-list').getByRole('button', { name: /THD_ABC/ })).toBeVisible();
+  });
+
+  test('any other Excel table becomes a new master in the chosen module', async ({ page }) => {
+    await page.goto('/#/admin/upload-master');
+    await page.getByLabel('Master Excel file').setInputFiles(sample('Sample_Upload_3_NewMaster.xlsx'));
+    await expect(page.getByTestId('sheet-result')).toContainText('New master');
+    await page.getByLabel('Module').selectOption('spd');
+    await page.getByLabel('Master name').fill('Tyre Brand Upload');
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
+    await expect(page.getByTestId('upload-done')).toContainText('1 new master(s) created');
+    await page.goto('/#/admin/masters');
+    await page.getByRole('button', { name: /Spare Parts|SPD/ }).first().click();
+    await expect(page.getByRole('button', { name: /Tyre Brand Upload/ })).toBeVisible();
+  });
 });

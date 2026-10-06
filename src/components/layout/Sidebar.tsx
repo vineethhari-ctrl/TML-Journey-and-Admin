@@ -20,6 +20,7 @@ import {
   ListChecks,
   Flame,
   Truck,
+  Upload,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useBays } from '../../context/BayContext';
@@ -147,6 +148,17 @@ export const Sidebar: React.FC = () => {
                 <span className="text-[9px] font-bold px-1.5 py-0.2 bg-blue-100 text-blue-900 rounded">
                   OEM/DLR
                 </span>
+              </button>
+            )}
+
+            {canAccessRoute('/admin/upload-master') && (
+              <button
+                onClick={() => navigate('/admin/upload-master')}
+                className={`w-full cursor-pointer ${navItemClass(isCurrent('/admin/upload-master'))}`}
+              >
+                <Upload className="h-4 w-4" />
+                <span className="flex-1 text-left">Upload a Master</span>
+                <span className="text-[9px] font-bold px-1.5 py-0.2 bg-emerald-100 text-emerald-900 rounded">XLSX</span>
               </button>
             )}
 

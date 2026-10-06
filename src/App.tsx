@@ -17,6 +17,7 @@ import { SessionManagementPage } from './pages/SessionManagementPage';
 import { ConfigurationPage } from './pages/ConfigurationPage';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { MastersMaintenancePage } from './pages/MastersMaintenancePage';
+import { UploadMasterPage } from './pages/UploadMasterPage';
 import { MasterGuidePage } from './pages/MasterGuidePage';
 import { BayApprovalsPage } from './pages/BayApprovalsPage';
 import { WorkshopWorklistPage } from './pages/WorkshopWorklistPage';
@@ -54,6 +55,9 @@ const AppRouter: React.FC = () => {
     }
     if (path === '/admin/bay-approvals') {
       return <BayApprovalsPage />;
+    }
+    if (path === '/admin/upload-master') {
+      return <UploadMasterPage />;
     }
     if (path === '/admin/masters-guide') {
       return <MasterGuidePage />;
