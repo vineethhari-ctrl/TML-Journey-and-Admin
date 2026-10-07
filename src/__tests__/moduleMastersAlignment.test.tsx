@@ -16,7 +16,7 @@ describe('Project Modules and Masters Alignment', () => {
     const validCodes = new Set<string>([...WORKSHOP_MODULES.map((m) => m.code), 'common']);
     const validGroups = new Set(LOGICAL_MODULES.map((g) => g.id));
 
-    expect(MASTER_COLLECTIONS.length).toBe(51);
+    expect(MASTER_COLLECTIONS.length).toBe(66);
 
     MASTER_COLLECTIONS.forEach((m) => {
       expect(validCodes.has(m.moduleCode)).toBe(true);
@@ -73,7 +73,9 @@ describe('Project Modules and Masters Alignment', () => {
 
     // Common Masters: shared by every module — all dropdown lists (Common LOV), PPL, complaint codes, dealer registry (4)
     expect(byModule['common']).toEqual(expect.arrayContaining(['common_lov', 'ppl_master', 'complaint_codes', 'dealer_details_registry']));
-    expect(byModule['common'].length).toBe(4);
+    // …plus the 15 generic masters (organisation, people & skills, service, vehicle, parts & tax, documents, communication)
+    expect(byModule['common']).toEqual(expect.arrayContaining(['zone_region_master', 'department_master', 'designation_master', 'skill_master', 'skill_level_master', 'certification_master', 'shift_master', 'service_type_master', 'jc_status_master', 'vehicle_colour_master', 'uom_master', 'tax_master', 'document_type_master', 'notification_template_master', 'escalation_matrix_master']));
+    expect(byModule['common'].length).toBe(19);
 
     // 5. JC Creation- Mechanical: job codes, complaint linkage, repeat revisit (3)
     expect(byModule['jc_creation']).toContain('job_codes');
@@ -127,7 +129,7 @@ describe('Project Modules and Masters Alignment', () => {
 
     // Every master accounted for
     const totalAssigned = Object.values(byModule).reduce((acc, list) => acc + list.length, 0);
-    expect(totalAssigned).toBe(51);
+    expect(totalAssigned).toBe(66);
   });
 
   it('renders 12 Project Modules alignment view and allows switching between modules and domains', async () => {

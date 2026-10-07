@@ -2,6 +2,7 @@ import type { MasterRule } from '../utils/masterRules';
 import { buildThdMasters } from './thdMasters';
 import { buildClaimMasters } from './claimMasters';
 import { COMMON_PLACEMENT, buildCommonLovMaster } from './commonLov';
+import { buildGenericMasters } from './genericMasters';
 
 export type DealerTargetModule =
   | 'vehicle_journey'
@@ -1487,5 +1488,6 @@ export const MASTER_COLLECTIONS: MasterConfig[] = [
       { id: 'GD-03', denialCode: 'HOLD-POLICE-STOLEN', reason: 'Chassis flagged in police stolen vehicle database alert', escalateTo: 'Security Officer In-Charge', active: 'Y' },
     ],
   },
+  ...buildGenericMasters(),
   buildCommonLovMaster(),
 ];
