@@ -57,7 +57,8 @@ test('record the training video', async ({ browser }, testInfo) => {
   const t0 = Date.now();
   const lines: Line[] = [];
   let chapter = '';
-  const sleep = (ms: number) => page.waitForTimeout(ms);
+  const FAST = !!process.env.FAST; // dry run: same steps, almost no waiting (to check the script quickly)
+  const sleep = (ms: number) => page.waitForTimeout(FAST ? Math.min(ms, 40) : ms);
 
   // ---- helpers ------------------------------------------------------------------------------------------------
   const say = async (text: string, ms?: number) => {
@@ -93,7 +94,7 @@ test('record the training video', async ({ browser }, testInfo) => {
     await point(loc);
     await loc.first().click();
     await loc.first().fill('');
-    await loc.first().pressSequentially(text, { delay: 70 });
+    await loc.first().pressSequentially(text, { delay: FAST ? 3 : 70 });
     await sleep(500);
   };
   const keys = async (combo: string, label = combo.replace('Control', 'Ctrl').replace('+', ' + ').replace(/\b[a-z]\b/g, (m) => m.toUpperCase())) => {
@@ -120,7 +121,7 @@ test('record the training video', async ({ browser }, testInfo) => {
   await sleep(700);
   await page.keyboard.press('Control+k');
   await sleep(500);
-  await page.keyboard.type('upload', { delay: 120 });
+  await page.keyboard.type('upload', { delay: FAST ? 5 : 120 });
   await sleep(1800);
   await page.keyboard.press('Escape');
   await page.evaluate(() => (window as any).__key(''));
@@ -148,7 +149,7 @@ test('record the training video', async ({ browser }, testInfo) => {
   await say('The copy is red: "Duplicate record cannot exist". An unchanged copy can never be saved. Press Esc to remove it.');
   await keys('Escape', 'Esc');
   await click(lov.getByRole('button', { name: 'New Value' }));
-  await page.keyboard.type('Closed by Plant', { delay: 80 });
+  await page.keyboard.type('Closed by Plant', { delay: FAST ? 3 : 80 });
   await say('Type the new value. The code is created automatically. Save with Ctrl + S.', 2200);
   await keys('Control+s');
   await toastSeen(/saved \(4 values\)/);
@@ -159,6 +160,7 @@ test('record the training video', async ({ browser }, testInfo) => {
   await head.getByLabel('Module').selectOption('JC');
   await type(head.getByLabel('Field Name (on screen)'), 'Vehicle Wash Type');
   await sleep(800);
+  await click(lov.getByTestId('lov-values').getByRole('button', { name: 'Remove value' }));
   await click(lov.getByRole('button', { name: 'Add several' }));
   await type(lov.getByLabel(/one per line/), 'Basic wash\nFoam wash\nInterior detailing');
   await click(lov.getByRole('button', { name: 'Add to list' }));
