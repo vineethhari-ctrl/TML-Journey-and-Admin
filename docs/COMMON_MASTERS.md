@@ -10,6 +10,23 @@ Masters that several modules need are kept once, in the **Common Masters** group
 | Complaint Codes Master | Complaint codes used across modules |
 | Dealer Details & Network Facility Registry | Dealers used across modules |
 
+## Generic masters (reference data for every module)
+
+| Group | Masters |
+| --- | --- |
+| Organisation | Zone, Region & State · Department · Designation & Grade · Shift (dealer-editable) |
+| People & Skills | Skill · Skill Level (Proficiency) · Certification |
+| Service | Service Type · Job Card Status |
+| Vehicle | Vehicle Colour |
+| Parts & Tax | Unit of Measure · GST / HSN |
+| Documents | Document Type |
+| Communication | Notification Template · Escalation Matrix |
+
+Each has sample test rows, field checks and ready-made rules (unique codes, designation must use an existing department,
+EV skills belong to BU EV, warnings for unusual GST / escalation hours). Everything can be changed on screen, by Excel
+upload (Upload a Master) or with the master's Rules button. Dropdown-only lists (language, fuel type, transmission, body
+type, customer category, priority, payment mode, rejection reason, employment type …) are in the Common LOV Master.
+
 ## Common LOV Master
 
 One row per dropdown value:
