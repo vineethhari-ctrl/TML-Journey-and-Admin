@@ -110,7 +110,7 @@ test('record the training video', async ({ browser }, testInfo) => {
   await page.goto('/#/dashboard');
   await sleep(1200);
   chapter = 'Introduction';
-  await card('TML Service Transformation', 'Admin Portal & TML Journey', ['Training: masters, lists of values, Excel upload, rules, employees, roles and skills', 'About 10 minutes · all data shown is test data'], 5000);
+  await card('TML Service Transformation', 'Admin Portal & TML Journey', ['Training: masters, lists of values, Excel upload, rules, employees, roles and skills', 'About 8 minutes · all data shown is test data'], 5000);
 
   // ============================================================ 1 Where things are
   chapter = '1 · Finding your way';
