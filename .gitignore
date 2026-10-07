@@ -17,3 +17,4 @@ docs-private/
 
 # Training video output (large files)
 training/output/
+__pycache__/
