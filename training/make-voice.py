@@ -44,22 +44,53 @@ def speak():
     print(f'{len(lines)} clips, {sum(durations.values()) / 60:.1f} minutes of speech')
 
 
+def marker_times(ff, video, count):
+    """Every frame of the recording carries a small black/white marker (bottom-left corner) that spells the number of the
+    narration line on screen. Read it back to get the exact video time at which each line starts."""
+    import numpy as np
+    fps = 10
+    raw = subprocess.run([ff, '-loglevel', 'error', '-i', video, '-vf', f'fps={fps},crop=96:10:0:710,format=gray', '-f', 'rawvideo', '-'], capture_output=True).stdout
+    fr = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 10, 96)
+    cells = fr[:, 5, 4::8][:, :12] < 128  # centre of each 8-pixel cell
+    vals = (cells * (1 << np.arange(11, -1, -1))).sum(axis=1)
+    first = {}
+    for i in range(len(vals) - 1):
+        v = int(vals[i])
+        if v and v == int(vals[i + 1]) and v not in first:  # two frames in a row, to ignore a half-painted frame
+            first[v] = i / fps
+    times, missing = [], 0
+    for k in range(1, count + 1):
+        if k in first:
+            times.append(first[k])
+        else:
+            times.append(None)
+            missing += 1
+    # a line whose marker was never seen sits just after the previous one
+    prev = 0.0
+    for i, t in enumerate(times):
+        times[i] = t if t is not None else prev + 1.0
+        prev = times[i]
+    print(f'{count - missing} of {count} lines found in the video')
+    return times
+
+
 def mix():
     import imageio_ffmpeg
     ff = imageio_ffmpeg.get_ffmpeg_exe()
     lines = json.load(open(os.path.join(OUT, 'chapters.json')))
     video = os.path.join(OUT, 'TML-Admin-Portal-Training.webm')
+    times = marker_times(ff, video, len(lines))
     ins, fl = [], []
     for i, x in enumerate(lines):
         ins += ['-i', os.path.join(CLIPS, f'{i}.wav')]
-        ms = int(x['at'] * 1000)
+        ms = int(times[i] * 1000)
         fl.append(f'[{i + 1}:a]adelay={ms}|{ms}[a{i}]')
     fl.append(''.join(f'[a{i}]' for i in range(len(lines))) + f'amix=inputs={len(lines)}:normalize=0[a]')
     script = os.path.join(OUT, 'mix-filter.txt')
     open(script, 'w').write(';\n'.join(fl))
     dst = os.path.join(OUT, 'TML-Admin-Portal-Training-Voice.mp4')
-    r = subprocess.run([ff, '-y', '-i', video] + ins + ['-filter_complex_script', script, '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
-                       '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-shortest', '-movflags', '+faststart', dst], capture_output=True, text=True)
+    r = subprocess.run([ff, '-y', '-i', video] + ins + ['-filter_complex_script', script, '-map', '0:v', '-vf', 'crop=1280:710:0:0,pad=1280:720:0:0:color=white', '-map', '[a]', '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+                       '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', dst], capture_output=True, text=True)
     print(r.returncode, dst)
     if r.returncode:
         print(r.stderr[-800:])

@@ -37,7 +37,16 @@ const OVERLAY = `
   const cur = Object.assign(document.createElement('div'), { id: '__cur' });
   const key = Object.assign(document.createElement('div'), { id: '__key' });
   const card = Object.assign(document.createElement('div'), { id: '__card' });
-  document.body.append(cap, cur, key, card);
+  // Frame marker: 12 black/white cells in the bottom-left corner that spell the number of the narration line now on
+  // screen. make-voice.py reads it back from the video to place each voice line exactly; it is cropped from the final video.
+  const bc = Object.assign(document.createElement('div'), { id: '__bc' });
+  bc.style.cssText = 'position:fixed;left:0;bottom:0;width:96px;height:10px;display:flex;z-index:2147483647;pointer-events:none;background:#fff';
+  for (let i = 0; i < 12; i++) { const c = document.createElement('div'); c.style.cssText = 'width:8px;height:10px;background:#fff'; bc.appendChild(c); }
+  const paint = (n) => { for (let i = 0; i < 12; i++) bc.children[i].style.background = (n >> (11 - i)) & 1 ? '#000' : '#fff'; };
+  window.__mark = (n) => { try { sessionStorage.setItem('__mk', String(n)); } catch (e) {} paint(n); };
+  let saved = 0; try { saved = Number(sessionStorage.getItem('__mk') || 0); } catch (e) {}
+  paint(saved);
+  document.body.append(cap, cur, key, card, bc);
   document.addEventListener('mousemove', (e) => { cur.style.left = e.clientX + 'px'; cur.style.top = e.clientY + 'px'; }, true);
   document.addEventListener('mousedown', () => cur.classList.add('down'), true);
   document.addEventListener('mouseup', () => cur.classList.remove('down'), true);
@@ -68,6 +77,7 @@ test('record the training video', async ({ browser }, testInfo) => {
   // say(text): show the caption and wait for the voice. say(text, act): the action runs while the voice speaks.
   const say = async (text: string, act?: (() => Promise<void>) | number) => {
     lines.push({ chapter, at: (Date.now() - t0) / 1000, text });
+    await page.evaluate((n) => (window as any).__mark(n), lines.length);
     await page.evaluate(([c, t]) => (window as any).__caption(c, t), [chapter, text]);
     const wait = holdFor(text, typeof act === 'number' ? act : Math.max(2600, text.length * 55));
     const started = Date.now();
@@ -79,6 +89,7 @@ test('record the training video', async ({ browser }, testInfo) => {
   const card = async (num: string, title: string, lead: string[], ms = 4500) => {
     const spoken = `[${num}] ${title}. ${lead.join(' ')}`;
     lines.push({ chapter: title, at: (Date.now() - t0) / 1000, text: spoken });
+    await page.evaluate((n) => (window as any).__mark(n), lines.length);
     ms = Math.max(ms, holdFor(spoken, 0));
     await page.evaluate(([n, t, l]) => (window as any).__card(`<div class="n">${n}</div><h1>${t}</h1>${(l as string[]).map((x) => `<p>${x}</p>`).join('')}`), [num, title, lead] as const);
     await sleep(ms);
