@@ -78,7 +78,8 @@ test('record the training video', async ({ browser }, testInfo) => {
   const say = async (text: string, act?: (() => Promise<void>) | number) => {
     lines.push({ chapter, at: (Date.now() - t0) / 1000, text });
     await page.evaluate((n) => (window as any).__mark(n), lines.length);
-    await page.evaluate(([c, t]) => (window as any).__caption(c, t), [chapter, text]);
+    // Captions cover parts of the screen; the voice says the same thing. Show them only with CAPTIONS=1.
+    if (process.env.CAPTIONS) await page.evaluate(([c, t]) => (window as any).__caption(c, t), [chapter, text]);
     const wait = holdFor(text, typeof act === 'number' ? act : Math.max(2600, text.length * 55));
     const started = Date.now();
     if (typeof act === 'function') await act();
