@@ -77,6 +77,19 @@ SELECT pg_temp.expect_error('other rule types name their field',
 SELECT pg_temp.expect_error('severity is error or warning',
   $q$INSERT INTO master_rule (master_id, rule_id, rule_type, params, severity, created_by, updated_by) VALUES ('eqc_gc_mandate','R-W','range','{"field":"ppl"}','fatal','u','u')$q$);
 
+-- 1c. Employee profile, skills and certificates
+INSERT INTO employee_profile (employee_id, designation, sa_expertise, updated_by) VALUES ('TML10001', 'Service Advisor', 'Both', 'admin');
+INSERT INTO employee_skill (employee_id, skill_code, level) VALUES ('TML10001', 'SA-MECH', 'L2'), ('TML10001', 'SA-BODY', 'L3');
+INSERT INTO employee_certification (employee_id, cert_code, issued_on, expires_on) VALUES ('TML10001', 'FIRE-1', '2026-01-01', '2027-01-01');
+SELECT pg_temp.expect_error('Service Advisor expertise is Mechanical, Bodyshop or Both',
+  $q$INSERT INTO employee_profile (employee_id, designation, sa_expertise, updated_by) VALUES ('X1','Service Advisor','Neither','u')$q$);
+SELECT pg_temp.expect_error('skill level is L1 to L4',
+  $q$INSERT INTO employee_skill (employee_id, skill_code, level) VALUES ('TML10001','MECH-ENG','L9')$q$);
+SELECT pg_temp.expect_error('one row per employee and skill',
+  $q$INSERT INTO employee_skill (employee_id, skill_code, level) VALUES ('TML10001','SA-MECH','L1')$q$);
+SELECT pg_temp.expect_error('certificate cannot expire before it is issued',
+  $q$INSERT INTO employee_certification (employee_id, cert_code, issued_on, expires_on) VALUES ('TML10001','HVS-1','2026-05-01','2026-01-01')$q$);
+
 -- 2. Bays and approvals
 INSERT INTO bay (bay_no, dealer_code, division_id, bu, bay_name, bay_type, bay_status, approval_status, created_by, updated_by)
 SELECT 1, 'DLR1001', division_id, 'PV', 'Mechanical Bay 01', 'Mechanical', 'Active', 'Approved', 'dlr', 'dlr' FROM division WHERE dealer_code = 'DLR1001';

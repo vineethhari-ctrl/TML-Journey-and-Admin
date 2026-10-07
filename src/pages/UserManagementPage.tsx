@@ -5,6 +5,9 @@ import { AppUser, UserType, UserStatus } from '../types';
 import { UserModal } from '../components/administration/UserModal';
 import { UserDetailDrawer } from '../components/administration/UserDetailDrawer';
 import { Pagination } from '../components/common/Pagination';
+import { SkillsMatrixPanel, AvailabilityPanel } from '../components/administration/EmployeeInsightPanels';
+import { useEmployeeProfiles } from '../hooks/useEmployeeProfiles';
+import { gapsFor, roleOfUser } from '../utils/employeeProfile';
 import {
   Users,
   UserPlus,
@@ -158,7 +161,9 @@ export const UserManagementPage: React.FC = () => {
   const { users, suspendUser, activateUser, resetUserSessions } = useApp();
 
   // Added 'proficiency' to the tab type union
-  const [activeTab, setActiveTab] = useState<'users' | 'employees' | 'pending' | 'suspended' | 'proficiency'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'employees' | 'pending' | 'suspended' | 'proficiency' | 'skills' | 'availability'>('users');
+  const insightTab = activeTab === 'skills' || activeTab === 'availability';
+  const { profileFor } = useEmployeeProfiles();
   const [searchQuery, setSearchQuery] = useState('');
   useRouteSearchParam(setSearchQuery);
   const [userTypeFilter, setUserTypeFilter] = useState<UserType | 'ALL'>('ALL');
@@ -435,6 +440,30 @@ export const UserManagementPage: React.FC = () => {
                   </span>
                 )}
               </button>
+              <button
+                onClick={() => {
+                  setActiveTab('skills');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+                  activeTab === 'skills' ? 'bg-blue-900 text-white shadow-2xs font-bold' : 'text-blue-900 hover:text-blue-950 font-bold'
+                }`}
+              >
+                <Award className="h-3.5 w-3.5" />
+                <span>Skills &amp; Certificates</span>
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('availability');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+                  activeTab === 'availability' ? 'bg-blue-900 text-white shadow-2xs font-bold' : 'text-blue-900 hover:text-blue-950 font-bold'
+                }`}
+              >
+                <Users className="h-3.5 w-3.5" />
+                <span>Availability</span>
+              </button>
             </div>
 
             {/* Quick search input */}
@@ -458,7 +487,7 @@ export const UserManagementPage: React.FC = () => {
           </div>
 
           {/* Sub Filters */}
-          {activeTab === 'proficiency' ? (
+          {insightTab ? null : activeTab === 'proficiency' ? (
             <div className="flex flex-wrap items-center gap-2.5 text-xs">
               <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1">
                 <Filter className="h-3 w-3" /> Progression Filter:
@@ -536,8 +565,12 @@ export const UserManagementPage: React.FC = () => {
           )}
         </div>
 
-        {/* VIEW 1: LMS & PROFICIENCY VIEW */}
-        {activeTab === 'proficiency' ? (
+        {/* VIEW 0: SKILLS MATRIX / AVAILABILITY (employee skills, certificates, who is available) */}
+        {activeTab === 'skills' ? (
+          <SkillsMatrixPanel searchQuery={searchQuery} onOpenEmployee={setSelectedUserForDetail} />
+        ) : activeTab === 'availability' ? (
+          <AvailabilityPanel searchQuery={searchQuery} onOpenEmployee={setSelectedUserForDetail} />
+        ) : /* VIEW 1: LMS & PROFICIENCY VIEW */ activeTab === 'proficiency' ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-500 font-semibold text-[11px] uppercase tracking-wider border-b border-slate-200">
@@ -662,6 +695,8 @@ export const UserManagementPage: React.FC = () => {
                   <th className="py-3 px-3">Department</th>
                   <th className="py-3 px-3">Dealer</th>
                   <th className="py-3 px-3">Role</th>
+                  <th className="py-3 px-3">Designation / Expertise</th>
+                  <th className="py-3 px-3">Skills</th>
                   <th className="py-3 px-3">Status</th>
                   <th className="py-3 px-3">Last Login</th>
                   <th className="py-3 px-3 text-right">Actions</th>
@@ -707,6 +742,30 @@ export const UserManagementPage: React.FC = () => {
 
                     <td className="py-3 px-3 font-medium text-slate-800">
                       {u.role}
+                    </td>
+
+                    <td className="py-3 px-3 text-slate-700" data-testid="designation-cell">
+                      {(() => {
+                        const p = profileFor(u);
+                        return (
+                          <>
+                            <span className="block">{p.designation}</span>
+                            {p.expertise && <span className="mt-0.5 inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-800">{p.expertise}</span>}
+                          </>
+                        );
+                      })()}
+                    </td>
+
+                    <td className="py-3 px-3">
+                      {(() => {
+                        const p = profileFor(u);
+                        const gaps = gapsFor(p, roleOfUser(u), new Date().toISOString().slice(0, 10));
+                        return (
+                          <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${gaps.ok ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`} title={gaps.ok ? 'Meets the role requirements' : 'Has skill / certificate gaps'}>
+                            {p.skills.length} skills{gaps.ok ? '' : ' · gap'}
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     <td className="py-3 px-3">
