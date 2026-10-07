@@ -14,6 +14,7 @@ interface Line { chapter: string; at: number; text: string }
 
 const OVERLAY = `
 (() => {
+  const setup = () => {
   if (window.__trainingReady) return;
   window.__trainingReady = true;
   const style = document.createElement('style');
@@ -43,6 +44,8 @@ const OVERLAY = `
   window.__caption = (chapter, text) => { cap.innerHTML = text ? '<small>' + chapter + '</small>' + text : ''; cap.style.opacity = text ? '1' : '0'; };
   window.__key = (t) => { key.textContent = t; key.style.display = t ? 'block' : 'none'; };
   window.__card = (html) => { card.innerHTML = html || ''; card.style.display = html ? 'flex' : 'none'; };
+  };
+  if (document.body) setup(); else document.addEventListener('DOMContentLoaded', setup);
 })();`;
 
 test('record the training video', async ({ browser }, testInfo) => {
