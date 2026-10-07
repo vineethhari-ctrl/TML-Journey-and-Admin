@@ -29,6 +29,7 @@ import {
 } from '../data/masterCatalogue';
 import { RETIRED_LOV_MASTER_IDS } from '../data/commonLov';
 import { resolveLovFields } from '../utils/commonLov';
+import { canRoleAccessRoute, hasPlatformPermission } from '../utils/roleAccess';
 
 export type PlatformRoleId =
   | 'superAdmin'
@@ -348,142 +349,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (activeRoleId === 'superAdmin') return true;
       if (activeRoleId === 'cro') return false; // not configured
 
-      const permissionsByRole: Record<PlatformRoleId, string[]> = {
-        superAdmin: ['*'],
-        serviceAdvisor: [
-          'appointment.read',
-          'appointment.create',
-          'appointment.update',
-          'appointment.cancel',
-          'jobcard.read',
-          'jobcard.create',
-          'jobcard.update',
-          'jobcard.status',
-          'estimation.read',
-          'estimation.create',
-          'bay.read',
-          'bay.assign',
-          'journey.read',
-          'journey.search',
-          'dashboard.read',
-          'pii.unmask',
-        ],
-        receptionist: [
-          'appointment.read',
-          'appointment.create',
-          'appointment.update',
-          'appointment.cancel',
-          'gate.checkin',
-          'gate.checkout',
-          'gate.read',
-          'jobcard.read',
-          'estimation.read',
-          'bay.read',
-          'bay.assign',
-          'journey.read',
-          'journey.search',
-        ],
-        securityGuard: [
-          'gate.checkin',
-          'gate.checkout',
-          'gate.read',
-          'appointment.read',
-          'journey.read',
-        ],
-        driver: ['gate.read', 'jobcard.read', 'journey.read'],
-        dgm: [
-          'appointment.read',
-          'gate.read',
-          'jobcard.read',
-          'estimation.read',
-          'bay.read',
-          'config.read',
-          'journey.read',
-          'journey.search',
-          'dashboard.read',
-          'pii.unmask',
-          'pii.export',
-        ],
-        dealerAdmin: [
-          'appointment.read',
-          'gate.read',
-          'jobcard.read',
-          'estimation.read',
-          'bay.read',
-          'config.read',
-          'config.write',
-          'user.provision',
-          'permission.manage',
-          'masters.read',
-          'masters.write',
-          'journey.read',
-          'journey.search',
-          'dashboard.read',
-          'pii.unmask',
-          'pii.export',
-        ],
-        cro: [],
-      };
-
-      const allowed = permissionsByRole[activeRoleId] || [];
-      return allowed.includes(code) || allowed.includes('*');
+      return hasPlatformPermission(activeRoleId, code);
     },
     [activeRoleId]
   );
 
-  const canAccessRoute = useCallback(
-    (fullRoute: string): boolean => {
-      const route = fullRoute.split('?')[0];
-      if (activeRoleId === 'superAdmin') return true;
-      if (activeRoleId === 'cro') return false;
-
-      if (route === '/dashboard') {
-        return ['superAdmin', 'dgm', 'dealerAdmin', 'serviceAdvisor'].includes(activeRoleId);
-      }
-      if (route.startsWith('/journey')) {
-        return [
-          'superAdmin',
-          'dgm',
-          'dealerAdmin',
-          'serviceAdvisor',
-          'receptionist',
-          'driver',
-          'securityGuard',
-        ].includes(activeRoleId);
-      }
-      // Approving bays is a TML Network Manager / TML Admin task (super admin in this prototype)
-      if (route === '/admin/bay-approvals') {
-        return false;
-      }
-      if (route === '/admin/masters' || route === '/admin/masters-guide' || route === '/admin/upload-master') {
-        return ['superAdmin', 'dealerAdmin'].includes(activeRoleId);
-      }
-      if (
-        route === '/admin/users' ||
-        route === '/admin/devices' ||
-        route === '/admin/sessions' ||
-        route === '/admin/config'
-      ) {
-        return ['superAdmin', 'dealerAdmin'].includes(activeRoleId);
-      }
-      if (route === '/admin/roles') {
-        return ['superAdmin', 'dealerAdmin', 'dgm'].includes(activeRoleId);
-      }
-      // Default views (tabs, cards, fields per role) are set by the TML admin only
-      if (route === '/admin/workshop-policy') {
-        return false;
-      }
-      // Fleet Register: admins view it; uploading needs the fleet-upload privilege (checked on the page)
-      if (route === '/admin/fleet') {
-        return ['superAdmin', 'dealerAdmin', 'dgm'].includes(activeRoleId);
-      }
-      if (route === '/admin/audit') {
-        return ['superAdmin', 'dgm'].includes(activeRoleId);
-      }
-      return true;
-    },
-    [activeRoleId]
-  );
+  const canAccessRoute = useCallback((fullRoute: string): boolean => canRoleAccessRoute(activeRoleId, fullRoute), [activeRoleId]);
 
   const toastSeq = useRef(0);
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {

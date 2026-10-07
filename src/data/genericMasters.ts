@@ -175,6 +175,8 @@ export function buildGenericMasters(): MasterConfig[] {
         { skillCode: 'PAINT-01', skillName: 'Painting & Colour Matching', category: 'Paint', bu: 'PV', forDesignation: 'Paint Specialist', critical: 'N' },
         { skillCode: 'QC-EQC', skillName: 'Electronic Quality Check (EQC)', category: 'Quality', bu: 'PV', forDesignation: 'Quality Inspector', critical: 'N' },
         { skillCode: 'CUST-HND', skillName: 'Customer Handling & Job Card Creation', category: 'Customer Handling', bu: 'PV', forDesignation: 'Service Advisor', critical: 'N' },
+        { skillCode: 'SA-MECH', skillName: 'Service Advisory — Mechanical jobs', category: 'Customer Handling', bu: 'PV', forDesignation: 'Service Advisor', critical: 'N' },
+        { skillCode: 'SA-BODY', skillName: 'Service Advisory — Bodyshop & Insurance jobs', category: 'Customer Handling', bu: 'PV', forDesignation: 'Service Advisor', critical: 'N' },
         { skillCode: 'PART-INV', skillName: 'Parts Issue & Inventory', category: 'Parts & Inventory', bu: 'PV', forDesignation: 'Parts Store Officer', critical: 'N' },
         { skillCode: 'SAFE-FIRE', skillName: 'Workshop Safety & Fire Response', category: 'Safety', bu: 'PV', forDesignation: 'Any', critical: 'Y' },
       ]),

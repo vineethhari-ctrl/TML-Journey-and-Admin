@@ -16,6 +16,7 @@ import {
   Keyboard,
   ShieldCheck,
   Layers,
+  Users,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { SmartExcelPicture, SMART_TEMPLATE_FILE } from '../components/administration/SmartExcelPicture';
@@ -140,6 +141,7 @@ const TOC = [
   ['common', 'Common Masters & Lists of Values'],
   ['rules', 'Rules (no coding)'],
   ['shortcuts', 'Shortcuts'],
+  ['employees', 'Employees, roles & skills'],
   ['smart', 'Smart Excel Import (detailed)'],
   ['choose', 'Which option to use'],
   ['create', 'A. Create one master (form)'],
@@ -383,6 +385,34 @@ export const MasterGuidePage: React.FC = () => {
             [<><strong>Ctrl+K</strong></>, 'Search any screen, e.g. "upload", "lov" or "guide".'],
           ]}
         />
+      </Section>
+
+      <Section id="employees" title="Employees, roles & skills" icon={Users}>
+        <p>
+          <strong>Administration → Employee / Users</strong> and <strong>Roles &amp; Access</strong> now cover the whole workforce: who the people are, what role each has,
+          what that role sees, and which skills and certificates they hold. Everything is driven by the generic masters (Designation, Department, Shift, Skill,
+          Skill Level, Certification), so maintain those first.
+        </p>
+        <Table
+          prose
+          head={['Where', 'What you can do']}
+          rows={[
+            ['Employee / Users → list', 'Designation, Service Advisor expertise and a skills badge ("gap" = a skill or certificate the role needs is missing).'],
+            ['Click an employee → Employment', 'Designation, employment type and status, date of joining, shift. A Service Advisor must be set to Mechanical, Bodyshop or Both.'],
+            ['Click an employee → Role & Views', 'The role, the screens, landing cards, worklist tabs, default columns and permissions that role gets, and what it requires.'],
+            ['Click an employee → Skills & Certificates', 'Skills with level L1–L4, certificates with expiry (valid / expiring in 60 days / expired), gaps against the role; add or remove.'],
+            ['Employee / Users → Skills & Certificates', 'Employees × skills grid with gaps, certificates to renew, filters by role and dealer, Export to Excel.'],
+            ['Employee / Users → Availability', 'Who is on which shift by skill, Service Advisors by expertise, and "Who can do this?" for a skill, level and shift.'],
+            ['Roles & Access → Roles & Position Types', 'All roles of the application (admin, dealer management, front office, workshop, TML back office) with their views, permissions, people and required skills; Export to Excel.'],
+          ]}
+        />
+        <p className="font-bold text-slate-900 pt-1">Service Advisor expertise</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li><strong>Mechanical</strong> — creates and advises on mechanical / periodic service job cards (needs the skill "Service Advisory — Mechanical jobs").</li>
+          <li><strong>Bodyshop</strong> — bodyshop, accident and insurance job cards (needs "Service Advisory — Bodyshop &amp; Insurance jobs").</li>
+          <li><strong>Both</strong> — either kind (needs both skills). The list of choices is in the Common LOV Master as <Code>ADMIN_SA_EXPERTISE</Code>.</li>
+        </ul>
+        <p className="text-slate-600">Prototype note: profiles, skills and certificates you edit are saved in your own browser. In production they are stored in the employee tables.</p>
       </Section>
 
       <Section id="smart" title="Smart Excel Import (any layout — detailed, step-by-step screen)" icon={Sparkles}>

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 
 import { PermissionsMatrix } from '../components/administration/PermissionsMatrix';
+import { RoleCataloguePanel } from '../components/administration/RoleCataloguePanel';
 
 type PermissionTier = 'REQUIRED' | 'DEFAULT' | 'GRANTABLE' | 'NEVER';
 
@@ -616,7 +617,7 @@ export const RoleManagementPage: React.FC = () => {
           <button
             onClick={() => {
               setActiveSubNav('roles');
-              showToast('Navigating to Roles & Position Types...', 'info');
+              showToast('Roles & Position Types: every role, its views and the skills it needs', 'info');
             }}
             className={`w-full text-left px-3 py-2 rounded-lg font-medium transition-colors cursor-pointer ${
               activeSubNav === 'roles'
@@ -718,6 +719,8 @@ export const RoleManagementPage: React.FC = () => {
       <div className="flex-1 space-y-4 overflow-hidden">
         {activeSubNav === 'matrix' ? (
           <PermissionsMatrix onSaved={() => showToast('Granular module permissions ratified', 'success')} />
+        ) : activeSubNav === 'roles' ? (
+          <RoleCataloguePanel />
         ) : (
           <>
             {/* Main Title and Action Buttons */}

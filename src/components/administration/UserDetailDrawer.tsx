@@ -13,7 +13,11 @@ import {
   CheckCircle,
   RefreshCw,
   Edit,
+  Briefcase,
+  Eye,
+  Award,
 } from 'lucide-react';
+import { EmploymentTab, RoleViewsTab, SkillsTab } from './EmployeeProfileTabs';
 
 interface UserDetailDrawerProps {
   user: AppUser | null;
@@ -29,7 +33,7 @@ export const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({
   onEdit,
 }) => {
   const { devices, sessions, auditLogs, suspendUser, activateUser, resetUserSessions } = useApp();
-  const [activeTab, setActiveTab] = useState<'profile' | 'access' | 'devices' | 'sessions' | 'activity' | 'audit'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'employment' | 'roleviews' | 'skills' | 'access' | 'devices' | 'sessions' | 'activity' | 'audit'>('profile');
 
   if (!user) return null;
 
@@ -114,6 +118,9 @@ export const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({
         <div className="flex items-center gap-1 border-b border-slate-200 pb-1 overflow-x-auto">
           {[
             { id: 'profile', label: 'Profile', icon: User },
+            { id: 'employment', label: 'Employment', icon: Briefcase },
+            { id: 'roleviews', label: 'Role & Views', icon: Eye },
+            { id: 'skills', label: 'Skills & Certificates', icon: Award },
             { id: 'access', label: 'Access & Roles', icon: Shield },
             { id: 'devices', label: `Devices (${userDevices.length})`, icon: Smartphone },
             { id: 'sessions', label: `Sessions (${userSessions.length})`, icon: Clock },
@@ -125,6 +132,7 @@ export const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({
             return (
               <button
                 key={tab.id}
+                data-testid={`drawer-tab-${tab.id}`}
                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
                   active
@@ -192,6 +200,10 @@ export const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({
         )}
 
         {/* Tab 2: Access & Roles */}
+        {activeTab === 'employment' && <EmploymentTab key={user.employeeId} user={user} />}
+        {activeTab === 'roleviews' && <RoleViewsTab user={user} />}
+        {activeTab === 'skills' && <SkillsTab key={user.employeeId} user={user} />}
+
         {activeTab === 'access' && (
           <div className="space-y-4">
             <div className="p-3.5 bg-blue-50/50 rounded-xl border border-blue-200 space-y-1">

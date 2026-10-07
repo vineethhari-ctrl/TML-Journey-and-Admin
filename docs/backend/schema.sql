@@ -158,6 +158,39 @@ CREATE TABLE master_rule (
   CHECK (rule_type = 'unique' OR params ? 'field')
 );
 
+-- Employee profile (portal "Employee / Users" → Employment, Skills & Certificates). Designation, shift, skills and
+-- certificates are codes of the generic masters (designation_master, shift_master, skill_master, certification_master).
+CREATE TABLE employee_profile (
+  employee_id      varchar(20)  PRIMARY KEY,
+  designation      varchar(100) NOT NULL,
+  employment_type  varchar(20)  NOT NULL DEFAULT 'Permanent',
+  lifecycle        varchar(12)  NOT NULL DEFAULT 'Active' CHECK (lifecycle IN ('Active', 'On Leave', 'On Notice', 'Left')),
+  joined_on        date,
+  shift_code       varchar(10)  NOT NULL DEFAULT 'GEN',
+  sa_expertise     varchar(10)  CHECK (sa_expertise IN ('Mechanical', 'Bodyshop', 'Both')),  -- Service Advisors only
+  updated_at       timestamptz  NOT NULL DEFAULT now(),
+  updated_by       varchar(60)  NOT NULL
+);
+
+CREATE TABLE employee_skill (
+  employee_id      varchar(20)  NOT NULL REFERENCES employee_profile ON DELETE CASCADE,
+  skill_code       varchar(14)  NOT NULL,
+  level            varchar(2)   NOT NULL CHECK (level IN ('L1', 'L2', 'L3', 'L4')),
+  since            date,
+  source           varchar(10)  NOT NULL DEFAULT 'Manual' CHECK (source IN ('LMS', 'Assessment', 'Manual')),
+  PRIMARY KEY (employee_id, skill_code)
+);
+
+CREATE TABLE employee_certification (
+  employee_id      varchar(20)  NOT NULL REFERENCES employee_profile ON DELETE CASCADE,
+  cert_code        varchar(14)  NOT NULL,
+  issued_on        date         NOT NULL,
+  expires_on       date         NOT NULL,
+  certificate_no   varchar(30),
+  PRIMARY KEY (employee_id, cert_code),
+  CHECK (expires_on >= issued_on)
+);
+
 CREATE TABLE master_record (
   master_id        varchar(31)  NOT NULL REFERENCES master_definition ON DELETE CASCADE,
   record_id        varchar(60)  NOT NULL,                    -- business id shown in the portal (e.g. GCM-01)
