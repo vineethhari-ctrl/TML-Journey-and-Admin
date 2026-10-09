@@ -17,6 +17,7 @@ import { viewsForRole } from '../src/utils/roleViews';
 import { buildMasterWorkbook, PROTECTED_MASTER_IDS, workbookToArrayBuffer } from '../src/utils/masterWorkbook';
 import { RULE_COLUMNS, ruleToRow } from '../src/utils/masterRules';
 import { buildPublished } from '../src/utils/masterPublish';
+import { baStatusOf } from '../src/data/confirmedBaMasters';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const out = path.join(root, 'build', 'master-pack');
@@ -48,7 +49,7 @@ sheet(wb, 'README', [
   [`Built ${today} from the portal as it is today. TEST DATA ONLY: nothing here is real Tata Motors data.`],
   [],
   ['Sheet', 'What it holds'],
-  ['Classification', 'Every master with a PROPOSED class: A CRM as-is, B new ST master, C CRM + business control. BA leads confirm or correct; the yellow columns are for you.'],
+  ['Classification', 'Every master with a PROPOSED class: A CRM as-is, B new ST master, C CRM + business control. BA leads confirm or correct; the columns whose heading starts with CONFIRMED are for you. The simpler 2-question version is TML_BA_Master_Questionnaire.xlsx.'],
   ['Master Fields', 'Every field of every master: type, mandatory, dropdown list used, value mapping.'],
   ['LOV Types', 'Every list of values (dropdown) with its values, and which master fields use it. Source (CRM / ST) is for the BA to fill.'],
   ['Rules', 'Every business rule set on a master (no-code rules).'],
@@ -65,17 +66,17 @@ sheet(wb, 'README', [
 ], [28, 140]);
 
 sheet(wb, 'Classification', [
-  ['Master ID', 'Master', 'Module', 'Group', 'Maintained by (today)', 'Proposed class', 'Proposed system of record', 'Proposed integration', 'Basis of the proposal',
+  ['Master ID', 'Master', 'Module', 'Group', 'BA status', 'Maintained by (today)', 'Proposed class', 'Proposed system of record', 'Proposed integration', 'Basis of the proposal',
    'Records', 'Fields', 'Rules', 'Dealer-specific?', 'Lists used', 'CONFIRMED CLASS (BA)', 'CONFIRMED System of record', 'Business control needed? (none / enable-disable / configure)', 'Control scope (ST functions)', 'Approver of control changes', 'Change frequency', 'BA lead / remarks', 'Can a BA workbook define / update it?'],
   ...all.map((m: MasterConfig) => {
     const d = draftClassification(m);
     return [
-      m.id, m.name, m.moduleName, m.logicalGroup, m.owner === 'TML_ADMIN' ? 'TML Admin' : 'Dealer Admin', CLASS_LABEL[d.masterClass], proposedSystemOfRecord(d.masterClass), proposedIntegration(d.masterClass), d.basis,
+      m.id, m.name, m.moduleName, m.logicalGroup, baStatusOf(m), m.owner === 'TML_ADMIN' ? 'TML Admin' : 'Dealer Admin', CLASS_LABEL[d.masterClass], proposedSystemOfRecord(d.masterClass), proposedIntegration(d.masterClass), d.basis,
       m.records.length, m.fields.length, (m.rules ?? []).length, m.owner === 'DEALER_ADMIN' ? 'Y' : 'N', [...new Set(m.fields.map((f) => f.lovCode).filter(Boolean) as string[])].join(', '),
       '', '', d.controlHint ?? '', '', '', '', '', PROTECTED_MASTER_IDS.includes(m.id) ? 'N (special screen: use the portal)' : 'Y',
     ];
   }),
-], [26, 40, 20, 20, 16, 40, 28, 22, 70, 9, 8, 7, 10, 40, 22, 22, 44, 28, 22, 16, 30, 30]);
+], [26, 40, 20, 20, 30, 16, 40, 28, 22, 70, 9, 8, 7, 10, 40, 22, 22, 44, 28, 22, 16, 30, 30]);
 
 sheet(wb, 'Master Fields', [
   ['Master ID', 'Master', 'Field key', 'Field label', 'Type', 'Mandatory', 'Dropdown list (LOV type)', 'Options (fixed list)', 'Pattern / limits', 'Shown in dealer app', 'Description', 'SOURCE of field (CRM / ST) — BA to fill'],
@@ -190,7 +191,7 @@ HOW THE CLASSIFICATION WORKS
   A  CRM master, used as it is (CRM is the System of Record; ST reads it through Solar or API)
   B  New ST master (maintained in the ST Portal)
   C  CRM master + business control (Business enables / disables / configures records inside ST without touching CRM)
-  Every class is a PROPOSAL except PL / PPL (stated in the mail of 8 Oct). Fill the yellow columns in the Classification sheet.
+  Every class is a PROPOSAL except PL / PPL (stated in the mail of 8 Oct). BA leads: use TML_BA_Master_Questionnaire.xlsx (two yes/no questions per master).
 
 ABOUT EXCEL
   Excel is used here to DEFINE and LOAD masters: fields, lists, rules and rows. The checks themselves (duplicates, rules, access, audit,
