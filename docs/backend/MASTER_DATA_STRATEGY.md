@@ -20,6 +20,8 @@ Example of C: CRM holds many PL / PPL models; Business makes only selected model
 4. **Business control is generic.** One control table (master, record, scope, state) works for any master, so a master that Business asks to control later needs no new table and no deployment: it is an admin switch on the master. Scopes (ST functionalities) are data. Two modes per master and scope: *deny-list* (everything on, Business switches some off) and *allow-list* (everything off, Business enables chosen records, for example models). In allow-list mode a new CRM record arrives as *new, not yet enabled* for Business to review. Control changes are audited, with an optional approval step.
 5. **A CRM refresh never overwrites a business choice**, because source data and control live in different tables. The portal reads one combined view: source data + control.
 
+> **Update 9 Oct 2026:** the database design for this approach is now written and tested: `schema_masters_crm.sql` and `schema_masters_crm_test.sql` (section 3 below lists what was proposed; the file is the result). The review document with diagrams is built by `npm run backend-doc`.
+
 ## 3. What exists and what is to add (see `schema.sql`)
 
 Exists: `master_definition`, `master_field`, `master_rule`, `master_record`, history tables, `import_job`, `audit_log`, `dealer`, users and roles, employee profile tables.

@@ -1,0 +1,86 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}body{margin:0;background:#fff;font-family:Segoe UI,Arial,Helvetica,sans-serif;color:#102a43}
+.d{width:1200px;padding:28px;background:#fff;position:relative}
+h3{margin:0 0 18px;font-size:26px;color:#002244}
+.row{display:flex;gap:22px}
+.card{flex:1;border:3px solid #002244;border-radius:16px;padding:18px;background:#f8fafc}
+.card h4{margin:0 0 6px;font-size:24px}
+.tag{display:inline-block;font-weight:800;font-size:20px;padding:3px 12px;border-radius:999px;color:#fff;margin-bottom:10px}
+.box{border-radius:12px;padding:12px 14px;margin:10px 0;font-size:20px;line-height:1.3;border:2px solid}
+.crm{background:#dbeafe;border-color:#1d4ed8}.st{background:#dcfce7;border-color:#15803d}.biz{background:#ffedd5;border-color:#c2410c}.view{background:#ede9fe;border-color:#6d28d9}.gray{background:#f1f5f9;border-color:#64748b}
+.arrow{text-align:center;font-size:30px;color:#475569;line-height:1}
+small{font-size:17px;color:#475569;display:block;margin-top:4px}
+.big{font-size:22px;font-weight:700}
+svg{display:block}
+</style></head><body>
+
+<div class="d" id="d1"><h3>The three kinds of master</h3>
+<div class="row">
+ <div class="card"><span class="tag" style="background:#1d4ed8">A</span><h4>CRM master, used as it is</h4><small>Example: PL / PPL list as CRM keeps it</small>
+  <div class="box crm"><b>CRM</b> is the System of Record<small>Business edits it in CRM only</small></div><div class="arrow">▼ Solar / API</div>
+  <div class="box gray"><b>ST Portal</b>: read-only copy<small>Nobody edits it in ST</small></div></div>
+ <div class="card"><span class="tag" style="background:#15803d">B</span><h4>New ST master</h4><small>Example: eQC checklists, Bodyshop inventory</small>
+  <div class="box st"><b>ST Portal</b> is the System of Record<small>Maintained with admin and governance controls</small></div>
+  <div class="box gray">No CRM link<small>Lists of values are kept in the ST Common LOV Master</small></div></div>
+ <div class="card"><span class="tag" style="background:#c2410c">C</span><h4>CRM master + business control</h4><small>Example: only some PPL models in an ST function</small>
+  <div class="box crm"><b>CRM</b> is the System of Record</div><div class="arrow">▼ Solar / API</div>
+  <div class="box gray"><b>ST Portal</b>: read-only copy</div><div class="arrow">+</div>
+  <div class="box biz"><b>Business control layer</b><small>Switches records on / off per ST function, without touching CRM</small></div></div>
+</div></div>
+
+<div class="d" id="d2"><h3>One record, three separate layers</h3>
+<div style="display:flex;gap:26px;align-items:stretch">
+ <div style="flex:1.4">
+  <div class="box crm"><div class="big">1 · CRM part</div>PPL = Nexon · PL = PV · CRM key PPL005<small>Written ONLY by the CRM sync. Read-only for every user (database enforced).</small></div>
+  <div class="box st"><div class="big">2 · ST part</div>Remark = "Priority model"<small>The new ST fields users edit. Never overwritten by a CRM refresh.</small></div>
+  <div class="box biz"><div class="big">3 · Business control</div>eQC Guided Check: ENABLED · Job card creation: ENABLED · Dashboards: DISABLED<small>One row per record and per ST function: state, settings, who, why, when.</small></div>
+ </div>
+ <div style="display:flex;align-items:center;font-size:44px;color:#475569">➜</div>
+ <div style="flex:1"><div class="box view" style="height:100%"><div class="big">What screens and dealer apps read</div>
+  <br><b>master_available</b><br>= CRM part + ST part,<br>only the records that are ENABLED<br>for that ST function<small>A record removed in CRM is never offered. Everything is kept for history.</small></div></div>
+</div></div>
+
+<div class="d" id="d3"><h3>How the data moves</h3>
+<div style="display:flex;gap:16px;align-items:stretch">
+ <div style="flex:1"><div class="box crm" style="height:100%"><div class="big">CRM</div>PL, PPL, dealers, outlets …<small>System of Record for classes A and C</small></div></div>
+ <div style="align-self:center;font-size:26px;color:#475569;text-align:center">Solar / API<br>➜</div>
+ <div style="flex:1.2"><div class="box gray"><div class="big">Staging</div>master_sync_stage<small>One run = one transaction</small></div><div class="arrow">▼ apply_master_sync</div>
+  <div class="box crm"><b>CRM part</b> of the records<small>new · changed · unchanged · removed · restored</small></div></div>
+ <div style="flex:1.2">
+  <div class="box st"><div class="big">ST users</div>edit the ST part of a record, or create ST masters</div>
+  <div class="box biz"><div class="big">Business</div>enables / disables records per ST function<small>optional approval by a second person</small></div></div>
+ <div style="align-self:center;font-size:26px;color:#475569;text-align:center">➜</div>
+ <div style="flex:1.1"><div class="box view" style="height:100%"><div class="big">Portal + dealer apps</div>read <b>master_available</b><small>History and audit of every change are written automatically</small></div></div>
+</div></div>
+
+<div class="d" id="d4" style="height:960px"><h3>The tables (new in blue, changed in grey)</h3><svg id="er" width="1144" height="860"></svg></div>
+
+<script>
+const boxes={
+ master_field:{x:30,y:40,w:270,h:130,t:'master_field',s:['+ source_system  CRM / ST','+ crm_field','+ ref_master','+ lov_type'],c:'gray'},
+ lov_type:{x:350,y:40,w:270,h:96,t:'lov_type',s:['source_system  CRM / ST','allow_st_extension'],c:'new'},
+ control_scope:{x:720,y:40,w:330,h:96,t:'control_scope',s:['scope_code (an ST function)','scope_type: FUNCTION, MODULE, DEALER'],c:'new'},
+ master_definition:{x:30,y:300,w:270,h:130,t:'master_definition',s:['+ source_system  CRM / ST / MIXED','+ sync_mode  API / SOLAR / NONE','+ control_mode','+ allow_st_records'],c:'gray'},
+ master_record:{x:350,y:290,w:320,h:150,t:'master_record',s:['+ crm_key · crm_data (read-only)','+ crm_hash · crm_status','+ needs_review · review_reason','data = the ST part'],c:'gray'},
+ master_control_policy:{x:720,y:290,w:330,h:116,t:'master_control_policy',s:['default_state: ENABLED / DISABLED','requires_approval · approver_role'],c:'new'},
+ master_sync_config:{x:30,y:520,w:270,h:116,t:'master_sync_config',s:['method  API / SOLAR','source_object · key_field','field_mapping · schedule'],c:'new'},
+ master_control:{x:350,y:520,w:320,h:130,t:'master_control',s:['state: ENABLED, DISABLED,','PENDING_REVIEW','settings · reason · decided_by'],c:'new'},
+ master_control_request:{x:720,y:520,w:330,h:116,t:'master_control_request',s:['status: PENDING, APPROVED, REJECTED','requested_by must differ from decided_by'],c:'new'},
+ master_sync_run:{x:30,y:700,w:270,h:96,t:'master_sync_run',s:['FULL / DELTA · status · counts'],c:'new'},
+ master_sync_stage:{x:350,y:680,w:210,h:70,t:'master_sync_stage',s:['the CRM rows'],c:'new'},
+ master_sync_item:{x:350,y:770,w:210,h:70,t:'master_sync_item',s:['result per record'],c:'new'},
+ master_control_history:{x:720,y:700,w:330,h:96,t:'master_control_history',s:['old / new state, who, when, why','append-only'],c:'new'}
+};
+const edges=[['master_field','lov_type'],['master_definition','master_field'],['master_definition','master_record'],['control_scope','master_control_policy'],['master_record','master_control'],['master_control_policy','master_control'],['master_control_policy','master_control_request'],['master_control','master_control_history'],['master_definition','master_sync_config'],['master_sync_config','master_sync_run'],['master_sync_run','master_sync_stage'],['master_sync_run','master_sync_item']];
+const bends=[[[240,300],[240,255],[805,255],[805,290]],[[560,715],[695,715],[695,365],[670,365]]];
+const svg=document.getElementById('er'),NS='http://www.w3.org/2000/svg';
+const mk=(n,a)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e};
+const ctr=b=>({x:b.x+b.w/2,y:b.y+b.h/2});
+const edgePt=(b,t)=>{const c=ctr(b),dx=t.x-c.x,dy=t.y-c.y,sx=(b.w/2)/Math.abs(dx||1e-6),sy=(b.h/2)/Math.abs(dy||1e-6),k=Math.min(sx,sy);return{x:c.x+dx*k,y:c.y+dy*k}};
+edges.forEach(([a,b])=>{const A=boxes[a],B=boxes[b],p=edgePt(A,ctr(B)),q=edgePt(B,ctr(A));svg.appendChild(mk('line',{x1:p.x,y1:p.y,x2:q.x,y2:q.y,stroke:'#64748b','stroke-width':3}))});
+bends.forEach(pts=>svg.appendChild(mk('polyline',{points:pts.map(p=>p.join(',')).join(' '),fill:'none',stroke:'#64748b','stroke-width':3})));
+Object.values(boxes).forEach(b=>{const g=mk('g',{});const fill=b.c==='new'?'#dbeafe':'#f1f5f9',stroke=b.c==='new'?'#1d4ed8':'#64748b';
+ g.appendChild(mk('rect',{x:b.x,y:b.y,width:b.w,height:b.h,rx:12,fill,stroke,'stroke-width':3}));
+ const t=mk('text',{x:b.x+12,y:b.y+28,'font-size':19,'font-weight':800,fill:'#002244'});t.textContent=b.t;g.appendChild(t);
+ b.s.forEach((s,i)=>{const e=mk('text',{x:b.x+12,y:b.y+54+i*21,'font-size':15,fill:'#334155'});e.textContent=s;g.appendChild(e)});svg.appendChild(g)});
+</script></body></html>

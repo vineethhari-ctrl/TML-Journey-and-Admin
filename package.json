@@ -16,6 +16,7 @@
     "master-pack": "tsx scripts/build-master-pack.ts",
     "ba-questionnaire": "tsx scripts/build-ba-questionnaire.ts",
     "ba-spec": "tsx scripts/build-ba-spec.ts",
+    "backend-doc": "tsx scripts/backend-doc/render-diagrams.ts && python3 scripts/backend-doc/build_doc.py",
     "training-video": "playwright test -c playwright.video.config.ts"
   },
   "dependencies": {

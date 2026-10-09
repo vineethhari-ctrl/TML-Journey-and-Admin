@@ -38,7 +38,8 @@ jobs:
           retention-days: 7
 
   # The backend database design (docs/backend/schema.sql) must load on PostgreSQL 16
-  # and pass its own rule tests (docs/backend/schema_test.sql).
+  # and pass its own rule tests (docs/backend/schema_test.sql); part 2 (masters from CRM + business control) loads on top
+  # and passes its tests (docs/backend/schema_masters_crm_test.sql).
   database-schema:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -62,4 +63,4 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
           PGDATABASE: tml
-        run: psql -v ON_ERROR_STOP=1 -f docs/backend/schema.sql -f docs/backend/schema_test.sql
+        run: psql -v ON_ERROR_STOP=1 -f docs/backend/schema.sql -f docs/backend/schema_test.sql -f docs/backend/schema_masters_crm.sql -f docs/backend/schema_masters_crm_test.sql
