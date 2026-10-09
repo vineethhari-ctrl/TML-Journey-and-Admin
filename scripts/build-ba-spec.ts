@@ -94,11 +94,17 @@ const REQUIRED: Record<string, string[]> = {
   washingJob: ['Job Code Value'], guided: ['PPL', 'Complaint Code'], exception: ['VC Number'], did: ['Parameter Name'], ptd: ['Color Code'],
 };
 const TYPE: Record<EqcFieldDef[1], string> = { text: 'Text', number: 'Number', bool: 'Yes / No', date: 'Date', select: 'Dropdown', ppl: 'Dropdown (PPL list)', fixed: 'Fixed value' };
-const behaviour = (f: EqcFieldDef) => {
+const behaviour = (f: EqcFieldDef, all: EqcFieldDef[]) => {
   const [name, type, opt] = f;
-  if (type === 'ppl') return 'Picked from the PPL list; switched off when "All PPLs" is ticked (then it means every PPL).';
-  if (name === 'Range Start KM' || name === 'Range End KM') return 'Switched off when "All KM Ranges" is ticked (then it means every range).';
-  if (name === 'All PPLs' || name === 'All KM Ranges') return 'Ticked by default on a new row.';
+  const has = (n: string) => all.some((x) => x[0] === n);
+  if (type === 'ppl') {
+    return has('All PPLs')
+      ? 'Pick one PPL (vehicle model) from the list. This field is greyed out while the tick box "All PPLs" (the field just above it) is ticked: the row then applies to every PPL.'
+      : 'Pick one PPL (vehicle model) from the list. This master has no "All PPLs" tick box, so a PPL is always required.';
+  }
+  if (name === 'Range Start KM' || name === 'Range End KM') return 'A KM number. Greyed out while the tick box "All KM Ranges" is ticked: the row then applies to every KM range.';
+  if (name === 'All PPLs') return 'Tick box (the on / off switch for the PPL field below). Ticked by default on a new row = applies to every PPL. Untick it to choose one PPL.';
+  if (name === 'All KM Ranges') return 'Tick box (the on / off switch for the KM range fields). Ticked by default on a new row = applies to every KM range. Untick it to enter a start and end KM.';
   if (name === 'Active') return 'Ticked by default. Records are never deleted, only deactivated (a reason is asked).';
   if (type === 'fixed') return `Fixed value "${opt}"; cannot be edited.`;
   if (name === 'Exception Till') return 'Blank = Permanent.';
@@ -119,7 +125,7 @@ Object.entries(EQC_SPEC).forEach(([id, m]) => {
   const master = m.name === 'Bodyshop Checklist' ? 'Bodyshop Checklist (eQC)' : m.name;
   m.fields.forEach((f, i) => {
     const opt = Array.isArray(f[2]) ? f[2].join(', ') : '';
-    const row = body(fields, ['eQC', master, '', i + 1, f[0], TYPE[f[1]], f[1] === 'ppl' ? `${EQC_PPL_LIST.length} PPLs: ${EQC_PPL_LIST.join(', ')}` : opt, REQUIRED[id]?.includes(f[0]) ? 'Yes' : f[1] === 'ppl' ? 'Yes, unless All PPLs' : '', m.keys.includes(f[0]) ? 'Yes' : '', behaviour(f), hint(f), '', ''], [12, 13]);
+    const row = body(fields, ['eQC', master, '', i + 1, f[0], TYPE[f[1]], f[1] === 'ppl' ? `${EQC_PPL_LIST.length} PPLs: ${EQC_PPL_LIST.join(', ')}` : opt, REQUIRED[id]?.includes(f[0]) ? 'Yes' : f[1] === 'ppl' ? (m.fields.some((x) => x[0] === 'All PPLs') ? 'Yes (unless "All PPLs" is ticked)' : 'Yes') : '', m.keys.includes(f[0]) ? 'Yes' : '', behaviour(f, m.fields), hint(f), '', ''], [12, 13]);
     row.getCell(12).dataValidation = { type: 'list', allowBlank: true, formulae: ['"CRM,ST"'] };
   });
 });
@@ -160,8 +166,8 @@ const beh = sheet('Behaviour', [6, 90, 22, 40], ['#', 'What the BA\'s eQC portal
   'Edit a record in the same row. Copy creates a new record from an existing one (the copy is recorded as "Added from Copy" with the source record).',
   'Duplicate check: a record is refused with "Duplicate record already exists" when the key fields (see Masters) are the same as another record, ignoring capital letters and spaces.',
   'Required fields are listed on the Fields sheet; an empty one is refused ("Required").',
-  '"All PPLs" ticked (the default) switches the PPL field off. Not ticked: the PPL must be picked from the PPL list; typing a name that is not on the list is refused.',
-  '"All KM Ranges" ticked (the default) switches the start / end KM fields off.',
+  'Where a master has an "All PPLs" tick box (General, Scheduled, Bodyshop Checklist, DID Threshold): ticked (the default) = the row applies to every PPL and the PPL field is greyed out; not ticked = one PPL must be picked from the list (a name that is not on the list is refused). Guided Check & Road Test has no tick box: its PPL is always required.',
+  'Where a master has an "All KM Ranges" tick box (General, Scheduled): ticked (the default) = every KM range, the start / end KM fields are greyed out; not ticked = enter a start and an end KM.',
   'Records are never deleted: Deactivate / Activate asks for a reason, which is kept.',
   'Every record has an audit history: date and time, user, action (Added, Modified, Activated, Deactivated, Imported), each changed field with the old and the new value, and the reason.',
   'Search across all fields, and a filter for Active / Inactive.',
