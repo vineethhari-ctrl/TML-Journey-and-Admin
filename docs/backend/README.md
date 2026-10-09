@@ -4,6 +4,7 @@
 | --- | --- |
 | **API contract** | [`public/api-docs/openapi.yaml`](../../public/api-docs/openapi.yaml), browsable at **`<portal>/api-docs/`** on the live site |
 | **Database** | [`schema.sql`](schema.sql) (PostgreSQL 16) + self-checking tests [`schema_test.sql`](schema_test.sql), run in CI on every change |
+| **Masters from CRM + business control** | [`schema_masters_crm.sql`](schema_masters_crm.sql) (part 2, loads on top of `schema.sql`) + tests [`schema_masters_crm_test.sql`](schema_masters_crm_test.sql); approach in [`MASTER_DATA_STRATEGY.md`](MASTER_DATA_STRATEGY.md); the review document for the architect is built with `npm run backend-doc` |
 | **Business rules** | Already written and unit-tested in the portal: `src/utils/eqcRules.ts`, `bodyshopRules.ts`, `bayGovernance.ts`, `holidayCalendar.ts`, `masterValidationSchema.ts`, `smartExcelImport.ts` |
 | **Status** | Design ready for review by TML IT / architecture. Today the portal keeps data in each user's browser; this backend makes it shared and production-grade. |
 
