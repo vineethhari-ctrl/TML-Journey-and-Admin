@@ -29,6 +29,7 @@ import {
 } from '../data/masterCatalogue';
 import { RETIRED_LOV_MASTER_IDS } from '../data/commonLov';
 import { resolveLovFields } from '../utils/commonLov';
+import { PUBLISHED_FILE, hasLocalChanges, parsePublished, type PublishedMasters } from '../utils/masterPublish';
 import { canRoleAccessRoute, hasPlatformPermission } from '../utils/roleAccess';
 
 export type PlatformRoleId =
@@ -90,6 +91,14 @@ interface AppContextType {
   addCustomMasterField: (masterId: string, fieldDef: MasterFieldDef, defaultValue?: any) => void;
   updateMasterFieldMapping: (masterId: string, fieldKey: string, updates: Partial<MasterFieldDef>) => void;
   resetMasterConfigs: () => void;
+  /** The published masters this browser is based on (undefined until the admin publishes). */
+  publishedInfo?: Omit<PublishedMasters, 'masters'>;
+  /** A newer published version that was not applied because this browser has its own changes. */
+  pendingPublished?: PublishedMasters;
+  /** The masters this browser started from: the published ones, else the built-in catalogue. */
+  baselineMasters: MasterConfig[];
+  loadPublishedMasters: () => void;
+  resetToPublished: () => void;
   createMaster: (config: MasterConfig) => boolean;
   importMasters: (configs: MasterConfig[], source: string) => void;
 
@@ -138,6 +147,8 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const DEFAULT_ROUTE = '/dashboard';
 const MASTER_CONFIG_STORAGE_KEY = 'tml_master_configs_v2';
 const ACTIVE_ROLE_STORAGE_KEY = 'tml_active_role_v1';
+const PUBLISHED_APPLIED_KEY = 'tml_published_applied_v1';
+const PUBLISHED_BASELINE_KEY = 'tml_published_baseline_v1';
 const PLATFORM_ROLE_IDS: PlatformRoleId[] = [
   'superAdmin',
   'serviceAdvisor',
@@ -237,6 +248,75 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   // Fields that name a Common LOV list (lovCode) always offer that list's current Active values
   const masterConfigs = useMemo(() => resolveLovFields(storedMasterConfigs), [storedMasterConfigs]);
+
+  // Published masters: the admin exports all masters (published-masters.json); once it is deployed with the app, everybody
+  // gets them. A browser with no changes of its own switches silently; one with changes is asked first (banner).
+  const [publishedInfo, setPublishedInfo] = useState<Omit<PublishedMasters, 'masters'> | undefined>(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(PUBLISHED_APPLIED_KEY) || 'null');
+      return v && Number.isInteger(v.version) ? v : undefined;
+    } catch {
+      return undefined;
+    }
+  });
+  const [pendingPublished, setPendingPublished] = useState<PublishedMasters | undefined>();
+  const baselineMasters = useMemo<MasterConfig[]>(() => {
+    if (!publishedInfo) return MASTER_COLLECTIONS;
+    try {
+      const b = JSON.parse(localStorage.getItem(PUBLISHED_BASELINE_KEY) || 'null');
+      if (Array.isArray(b)) return b;
+    } catch {
+      // fall through
+    }
+    return MASTER_COLLECTIONS;
+  }, [publishedInfo, storedMasterConfigs]);
+
+  const applyPublished = useCallback((p: PublishedMasters) => {
+    const next = mergeWithCatalogue(p.masters);
+    const { masters: _omit, ...info } = p;
+    setMasterConfigs(next);
+    persistMasterConfigs(next);
+    try {
+      localStorage.setItem(PUBLISHED_BASELINE_KEY, JSON.stringify(next));
+      localStorage.setItem(PUBLISHED_APPLIED_KEY, JSON.stringify(info));
+    } catch {
+      // storage unavailable: the masters still apply for this visit
+    }
+    setPublishedInfo(info);
+    setPendingPublished(undefined);
+  }, []);
+
+  useEffect(() => {
+    if (typeof fetch !== 'function') return;
+    let alive = true;
+    fetch(`${import.meta.env.BASE_URL}${PUBLISHED_FILE}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.text() : ''))
+      .then((text) => {
+        const p = text ? parsePublished(text) : undefined;
+        if (!p || !alive) return;
+        let applied = 0;
+        try {
+          applied = Number(JSON.parse(localStorage.getItem(PUBLISHED_APPLIED_KEY) || 'null')?.version) || 0;
+        } catch {
+          applied = 0;
+        }
+        if (p.version <= applied) return;
+        let base: MasterConfig[] = MASTER_COLLECTIONS;
+        try {
+          const b = JSON.parse(localStorage.getItem(PUBLISHED_BASELINE_KEY) || 'null');
+          if (Array.isArray(b)) base = b;
+        } catch {
+          // built-in catalogue
+        }
+        const mine = JSON.parse(localStorage.getItem(MASTER_CONFIG_STORAGE_KEY) || 'null');
+        if (!Array.isArray(mine) || !hasLocalChanges(base, mergeWithCatalogue(mine))) applyPublished(p);
+        else setPendingPublished(p);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [applyPublished]);
 
   // Active Role State for Dynamic RBAC simulation
   const [activeRoleId, setActiveRoleIdState] = useState<PlatformRoleId>(() => {
@@ -738,6 +818,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [masterConfigs, logAudit, showToast]
   );
 
+  const loadPublishedMasters = useCallback(() => {
+    if (!pendingPublished) return;
+    applyPublished(pendingPublished);
+    showToast(`Published masters v${pendingPublished.version} loaded`, 'success');
+  }, [pendingPublished, applyPublished, showToast]);
+
+  const resetToPublished = useCallback(() => {
+    const next = publishedInfo ? baselineMasters : MASTER_COLLECTIONS;
+    setMasterConfigs(next);
+    persistMasterConfigs(next);
+    showToast(publishedInfo ? `Back to published masters v${publishedInfo.version}` : 'Back to the built-in masters', 'info');
+  }, [publishedInfo, baselineMasters, showToast]);
+
   const resetMasterConfigs = useCallback(() => {
     setMasterConfigs(MASTER_COLLECTIONS);
     try {
@@ -761,6 +854,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addCustomMasterField,
         updateMasterFieldMapping,
         resetMasterConfigs,
+        publishedInfo,
+        pendingPublished,
+        baselineMasters,
+        loadPublishedMasters,
+        resetToPublished,
         createMaster,
         importMasters,
         users,
