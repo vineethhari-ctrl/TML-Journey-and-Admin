@@ -34,10 +34,10 @@ export const CONFIRMED_BA_MASTERS: ConfirmedMaster[] = [
 /** Modules whose master list the BA has confirmed. */
 export const CONFIRMED_MODULE_CODES = ['eqc', 'bodyshop'];
 
-export type BaStatus = 'Confirmed by BA' | 'In the prototype only (not in the BA file)' | 'Waiting for BA';
+export type BaStatus = 'Confirmed by BA' | 'Not in the BA-confirmed list' | 'Waiting for BA';
 
 /** Where a portal master stands with its BA. */
 export function baStatusOf(master: { id: string; moduleCode: string }): BaStatus {
   if (CONFIRMED_BA_MASTERS.some((c) => c.portalMasterIds.includes(master.id))) return 'Confirmed by BA';
-  return CONFIRMED_MODULE_CODES.includes(master.moduleCode) ? 'In the prototype only (not in the BA file)' : 'Waiting for BA';
+  return CONFIRMED_MODULE_CODES.includes(master.moduleCode) ? 'Not in the BA-confirmed list' : 'Waiting for BA';
 }
