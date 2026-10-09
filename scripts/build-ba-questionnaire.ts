@@ -1,13 +1,13 @@
 /**
  * The simple sheet for the BA leads (test data only):
- *   npm run ba-questionnaire   →   build/TML_BA_Master_Questionnaire_v2.xlsx
+ *   npm run ba-questionnaire   →   build/TML_BA_Master_Questionnaire_v3.xlsx
  * One row per master and TWO yes/no questions. The answer sheet works out the class (new ST master / CRM as it is / CRM + business control).
  * The masters the BA has confirmed (eQC, Bodyshop) are listed as the BA confirmed them; the other modules are the earlier draft list, for their BAs to correct. No portal / UI columns.
  */
 import * as fs from 'fs';
 import * as path from 'path';
 import ExcelJS from 'exceljs';
-import { MASTER_COLLECTIONS } from '../src/data/masterCatalogue';
+import { MASTER_COLLECTIONS, WORKSHOP_MODULES } from '../src/data/masterCatalogue';
 import { draftClassification } from '../src/data/masterClassification';
 import { CONFIRMED_BA_MASTERS } from '../src/data/confirmedBaMasters';
 
@@ -38,8 +38,13 @@ help.columns = [{ width: 120 }];
   ['"Our guess" is only a starting point. Please correct it.'],
   ['Green = the BA has confirmed this master (eQC and Bodyshop files). Orange = still waiting for the BA: this is the earlier draft list, so please add masters that are missing and strike out the ones you do not need.'],
   [],
+  ['BEFORE YOU SEND IT BACK: make sure ALL modules and ALL masters of yours are covered.'],
+  ['   1. Sheet "Masters": add every master that is missing in the empty blue rows at the bottom (module, master name, Q1, Q2), and strike out or mark "Not needed" in Remarks the ones you do not need.'],
+  ['   2. Sheet "Module check": for each of your modules, answer "Are all masters of this module listed?" (Yes / No), list what is missing, and add your name and the date. This is your sign-off.'],
+  [],
   ['Test data only. Nothing in this file is real Tata Motors data.'],
 ].forEach((r) => help.addRow(r));
+help.getCell('A15').font = { bold: true, color: { argb: 'FFB45309' } };
 help.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF002244' } };
 help.getCell('A5').font = { bold: true };
 help.getCell('A8').font = { bold: true };
@@ -55,16 +60,16 @@ header.eachCell((c, col) => {
   c.alignment = { wrapText: true, vertical: 'middle' };
 });
 
-interface Line { module: string; master: string; status: string; guessText: string }
+interface Line { module: string; code: string; master: string; status: string; guessText: string }
 const lines: Line[] = [];
 // 1. The masters the BA has confirmed, exactly as confirmed (eQC, Bodyshop)
-CONFIRMED_BA_MASTERS.forEach((c) => lines.push({ module: c.module, master: c.name, status: 'Confirmed by BA', guessText: 'New for ST: probably not in CRM' }));
+CONFIRMED_BA_MASTERS.forEach((c) => lines.push({ module: c.module, code: c.moduleCodes[0], master: c.name, status: 'Confirmed by BA', guessText: 'New for ST: probably not in CRM' }));
 // 2. Everything the other BAs have not shared yet: the earlier draft list, for them to correct
 const confirmedIds = new Set(CONFIRMED_BA_MASTERS.flatMap((c) => c.portalMasterIds));
 const confirmedModules = new Set(CONFIRMED_BA_MASTERS.flatMap((c) => c.moduleCodes));
 MASTER_COLLECTIONS.filter((m) => !confirmedIds.has(m.id) && !confirmedModules.has(m.moduleCode))
   .sort((a, b) => a.moduleName.localeCompare(b.moduleName) || a.name.localeCompare(b.name))
-  .forEach((m) => lines.push({ module: m.moduleName, master: m.name, status: 'Waiting for BA', guessText: guess(m.id) }));
+  .forEach((m) => lines.push({ module: m.moduleName, code: m.moduleCode, master: m.name, status: 'Waiting for BA', guessText: guess(m.id) }));
 
 const COLOUR: Record<string, string> = { 'Confirmed by BA': 'FFD1FAE5', 'Waiting for BA': 'FFFFEDD5' };
 lines.forEach((l) => {
@@ -81,7 +86,47 @@ lines.forEach((l) => {
 });
 ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: heads.length } };
 
-const targets = [path.join(outDir, 'TML_BA_Master_Questionnaire_v2.xlsx')];
-if (fs.existsSync(path.join(outDir, 'master-pack'))) targets.push(path.join(outDir, 'master-pack', 'TML_BA_Master_Questionnaire_v2.xlsx'));
+// Empty rows for masters the BAs find missing
+for (let i = 0; i < 10; i++) {
+  const row = ws.addRow(['', '', 'Added by BA', '', '', '', '', '', '']);
+  const r = row.number;
+  row.getCell(9).value = { formula: `IF(E${r}="","",IF(E${r}="No","New ST master",IF(F${r}="Yes","CRM master + business control","CRM master, used as it is")))`, result: '' };
+  row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+  row.getCell(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } };
+  for (const col of [1, 2, 5, 6, 7, 8]) row.getCell(col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF08A' } };
+  row.getCell(5).dataValidation = { type: 'list', allowBlank: true, formulae: ['"Yes,No"'] };
+  row.getCell(6).dataValidation = { type: 'list', allowBlank: true, formulae: ['"Yes,No"'] };
+  row.getCell(7).dataValidation = { type: 'list', allowBlank: true, formulae: ['"Solar,API,Not sure"'] };
+}
+
+// Sign-off: every BA confirms that all masters of every module of theirs are covered
+const check = wb.addWorksheet('Module check', { views: [{ state: 'frozen', ySplit: 1 }] });
+const cheads = ['Module', 'Masters listed', 'Status', 'Are ALL masters of this module listed? (Yes / No)', 'Masters that are missing (names)', 'Masters not needed', 'BA name', 'Date'];
+check.columns = [{ width: 44 }, { width: 14 }, { width: 24 }, { width: 28 }, { width: 50 }, { width: 40 }, { width: 22 }, { width: 14 }];
+const crow = check.addRow(cheads);
+crow.height = 34;
+crow.eachCell((c, col) => {
+  c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: col >= 4 ? 'FFB45309' : 'FF002244' } };
+  c.alignment = { wrapText: true, vertical: 'middle' };
+});
+const modules = [...WORKSHOP_MODULES.map((m) => ({ code: m.code, title: m.title })), { code: 'common', title: 'Common Masters' }];
+modules.forEach((m) => {
+  const listed = lines.filter((l) => l.code === m.code).length;
+  const confirmed = lines.some((l) => l.code === m.code && l.status === 'Confirmed by BA');
+  const row = check.addRow([m.title, listed, confirmed ? 'Confirmed by BA' : 'Waiting for BA', '', '', '', '', '']);
+  row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: confirmed ? 'FFD1FAE5' : 'FFFFEDD5' } };
+  for (const col of [4, 5, 6, 7, 8]) row.getCell(col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF08A' } };
+  row.getCell(4).dataValidation = { type: 'list', allowBlank: true, formulae: ['"Yes,No"'] };
+  row.alignment = { vertical: 'top', wrapText: true };
+});
+for (let i = 0; i < 3; i++) {
+  const row = check.addRow(['', '', 'A module not listed above', '', '', '', '', '']);
+  for (const col of [1, 4, 5, 6, 7, 8]) row.getCell(col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF08A' } };
+  row.getCell(4).dataValidation = { type: 'list', allowBlank: true, formulae: ['"Yes,No"'] };
+}
+
+const targets = [path.join(outDir, 'TML_BA_Master_Questionnaire_v3.xlsx')];
+if (fs.existsSync(path.join(outDir, 'master-pack'))) targets.push(path.join(outDir, 'master-pack', 'TML_BA_Master_Questionnaire_v3.xlsx'));
 await Promise.all(targets.map((t) => wb.xlsx.writeFile(t)));
 console.log(`questionnaire written: ${lines.length} rows, ${CONFIRMED_BA_MASTERS.length} confirmed by BA, ${lines.length - CONFIRMED_BA_MASTERS.length} waiting for their BAs`);
