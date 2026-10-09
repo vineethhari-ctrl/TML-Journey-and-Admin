@@ -52,7 +52,8 @@ help.columns = [{ width: 130 }];
   ['What is in this workbook'],
   ['  Masters      the 11 confirmed masters, with the two yes/no questions per master (yellow) and a result that fills itself.'],
   ['  Fields       every field of every master as confirmed: type, dropdown values, required, part of the duplicate check. Yellow = where does the field come from (CRM or ST).'],
-  ['  Dropdown lists   every dropdown in these masters with its values. Yellow = does the list come from CRM or is it kept in ST.'],
+  ['  Dropdown lists   every dropdown in these masters with its values. Yellow = does the list come from CRM or is it kept in ST. Lists marked "(new)" are ones WE added where the BA file had free text.'],
+  ['  Orange cells in Fields = a text field that we changed to a dropdown with sample values (the Remarks say why). BA: confirm, change the values, or tell us to put it back to text.'],
   ['  Behaviour    what the BA\'s eQC portal does (duplicate check, All PPLs, history …). Yellow = confirm that the system must do the same.'],
   ['  Open questions   things found while reading the files that need an answer before anything is built. Yellow = answer.'],
   [],
@@ -88,6 +89,39 @@ bsMasters.forEach((name) => {
   addMasterRow(['Bodyshop', name, 'Bodyshop_Master.xlsx (status Closed)', parts.reduce((n, p) => n + p.fields.length, 0), 'Not stated in the file: BA to define (see Open questions)', parts.length > 1 ? `${rows} (${parts.map((p) => `${p.rows} ${p.part.toLowerCase()}`).join(' + ')})` : rows]);
 });
 
+// ------------------------------------------------------------------ text fields we turned into dropdowns (BA to confirm)
+interface Conv { list: string; values: string[]; from: string; why: string; several?: boolean }
+const EQC_DROPDOWNS: Record<string, Record<string, Conv>> = {
+  guided: {
+    'Complaint Code': { list: 'Complaint Code', values: ['ENG-NOIS-01 · Engine & Powertrain', 'BRK-VIB-02 · Brakes & Suspension', 'BAT-SOC-03 · Electrical & Battery', 'AC-COOL-04 · HVAC & AC', 'INFO-SCR-05 · Infotainment & Connected'], from: 'CRM (complaint codes)', why: 'Typing a code by hand allows wrong codes. Sample values are the complaint codes of this portal; the BA file used "CC_01".' },
+  },
+  did: {
+    Unit: { list: 'Unit of measure (DID)', values: ['%', 'V', 'A', '°C', 'kWh', 'km/h', 'bar', 'rpm'], from: 'ST', why: 'Units should be chosen, not typed.' },
+    'Fuel Type': { list: 'Fuel Type', values: ['Petrol', 'Diesel', 'CNG', 'Electric'], from: 'CRM (fuel types)', why: 'Same list as Fuel Type in the common lists of values.' },
+    'VC Applicability': { list: 'VC Applicability', values: ['All', 'VCI', 'OBD'], from: 'ST', why: 'The BA file had free text ("All"). Sample values follow the VCI / OBD exception types; what "VC" means here is a question below.' },
+  },
+  ptd: {
+    'BU / Service Type': { list: 'BU / Service Type (PTD)', values: ['All', 'PV', 'EV'], from: 'Common list (BU) + ST', why: 'The BA file had free text ("All"). This field mixes two ideas (BU and Service Type): see the question below about splitting it.' },
+  },
+  exception: {
+    'Exception Reason': { list: 'Exception Reason', values: ['Temporary compatibility exception', 'Hardware not available', 'Software update pending', 'Other'], from: 'ST', why: 'Reasons should be a list so they can be reported on. "Other" is kept for anything else.' },
+    'Approved By': { list: 'Approver (role)', values: ['Quality Head', 'Service Manager', 'DGM', 'TML Admin'], from: 'ST (roles of Roles & Access)', why: 'Free text cannot be traced to a person or role. Sample roles; the real list comes from Roles & Access.' },
+  },
+  washing: {
+    'Image Angle Code': { list: 'Image Angle', values: ['FRONT', 'REAR', 'LEFT', 'RIGHT', 'ROOF'], from: 'ST', why: 'The BA file had free text ("FRONT"). Angles are a small fixed set.' },
+  },
+  washingJob: {
+    'Job Code Value': { list: 'Job Code (Washing)', values: ['FREE1', 'FREE2', 'PAID1', 'WASH01', 'SPEEDO01'], from: 'CRM (job codes)', why: 'A job code should be picked from the real job codes, not typed. Sample values only; the real list is the job-code master and depends on the category.' },
+  },
+};
+const BODYSHOP_DROPDOWNS: Record<string, Conv> = {
+  'Sections|Roles': { list: 'Role (Bodyshop)', values: ['DSvAdv', 'Driver'], from: 'ST (roles of Roles & Access)', several: true, why: 'The BA file has "DSvAdv, Driver" typed in one cell. A multi-select list does the same without typing errors.' },
+  'Checkpoints|Section': { list: 'Section (from the Sections table)', values: ['Documents', 'Accident Details', 'External', 'Internal', 'Inventory', 'Accessories', 'Tyre & Battery'], from: 'ST (the Sections table above)', why: 'A checkpoint must belong to a section that exists, so it is picked from the Sections table.' },
+  'Checkpoints|Acceptable Values': { list: 'Acceptable Value', values: ['OK', 'NOT OK', 'NA', 'Count'], from: 'ST', several: true, why: 'The BA file has typed lists such as "OK, NOT OK, NA". "Count" is kept as the BA used it; see the question below.' },
+};
+const newLists: Array<{ list: string; used: string; values: string[]; from: string; why: string }> = [];
+const noteNew = (c: Conv, used: string) => newLists.push({ list: c.list, used, values: c.values, from: c.from, why: c.why });
+
 // ------------------------------------------------------------------ fields
 const REQUIRED: Record<string, string[]> = {
   general: ['Checklist Item'], scheduled: ['Section', 'Sub-Section'], bodyshop: ['Section', 'Sub-Section'], washing: ['Check Description'],
@@ -120,22 +154,29 @@ const hint = (f: EqcFieldDef) => {
   if (n === 'BU') return 'Common list (PV, EV)';
   return 'New for ST';
 };
-const fields = sheet('Fields', [10, 40, 16, 6, 36, 22, 44, 11, 14, 60, 26, 30, 30], ['Module', 'Master', 'Part', '#', 'Field', 'Type', 'Dropdown values', 'Required?', 'In duplicate check?', 'Behaviour / note', 'Our guess: where does it come from?', 'Field comes from (CRM / ST)', 'Remarks'], [12, 13]);
+const fields = sheet('Fields', [10, 40, 16, 6, 36, 22, 44, 11, 14, 60, 44, 26, 30, 44], ['Module', 'Master', 'Part', '#', 'Field', 'Type', 'Dropdown values', 'Required?', 'In duplicate check?', 'Behaviour / note', 'Changed by us (BA to confirm)', 'Our guess: where does it come from?', 'Field comes from (CRM / ST)', 'Remarks'], [13, 14]);
 Object.entries(EQC_SPEC).forEach(([id, m]) => {
   const master = m.name === 'Bodyshop Checklist' ? 'Bodyshop Checklist (eQC)' : m.name;
   m.fields.forEach((f, i) => {
+    const conv = f[1] === 'text' ? EQC_DROPDOWNS[id]?.[f[0]] : undefined;
+    if (conv) noteNew(conv, `${master}: ${f[0]}`);
     const opt = Array.isArray(f[2]) ? f[2].join(', ') : '';
-    const row = body(fields, ['eQC', master, '', i + 1, f[0], TYPE[f[1]], f[1] === 'ppl' ? `${EQC_PPL_LIST.length} PPLs: ${EQC_PPL_LIST.join(', ')}` : opt, REQUIRED[id]?.includes(f[0]) ? 'Yes' : f[1] === 'ppl' ? (m.fields.some((x) => x[0] === 'All PPLs') ? 'Yes (unless "All PPLs" is ticked)' : 'Yes') : '', m.keys.includes(f[0]) ? 'Yes' : '', behaviour(f, m.fields), hint(f), '', ''], [12, 13]);
-    row.getCell(12).dataValidation = { type: 'list', allowBlank: true, formulae: ['"CRM,ST"'] };
+    const values = conv ? `${conv.list}: ${conv.values.join(', ')}` : f[1] === 'ppl' ? `${EQC_PPL_LIST.length} PPLs: ${EQC_PPL_LIST.join(', ')}` : opt;
+    const row = body(fields, ['eQC', master, '', i + 1, f[0], conv ? 'Dropdown' : TYPE[f[1]], values, REQUIRED[id]?.includes(f[0]) ? 'Yes' : f[1] === 'ppl' ? (m.fields.some((x) => x[0] === 'All PPLs') ? 'Yes (unless "All PPLs" is ticked)' : 'Yes') : '', m.keys.includes(f[0]) ? 'Yes' : '', behaviour(f, m.fields), conv ? 'Text in the BA file, changed to a dropdown with sample values' : '', conv ? conv.from : hint(f), '', conv ? `Changed from text to a dropdown. ${conv.why}` : ''], [13, 14]);
+    row.getCell(13).dataValidation = { type: 'list', allowBlank: true, formulae: ['"CRM,ST"'] };
+    if (conv) row.getCell(11).fill = fill('FFFED7AA');
   });
 });
 BODYSHOP_PARTS.forEach((p) =>
   p.fields.forEach((f, i) => {
-    const row = body(fields, ['Bodyshop', p.master, p.part, i + 1, f.name, f.type, (f.values ?? []).join(', '), 'BA to fill', 'BA to fill', f.note ?? '', f.name === 'Role' || f.name === 'Roles' ? 'Looks like roles (Roles & Access)' : f.name === 'BU' ? 'Common list (PV, EV)' : 'New for ST', '', ''], [12, 13]);
-    row.getCell(12).dataValidation = { type: 'list', allowBlank: true, formulae: ['"CRM,ST"'] };
+    const conv = BODYSHOP_DROPDOWNS[`${p.part}|${f.name}`];
+    if (conv) noteNew(conv, `${p.master} (${p.part}): ${f.name}`);
+    const row = body(fields, ['Bodyshop', p.master, p.part, i + 1, f.name, conv ? (conv.several ? 'Dropdown (several can be picked)' : 'Dropdown') : f.type, conv ? `${conv.list}: ${conv.values.join(', ')}` : (f.values ?? []).join(', '), 'BA to fill', 'BA to fill', f.note ?? '', conv ? 'Text in the BA file, changed to a dropdown with sample values' : '', conv ? conv.from : f.name === 'Role' || f.name === 'Roles' ? 'Looks like roles (Roles & Access)' : f.name === 'BU' ? 'Common list (PV, EV)' : 'New for ST', '', conv ? `Changed from text to a dropdown. ${conv.why}` : ''], [13, 14]);
+    row.getCell(13).dataValidation = { type: 'list', allowBlank: true, formulae: ['"CRM,ST"'] };
+    if (conv) row.getCell(11).fill = fill('FFFED7AA');
   })
 );
-fields.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 13 } };
+fields.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 14 } };
 
 // ------------------------------------------------------------------ dropdown lists
 const lists = sheet('Dropdown lists', [30, 56, 80, 24, 30], ['List', 'Used in', 'Values', 'List comes from (CRM / ST)', 'Remarks'], [4, 5]);
@@ -157,6 +198,7 @@ BODYSHOP_PARTS.forEach((p) => p.fields.filter((f) => f.values && f.type !== 'Yes
   bsLists.set(f.name, e);
 }));
 bsLists.forEach((e, name) => body(lists, [`${name} (Bodyshop)`, [...e.used].join(', '), e.values.join(', '), '', ''], [4, 5]));
+newLists.forEach((n) => body(lists, [`${n.list} (new)`, n.used, n.values.join(', '), n.from, `New list proposed by us: the BA file had free text. ${n.why} Sample values, BA to confirm.`], [4, 5]));
 body(lists, ['Yes / No flags', 'Active, Mandatory and similar flags', 'Y, N (Bodyshop) · ticked / not ticked (eQC)', '', 'The two files write it differently: confirm one way.'], [4, 5]);
 
 // ------------------------------------------------------------------ behaviour
@@ -181,18 +223,18 @@ beh.getColumn(3).eachCell({ includeEmpty: false }, (c, r) => { if (r > 1) c.data
 const qs = sheet('Open questions', [6, 14, 36, 90, 56, 40], ['#', 'Module', 'Master', 'Question', 'Why it matters', 'Answer'], [6]);
 [
   ['eQC', 'Guided Check & Road Test', '"Guided Steps" is one free-text field (e.g. "Verify concern; Visual inspection; VCI/DTC check"). Is that final, or should the steps be a separate master with one row per step and a sequence?', 'One text field cannot be reordered, reused or reported on. A separate master can.'],
-  ['eQC', 'Guided Check & Road Test', 'Complaint Code is typed by hand (e.g. CC_01). Should it be picked from the CRM complaint-code master?', 'Typing allows wrong codes; picking keeps one source of truth.'],
+  ['eQC', 'Guided Check & Road Test', 'DONE BY US: Complaint Code is now a dropdown (sample codes of this portal; the BA file typed "CC_01"). Please confirm that the real list is the CRM complaint-code master, and give its codes.', 'Typing allows wrong codes; picking keeps one source of truth.'],
   ['eQC', 'General, Scheduled, Bodyshop (eQC), Guided Check, DID Threshold', 'The PPL list (14 values) is fixed inside the file. Is the source the CRM PL / PPL master, and should Business be able to choose which PPLs appear here?', 'This is the PL / PPL example of business control in the architect\'s mail.'],
-  ['eQC', 'DID Threshold Mapping', 'Fuel Type and VC Applicability are free text ("EV", "All"). Which values are allowed? Is Fuel Type a CRM list?', 'Free text creates spellings that never match.'],
-  ['eQC', 'PTD Risk Configuration', '"BU / Service Type" is free text ("All"). Which values are allowed (PV, EV, All; which service types)? And do Green and Breached need thresholds, or only Orange and Red?', 'Needed to define the dropdown and to know whether all four colours must have a row.'],
+  ['eQC', 'DID Threshold Mapping', 'DONE BY US: Fuel Type is now a dropdown (Petrol, Diesel, CNG, Electric) and VC Applicability a dropdown (All, VCI, OBD), Unit a dropdown. Please confirm the values, and tell us what "VC" means here.', 'Free text creates spellings that never match.'],
+  ['eQC', 'PTD Risk Configuration', 'DONE BY US: "BU / Service Type" is now a dropdown (All, PV, EV). It mixes two ideas: should it be two fields, BU and Service Type? Also: do Green and Breached need thresholds, or only Orange and Red?', 'Needed to define the fields and to know whether all four colours must have a row.'],
   ['eQC', 'Washing Checklist', '"AI Validation Enabled" is a Yes / No flag. What happens when it is Yes, and who validates the photos? BU has said no AI may run in the application.', 'If it calls an AI service at run time, BU will not accept it. If it is only a flag for another system, say which.'],
   ['eQC', 'General, Scheduled, DID, Washing Job Code', 'Duplicate check keys: e.g. General = BU + Checklist Item + KM range + PPL. Is the same item allowed for different KM ranges or PPLs? For DID, are Fuel Type and VC Applicability part of the key?', 'The key decides what counts as a duplicate.'],
   ['eQC', 'Washing Job Code, DID, VCI / OBD Exceptions', 'Effective From / To dates: may two records with the same key have overlapping dates? What should happen at the end date?', 'The BA\'s page does not check overlaps.'],
-  ['eQC', 'VCI / OBD Exceptions', '"Approved By" is free text. Should it be a user or role picked from the system?', 'Free text cannot be traced to a person.'],
+  ['eQC', 'VCI / OBD Exceptions', 'DONE BY US: Approved By is now a dropdown of roles, and Exception Reason a dropdown with "Other". Please confirm the roles and the reasons.', 'Free text cannot be traced to a person or role.'],
   ['eQC', 'All', 'Import from Excel in the BA\'s page does not check duplicates or required fields. The system will check them. Confirm.', 'Wrong rows would otherwise get in unnoticed.'],
   ['Bodyshop', 'Inventory Capture + Insurance Document Collection', '"Insurance Copy" and "Police Complaint Report" appear in both masters (as sub-sections of the Documents section, and as insurance documents). Which master owns them?', 'The same document defined twice will drift apart.'],
-  ['Bodyshop', 'Inventory Capture Master', 'Roles is typed as "DSvAdv, Driver". Should it be a multi-select from the roles of the system? Are DSvAdv and Driver the final codes?', 'Needed to link a section to roles in Roles & Access.'],
-  ['Bodyshop', 'Inventory Capture Master', 'Acceptable Values is typed text ("OK, NOT OK, NA", "OK", "Count"). Which values are allowed, and is "Count" a different kind of checkpoint (a number to enter)?', 'A fixed list or a type is needed for the mobile app.'],
+  ['Bodyshop', 'Inventory Capture Master', 'DONE BY US: Roles is now a multi-select dropdown (DSvAdv, Driver). Are there more roles, and are DSvAdv and Driver the final codes?', 'Needed to link a section to roles in Roles & Access.'],
+  ['Bodyshop', 'Inventory Capture Master', 'DONE BY US: Acceptable Values is now a multi-select dropdown (OK, NOT OK, NA, Count) and a checkpoint\'s Section is picked from the Sections table. Is "Count" a different kind of checkpoint (a number to enter)?', 'A fixed list or a type is needed for the mobile app.'],
   ['Bodyshop', 'Inventory Capture Master', 'Some sub-section sequences and some checkpoint rows are blank. Are sequences mandatory? What decides the order when blank?', 'Order on the mobile screen.'],
   ['Bodyshop', 'Inventory Capture Master', 'Sections are listed once for PV and once for EV with the same content. Is a copy per BU needed, or should one row say "PV, EV"? The checkpoints table has no BU column: do they follow the BU of their section?', 'Avoids maintaining everything twice.'],
   ['Bodyshop', 'Inventory Capture Master', 'Service Type is on both tables (sections and checkpoints). Which one wins if they differ?', 'Needed to decide which checkpoints show for an accident job.'],
