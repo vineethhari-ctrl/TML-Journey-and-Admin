@@ -1,6 +1,6 @@
 /**
  * The specification workbook for the masters the BA has CONFIRMED (eQC, Bodyshop). Test data only.
- *   npm run ba-spec   →   build/TML_eQC_Bodyshop_Master_Spec.xlsx
+ *   npm run ba-spec   →   build/TML_eQC_Bodyshop_Master_Spec_v2.xlsx
  * For the Solution Architect and the BAs: every master and field as confirmed, plus the yellow cells to confirm (in CRM? business
  * control? where does each field come from?) and the open questions found while reading the BA's files.
  */
@@ -50,6 +50,7 @@ help.columns = [{ width: 130 }];
   ['Built from the BA\'s own files: "eQC Master Management Portal v11" (HTML) and "Bodyshop_Master.xlsx". Test data only.'],
   [],
   ['What is in this workbook'],
+  ['  Changes made   the free-text fields we turned into dropdowns in this version (start here if you saw the earlier file).'],
   ['  Masters      the 11 confirmed masters, with the two yes/no questions per master (yellow) and a result that fills itself.'],
   ['  Fields       every field of every master as confirmed: type, dropdown values, required, part of the duplicate check. Yellow = where does the field come from (CRM or ST).'],
   ['  Dropdown lists   every dropdown in these masters with its values. Yellow = does the list come from CRM or is it kept in ST. Lists marked "(new)" are ones WE added where the BA file had free text.'],
@@ -66,6 +67,11 @@ help.columns = [{ width: 130 }];
 ].forEach((r) => help.addRow(r));
 help.getCell('A1').font = { bold: true, size: 14, color: { argb: NAVY } };
 ['A4', 'A11'].forEach((a) => (help.getCell(a).font = { bold: true }));
+
+// ------------------------------------------------------------------ changes made (filled at the end, shown second)
+const VERSION = 'v2';
+const changesSheet = sheet('Changes made', [8, 12, 40, 30, 22, 26, 80, 60], ['#', 'Module', 'Master', 'Field', 'Was (BA file)', 'Now', 'Dropdown values (sample, BA to confirm)', 'Why'], []);
+const changeLog: Array<(string | number)[]> = [];
 
 // ------------------------------------------------------------------ masters
 const masters = sheet('Masters', [12, 44, 36, 8, 52, 14, 18, 28, 20, 36, 38], ['Module', 'Master', 'Source file', 'Fields', 'Duplicate check (record is a duplicate when these are the same)', 'Rows in file', 'Q1. Already in CRM?', 'Q2. Business wants to switch records on / off in ST?', 'How will ST read it from CRM?', 'Remarks', 'Result (fills itself)'], [7, 8, 9, 10]);
@@ -121,6 +127,7 @@ const BODYSHOP_DROPDOWNS: Record<string, Conv> = {
 };
 const newLists: Array<{ list: string; used: string; values: string[]; from: string; why: string }> = [];
 const noteNew = (c: Conv, used: string) => newLists.push({ list: c.list, used, values: c.values, from: c.from, why: c.why });
+const logChange = (module: string, master: string, field: string, c: Conv) => changeLog.push([module, master, field, 'Free text', c.several ? 'Dropdown (several can be picked)' : 'Dropdown', `${c.list}: ${c.values.join(', ')}`, c.why]);
 
 // ------------------------------------------------------------------ fields
 const REQUIRED: Record<string, string[]> = {
@@ -159,7 +166,7 @@ Object.entries(EQC_SPEC).forEach(([id, m]) => {
   const master = m.name === 'Bodyshop Checklist' ? 'Bodyshop Checklist (eQC)' : m.name;
   m.fields.forEach((f, i) => {
     const conv = f[1] === 'text' ? EQC_DROPDOWNS[id]?.[f[0]] : undefined;
-    if (conv) noteNew(conv, `${master}: ${f[0]}`);
+    if (conv) { noteNew(conv, `${master}: ${f[0]}`); logChange('eQC', master, f[0], conv); }
     const opt = Array.isArray(f[2]) ? f[2].join(', ') : '';
     const values = conv ? `${conv.list}: ${conv.values.join(', ')}` : f[1] === 'ppl' ? `${EQC_PPL_LIST.length} PPLs: ${EQC_PPL_LIST.join(', ')}` : opt;
     const row = body(fields, ['eQC', master, '', i + 1, f[0], conv ? 'Dropdown' : TYPE[f[1]], values, REQUIRED[id]?.includes(f[0]) ? 'Yes' : f[1] === 'ppl' ? (m.fields.some((x) => x[0] === 'All PPLs') ? 'Yes (unless "All PPLs" is ticked)' : 'Yes') : '', m.keys.includes(f[0]) ? 'Yes' : '', behaviour(f, m.fields), conv ? 'Text in the BA file, changed to a dropdown with sample values' : '', conv ? conv.from : hint(f), '', conv ? `Changed from text to a dropdown. ${conv.why}` : ''], [13, 14]);
@@ -170,7 +177,7 @@ Object.entries(EQC_SPEC).forEach(([id, m]) => {
 BODYSHOP_PARTS.forEach((p) =>
   p.fields.forEach((f, i) => {
     const conv = BODYSHOP_DROPDOWNS[`${p.part}|${f.name}`];
-    if (conv) noteNew(conv, `${p.master} (${p.part}): ${f.name}`);
+    if (conv) { noteNew(conv, `${p.master} (${p.part}): ${f.name}`); logChange('Bodyshop', `${p.master} (${p.part})`, f.name, conv); }
     const row = body(fields, ['Bodyshop', p.master, p.part, i + 1, f.name, conv ? (conv.several ? 'Dropdown (several can be picked)' : 'Dropdown') : f.type, conv ? `${conv.list}: ${conv.values.join(', ')}` : (f.values ?? []).join(', '), 'BA to fill', 'BA to fill', f.note ?? '', conv ? 'Text in the BA file, changed to a dropdown with sample values' : '', conv ? conv.from : f.name === 'Role' || f.name === 'Roles' ? 'Looks like roles (Roles & Access)' : f.name === 'BU' ? 'Common list (PV, EV)' : 'New for ST', '', conv ? `Changed from text to a dropdown. ${conv.why}` : ''], [13, 14]);
     row.getCell(13).dataValidation = { type: 'list', allowBlank: true, formulae: ['"CRM,ST"'] };
     if (conv) row.getCell(11).fill = fill('FFFED7AA');
@@ -244,7 +251,14 @@ const qs = sheet('Open questions', [6, 14, 36, 90, 56, 40], ['#', 'Module', 'Mas
 ].forEach((q, i) => body(qs, [i + 1, q[0], q[1], q[2], q[3], ''], [6]));
 qs.getColumn(6).eachCell({ includeEmpty: false }, (c, r) => { if (r > 1) c.fill = fill(YELLOW); });
 
-const target = path.join(outDir, 'TML_eQC_Bodyshop_Master_Spec.xlsx');
+changeLog.forEach((c, i) => body(changesSheet, [i + 1, ...c]));
+changesSheet.insertRow(1, [`Version ${VERSION}: ${changeLog.length} fields were free text in the BA files. We turned them into dropdowns with sample values. They are also orange in the Fields sheet (column K) and have a "(new)" list on the Dropdown lists sheet. BA: confirm, change the values, or tell us to put a field back to text.`]);
+changesSheet.getRow(1).font = { bold: true };
+changesSheet.mergeCells('A1:H1');
+changesSheet.getRow(1).alignment = { wrapText: true, vertical: 'middle' };
+changesSheet.getRow(1).height = 44;
+changesSheet.views = [{ state: 'frozen', ySplit: 2 }];
+const target = path.join(outDir, `TML_eQC_Bodyshop_Master_Spec_${VERSION}.xlsx`);
 await wb.xlsx.writeFile(target);
 const nFields = Object.values(EQC_SPEC).reduce((n, m) => n + m.fields.length, 0) + BODYSHOP_PARTS.reduce((n, p) => n + p.fields.length, 0);
 console.log(`spec written: ${Object.keys(EQC_SPEC).length + bsMasters.length} masters, ${nFields} fields, sample rows in file: ${Object.values(EQC_SAMPLE).flat().length}`);
