@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Layers,
   Users,
+  Share2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { SmartExcelPicture, SMART_TEMPLATE_FILE } from '../components/administration/SmartExcelPicture';
@@ -141,6 +142,7 @@ const TOC = [
   ['common', 'Common Masters & Lists of Values'],
   ['rules', 'Rules (no coding)'],
   ['shortcuts', 'Shortcuts'],
+  ['sharing', 'Sharing masters (publish & send changes)'],
   ['employees', 'Employees, roles & skills'],
   ['smart', 'Smart Excel Import (detailed)'],
   ['choose', 'Which option to use'],
@@ -385,6 +387,29 @@ export const MasterGuidePage: React.FC = () => {
             [<><strong>Ctrl+K</strong></>, 'Search any screen, e.g. "upload", "lov" or "guide".'],
           ]}
         />
+      </Section>
+
+      <Section id="sharing" title="Sharing masters: publish, and send your changes" icon={Share2}>
+        <p>
+          In this prototype every browser keeps its own copy of the masters. Until the shared database exists, use <strong>Masters Maintenance → Share</strong> to get
+          everybody onto the same masters. <strong>Test data only</strong>: the portal site is public.
+        </p>
+        <Table
+          head={['Who', 'Menu item', 'What it does']}
+          rows={[
+            ['TML Admin (master owner)', <><strong>Share → Publish all masters</strong></>, 'Ticks the "test data only" confirmation, then saves published-masters.json with every master, field, rule and row. Send the file to the person who deploys the portal. After the next deployment everybody sees these masters.'],
+            ['Any BA', <><strong>Share → Send my changes for review</strong></>, 'Lists what you added or changed and saves it as an Excel file in the Upload a Master format (only your rows). Email it to the master owner, who drops it on Upload a Master, checks the result and imports it.'],
+            ['Anyone', <><strong>Share → Back to published masters</strong></>, 'Removes your own changes in this browser and returns to the published masters.'],
+          ]}
+        />
+        <p>
+          <strong>New published version:</strong> a browser with no changes of its own switches silently. A browser with changes of its own shows a banner:
+          <em> Send my changes first</em> or <em>Load published masters</em> (loading replaces your own changes). A green line at the top shows which published version you are on.
+        </p>
+        <p>
+          Changes to <strong>fields or rules</strong> cannot travel as rows: send the BA workbook for those masters (Export → Whole group (Excel)).
+          Removed rows are not sent; set a row to Inactive instead of deleting it.
+        </p>
       </Section>
 
       <Section id="employees" title="Employees, roles & skills" icon={Users}>

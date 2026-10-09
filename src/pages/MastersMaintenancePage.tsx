@@ -80,8 +80,11 @@ import {
   LayoutGrid,
   ChevronDown,
   Table2,
+  Share2,
+  RotateCcw,
 } from 'lucide-react';
 import { masterExportUtil } from '../utils/masterExportUtil';
+import { PublishMastersDialog, SendChangesDialog, PublishedBanner } from '../components/administration/MasterSharing';
 import { mergeImportedRecords } from '../utils/recordMerge';
 
 // Icon helper function for rendering module icons
@@ -195,6 +198,7 @@ export const MastersMaintenancePage: React.FC = () => {
     masterConfigs,
     updateMasterConfig,
     resetMasterConfigs,
+    resetToPublished,
   } = useApp();
 
   // Dual Admin Role Context: [Dealer Admin] vs [TML Admin] - default to TML Admin to enable full enterprise schema customization
@@ -232,6 +236,8 @@ export const MastersMaintenancePage: React.FC = () => {
 
   // On-the-fly master creation (form) and BA workbook import
   const [isCreateMasterOpen, setIsCreateMasterOpen] = useState(false);
+  const [isPublishOpen, setIsPublishOpen] = useState(false);
+  const [isChangesOpen, setIsChangesOpen] = useState(false);
   const [isWorkbookImportOpen, setIsWorkbookImportOpen] = useState(false);
   const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
 
@@ -1550,6 +1556,25 @@ export const MastersMaintenancePage: React.FC = () => {
             ]}
           />
 
+          <ToolbarMenu
+            label="Share"
+            icon={Share2}
+            className="bg-sky-700 hover:bg-sky-600 border-sky-300/40"
+            items={[
+              {
+                label: 'Publish all masters',
+                hint: 'Save every master as one file so everybody sees them',
+                icon: Upload,
+                onClick: () => {
+                  if (adminRole !== 'TML Admin') return showToast('Switch to TML Admin to publish masters', 'error');
+                  setIsPublishOpen(true);
+                },
+              },
+              { label: 'Send my changes for review', hint: 'Only the rows you added or changed, as Excel', icon: FileSpreadsheet, onClick: () => setIsChangesOpen(true) },
+              { label: 'Back to published masters', hint: 'Remove my own changes in this browser', icon: RotateCcw, onClick: resetToPublished },
+            ]}
+          />
+
           <button
             onClick={() => navigate('/admin/masters-guide')}
             aria-label="BA Guide"
@@ -1560,6 +1585,8 @@ export const MastersMaintenancePage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      <PublishedBanner onSendChanges={() => setIsChangesOpen(true)} />
 
       {/* ======================================================================= */}
       {/* 4. MODULE SUB-FILTER & SEARCH STRIP                                     */}
@@ -2078,6 +2105,8 @@ export const MastersMaintenancePage: React.FC = () => {
     </>
   )}
 
+      <PublishMastersDialog isOpen={isPublishOpen} onClose={() => setIsPublishOpen(false)} />
+      <SendChangesDialog isOpen={isChangesOpen} onClose={() => setIsChangesOpen(false)} />
       <CreateMasterModal
         isOpen={isCreateMasterOpen}
         onClose={() => setIsCreateMasterOpen(false)}

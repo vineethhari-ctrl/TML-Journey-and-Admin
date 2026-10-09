@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "templates": "tsx scripts/generate-master-templates.ts",
+    "master-pack": "tsx scripts/build-master-pack.ts",
     "training-video": "playwright test -c playwright.video.config.ts"
   },
   "dependencies": {
