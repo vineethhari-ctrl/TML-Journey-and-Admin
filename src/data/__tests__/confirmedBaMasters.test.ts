@@ -16,11 +16,11 @@ describe('masters confirmed by the BA', () => {
       'Bodyshop Checklist (eQC)', 'Washing Checklist', 'Washing Job Code Master', 'VCI / OBD Exceptions',
     ]);
   });
-  it('status: confirmed, prototype-only (eQC / Bodyshop not in the file), or waiting', () => {
+  it('status: confirmed, not in the BA-confirmed list (eQC / Bodyshop), or waiting', () => {
     const m = (id: string) => MASTER_COLLECTIONS.find((x) => x.id === id)!;
     expect(baStatusOf(m('eqc_general_checklist'))).toBe('Confirmed by BA');
-    expect(baStatusOf(m('torque_verification_standards'))).toBe('In the prototype only (not in the BA file)');
-    expect(baStatusOf(m('paint_booth_schedule'))).toBe('In the prototype only (not in the BA file)');
+    expect(baStatusOf(m('torque_verification_standards'))).toBe('Not in the BA-confirmed list');
+    expect(baStatusOf(m('paint_booth_schedule'))).toBe('Not in the BA-confirmed list');
     expect(baStatusOf(m('thd_users'))).toBe('Waiting for BA');
   });
 });
