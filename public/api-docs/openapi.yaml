@@ -59,6 +59,12 @@ tags:
     description: Fleet flag — chassis numbers uploaded as Fleet; every other vehicle is Individual
   - name: Journeys
     description: The ID chain under a Job Card (Appointment → Visit → SR → Pre-JC → JC, MRs) and customer updates
+  - name: Configuration
+    description: System settings (session, security, notification, journey) — typed, range-checked, with history. Database part 3.
+  - name: Devices & sessions
+    description: Sign-in, devices (approval, block), sessions (timeouts, terminate), failed sign-ins and locks. Database part 3.
+  - name: Default views
+    description: What each role starts with (cards, header tabs, list columns). TML Admin only; users personalise for the session only.
 
 paths:
   /me:
@@ -1147,6 +1153,7 @@ paths:
         - { name: from, in: query, schema: { type: string, format: date-time } }
         - { name: to, in: query, schema: { type: string, format: date-time } }
         - { name: q, in: query, schema: { type: string } }
+        - { name: securityOnly, in: query, description: Only security-relevant and DPDP actions (audit_log_security), schema: { type: boolean } }
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
       responses:
@@ -1161,6 +1168,376 @@ paths:
                   items: { type: array, items: { $ref: '#/components/schemas/AuditEntry' } }
                   nextCursor: { type: [string, 'null'] }
 
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  # ---------------------------------------------------------------- Audit coverage (part 3)
+  /audit-actions:
+    get:
+      tags: [Notifications & audit]
+      summary: Catalogue of every audit action (who writes it, security / DPDP flags)
+      description: Actions with `writtenBy = DB` are written by the database itself; the API must not write them again.
+      operationId: listAuditActions
+      responses:
+        '200':
+          description: Catalogue
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/AuditAction' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ---------------------------------------------------------------- Configuration (part 3)
+  /settings:
+    get:
+      tags: [Configuration]
+      summary: All system settings with their current value, default, range and version
+      operationId: listSettings
+      parameters:
+        - { name: group, in: query, schema: { type: string, enum: [SESSION, SECURITY, NOTIFICATION, JOURNEY] } }
+      responses:
+        '200':
+          description: Settings
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/Setting' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /settings/{settingKey}:
+    parameters:
+      - { name: settingKey, in: path, required: true, schema: { type: string }, example: session.timeout_minutes }
+    put:
+      tags: [Configuration]
+      summary: Change one setting (TML Admin)
+      description: |
+        Calls `set_system_setting`. The type, the range and cross-setting rules (idle timeout ≤ session timeout) are checked
+        in the database. `If-Match` carries the `rowVersion` the admin saw; a newer version returns 412.
+      operationId: updateSetting
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: { type: [integer, boolean] }
+                reason: { type: string, maxLength: 300 }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { $ref: '#/components/schemas/Setting' } } } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+  /settings/{settingKey}/history:
+    parameters:
+      - { name: settingKey, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Configuration]
+      summary: Every change of a setting (old, new, who, when, why)
+      operationId: getSettingHistory
+      responses:
+        '200':
+          description: History, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        oldValue: { type: [integer, boolean, 'null'] }
+                        newValue: { type: [integer, boolean] }
+                        reason: { type: [string, 'null'] }
+                        changedBy: { type: string }
+                        changedAt: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ---------------------------------------------------------------- Devices & sessions (part 3)
+  /sessions:
+    post:
+      tags: [Devices & sessions]
+      summary: Start a portal session after TML SSO sign-in
+      description: |
+        Registers or recognises the device (`register_device`), then calls `start_session`. A new device is PENDING when
+        device registration is required: the call returns 403 with `deviceStatus: PENDING` and the TML admins are notified.
+        Above the concurrent-session limit the user's least recently used session ends (SUPERSEDED).
+        The raw device identifier is hashed (SHA-256) by the API and never stored.
+      operationId: startSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceFingerprint, deviceType]
+              properties:
+                deviceFingerprint: { type: string, description: Stable device identifier from the client; hashed by the API }
+                deviceType: { type: string, enum: [Desktop, Laptop, Tablet, Mobile, Workshop Device] }
+                operatingSystem: { type: string }
+                browser: { type: string }
+                location: { type: string }
+      responses:
+        '201': { description: Session started, content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Account not ACTIVE (locked, suspended …) or device not ACTIVE (PENDING approval, BLOCKED, INACTIVE)
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    get:
+      tags: [Devices & sessions]
+      summary: Sessions screen (TML Admin; Dealer Admin sees own dealer only)
+      operationId: listSessions
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [ACTIVE, IDLE, TERMINATED] } }
+        - { name: userId, in: query, schema: { type: string } }
+        - { name: deviceId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Sessions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Session' } }
+                  nextCursor: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /sessions/current:
+    delete:
+      tags: [Devices & sessions]
+      summary: Sign out (end_session LOGOUT); the session-only layout is discarded
+      operationId: signOut
+      responses:
+        '204': { description: Signed out }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /sessions/{sessionId}/terminate:
+    parameters: [{ name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }]
+    post:
+      tags: [Devices & sessions]
+      summary: End one session (admin)
+      operationId: terminateSession
+      responses:
+        '204': { description: Ended }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /sessions/terminate:
+    post:
+      tags: [Devices & sessions]
+      summary: End all sessions of a user, of a device, or of everybody except the caller (admin)
+      operationId: terminateSessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope]
+              properties:
+                scope: { type: string, enum: [user, device, all] }
+                value: { type: string, description: userId or deviceId; ignored for `all` (the caller's own sessions stay open) }
+      responses:
+        '200': { description: How many ended, content: { application/json: { schema: { type: object, properties: { ended: { type: integer } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /devices:
+    get:
+      tags: [Devices & sessions]
+      summary: Devices screen (TML Admin; Dealer Admin sees own dealer only)
+      operationId: listDevices
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [PENDING, ACTIVE, INACTIVE, BLOCKED] } }
+        - { name: userId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Device' } }
+                  nextCursor: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /devices/{deviceId}/actions:
+    parameters: [{ name: deviceId, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [Devices & sessions]
+      summary: Approve, block, unblock, deactivate or reactivate a device
+      description: Calls `set_device_status`. BLOCK needs a reason. BLOCK and DEACTIVATE end the device's open sessions.
+      operationId: deviceAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [APPROVE, BLOCK, UNBLOCK, DEACTIVATE, REACTIVATE] }
+                reason: { type: string, maxLength: 200 }
+      responses:
+        '200': { description: New state, content: { application/json: { schema: { $ref: '#/components/schemas/Device' } } } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /devices/{deviceId}/events:
+    parameters: [{ name: deviceId, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [Devices & sessions]
+      summary: Status history of a device
+      operationId: listDeviceEvents
+      responses:
+        '200':
+          description: Events, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        event: { type: string, enum: [REGISTERED, APPROVED, BLOCKED, UNBLOCKED, DEACTIVATED, REACTIVATED] }
+                        oldStatus: { type: [string, 'null'] }
+                        newStatus: { type: string }
+                        reason: { type: [string, 'null'] }
+                        byUser: { type: string }
+                        at: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /login-attempts:
+    get:
+      tags: [Devices & sessions]
+      summary: Sign-in attempts (successful and failed), for the security review
+      operationId: listLoginAttempts
+      parameters:
+        - { name: userId, in: query, schema: { type: string } }
+        - { name: failedOnly, in: query, schema: { type: boolean } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Attempts, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        userId: { type: [string, 'null'] }
+                        loginName: { type: [string, 'null'] }
+                        ipAddress: { type: [string, 'null'] }
+                        deviceId: { type: [string, 'null'] }
+                        succeeded: { type: boolean }
+                        failureReason: { type: [string, 'null'] }
+                        attemptedAt: { type: string, format: date-time }
+                  nextCursor: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ---------------------------------------------------------------- Default views (part 3)
+  /ui-catalogue:
+    get:
+      tags: [Default views]
+      summary: Everything a default view can refer to (cards, header tabs, lists and their columns)
+      operationId: getUiCatalogue
+      responses:
+        '200':
+          description: Active catalogue
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cards: { type: array, items: { type: object, properties: { cardId: { type: string }, label: { type: string } } } }
+                  tabs: { type: array, items: { type: object, properties: { tabId: { type: string }, label: { type: string } } } }
+                  lists:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        listId: { type: string }
+                        label: { type: string }
+                        columns: { type: array, items: { type: object, properties: { columnKey: { type: string }, label: { type: string }, isPii: { type: boolean } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/default-view:
+    get:
+      tags: [Default views]
+      summary: What the signed-in user starts with (effective_default_view of their role)
+      description: Personal changes are kept by the portal for the session only and are never sent to the server.
+      operationId: getMyDefaultView
+      responses:
+        '200': { description: Effective view, content: { application/json: { schema: { $ref: '#/components/schemas/DefaultView' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /default-views/{roleId}:
+    parameters:
+      - { name: roleId, in: path, required: true, schema: { type: string }, description: 'A role id, or `*` for the default of every role without its own view' }
+    get:
+      tags: [Default views]
+      summary: The effective view of a role (its own, else the default for all roles)
+      operationId: getDefaultView
+      responses:
+        '200': { description: Effective view, content: { application/json: { schema: { $ref: '#/components/schemas/DefaultView' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Default views]
+      summary: Save a role's default view (TML Admin only)
+      description: Calls `save_default_view`; every rule is checked before anything is written. Returns the new version.
+      operationId: saveDefaultView
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/DefaultViewInput' }
+                - { type: object, properties: { reason: { type: string, maxLength: 300 } } }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { type: object, properties: { version: { type: integer } } } } } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [Default views]
+      summary: Reset a role to the default for all roles (history keeps the old versions)
+      operationId: resetDefaultView
+      responses:
+        '204': { description: Reset }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /default-views/{roleId}/history:
+    parameters: [{ name: roleId, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [Default views]
+      summary: Every saved version and reset of a role's default view
+      operationId: getDefaultViewHistory
+      responses:
+        '200':
+          description: Versions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        version: { type: integer }
+                        policy: { type: object, description: 'The saved view, or {"reset": true}' }
+                        reason: { type: [string, 'null'] }
+                        changedBy: { type: string }
+                        changedAt: { type: string, format: date-time }
         '401': { $ref: '#/components/responses/Unauthorized' }
 components:
   securitySchemes:
@@ -1778,7 +2155,7 @@ components:
         type: { type: string, enum: [EXCEPTION, SECURITY, USER, DEVICE, CONFIG, APPROVAL] }
         title: { type: string }
         message: { type: string }
-        targetPath: { type: string, example: /admin/bay-approvals?request=… }
+        targetPath: { type: string, example: '/admin/bay-approvals?request=…' }
         createdAt: { type: string, format: date-time }
         read: { type: boolean }
 
@@ -1863,3 +2240,110 @@ components:
               linkedId: { type: string }
               status: { type: string, enum: [SENT, DELIVERED, FAILED] }
               sentAt: { type: string, format: date-time }
+
+    AuditAction:
+      type: object
+      properties:
+        action: { type: string }
+        module: { type: string }
+        description: { type: string }
+        writtenBy: { type: string, enum: [APP, DB] }
+        isSecurity: { type: boolean }
+        isDpdp: { type: boolean }
+
+    Setting:
+      type: object
+      required: [settingKey, group, label, valueType, value, defaultValue, rowVersion]
+      properties:
+        settingKey: { type: string, example: session.timeout_minutes }
+        group: { type: string, enum: [SESSION, SECURITY, NOTIFICATION, JOURNEY] }
+        label: { type: string }
+        portalField: { type: [string, 'null'], example: sessionTimeoutMinutes }
+        valueType: { type: string, enum: [INTEGER, BOOLEAN] }
+        value: { type: [integer, boolean] }
+        defaultValue: { type: [integer, boolean] }
+        minValue: { type: [integer, 'null'] }
+        maxValue: { type: [integer, 'null'] }
+        unit: { type: [string, 'null'] }
+        description: { type: string }
+        enforcedBy: { type: string, enum: [APP, SSO] }
+        rowVersion: { type: integer }
+        updatedAt: { type: string, format: date-time }
+        updatedBy: { type: string }
+
+    Device:
+      type: object
+      required: [deviceId, userId, deviceType, status]
+      properties:
+        deviceId: { type: string, example: DEV-3F2A9C10B4 }
+        userId: { type: string }
+        deviceType: { type: string, enum: [Desktop, Laptop, Tablet, Mobile, Workshop Device] }
+        operatingSystem: { type: [string, 'null'] }
+        browser: { type: [string, 'null'] }
+        lastIpAddress: { type: [string, 'null'] }
+        lastLocation: { type: [string, 'null'] }
+        status: { type: string, enum: [PENDING, ACTIVE, INACTIVE, BLOCKED] }
+        statusReason: { type: [string, 'null'] }
+        firstRegisteredAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time }
+
+    Session:
+      type: object
+      required: [sessionId, userId, deviceId, startedAt, status]
+      properties:
+        sessionId: { type: string, format: uuid }
+        userId: { type: string }
+        userName: { type: string }
+        deviceId: { type: string }
+        deviceType: { type: string }
+        ipAddress: { type: [string, 'null'] }
+        location: { type: [string, 'null'] }
+        startedAt: { type: string, format: date-time }
+        lastActivityAt: { type: string, format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+        endReason:
+          type: [string, 'null']
+          enum: [LOGOUT, TIMEOUT, IDLE_TIMEOUT, TERMINATED_BY_ADMIN, SUPERSEDED, DEVICE_BLOCKED, DEVICE_DEACTIVATED,
+                 USER_SUSPENDED, USER_LOCKED, USER_INACTIVE, PASSWORD_CHANGED, null]
+        status: { type: string, enum: [ACTIVE, IDLE, TERMINATED] }
+
+    ColumnLayout:
+      type: object
+      required: [visible]
+      properties:
+        visible: { type: array, items: { type: string }, minItems: 1, description: Visible columns in display order }
+        hidden: { type: array, items: { type: string } }
+        pinnedLeft: { type: array, items: { type: string } }
+        pinnedRight: { type: array, items: { type: string } }
+
+    DefaultViewInput:
+      type: object
+      required: [cards, tabs]
+      properties:
+        cards:
+          type: object
+          required: [allowed]
+          properties:
+            allowed: { type: array, items: { type: string }, minItems: 1, description: A card not listed never appears for the role }
+            order: { type: array, items: { type: string } }
+            hidden: { type: array, items: { type: string } }
+        tabs:
+          type: object
+          required: [allowed, landing]
+          properties:
+            allowed: { type: array, items: { type: string }, minItems: 1 }
+            order: { type: array, items: { type: string } }
+            hidden: { type: array, items: { type: string } }
+            landing: { type: string, description: Must be an allowed, visible tab }
+        columns:
+          type: object
+          description: Per list id; lists not given use the default for all roles
+          additionalProperties: { $ref: '#/components/schemas/ColumnLayout' }
+
+    DefaultView:
+      allOf:
+        - { $ref: '#/components/schemas/DefaultViewInput' }
+        - type: object
+          properties:
+            role: { type: string }
+            source: { type: string, description: 'The role whose own view is used, or `*`' }

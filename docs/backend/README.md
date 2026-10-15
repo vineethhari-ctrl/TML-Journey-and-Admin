@@ -5,6 +5,7 @@
 | **API contract** | [`public/api-docs/openapi.yaml`](../../public/api-docs/openapi.yaml), browsable at **`<portal>/api-docs/`** on the live site |
 | **Database** | [`schema.sql`](schema.sql) (PostgreSQL 16) + self-checking tests [`schema_test.sql`](schema_test.sql), run in CI on every change |
 | **Masters from CRM + business control** | [`schema_masters_crm.sql`](schema_masters_crm.sql) (part 2, loads on top of `schema.sql`) + tests [`schema_masters_crm_test.sql`](schema_masters_crm_test.sql); approach in [`MASTER_DATA_STRATEGY.md`](MASTER_DATA_STRATEGY.md); the review document for the architect is built with `npm run backend-doc` |
+| **Platform: configuration, devices, sessions, default views, audit coverage** | [`schema_platform.sql`](schema_platform.sql) (part 3, loads on top of parts 1 and 2) + tests [`schema_platform_test.sql`](schema_platform_test.sql); summary in section 14 below; endpoints under the tags *Configuration*, *Devices & sessions* and *Default views* of the API contract |
 | **Business rules** | Already written and unit-tested in the portal: `src/utils/eqcRules.ts`, `bodyshopRules.ts`, `bayGovernance.ts`, `holidayCalendar.ts`, `masterValidationSchema.ts`, `smartExcelImport.ts` |
 | **Status** | Design ready for review by TML IT / architecture. Today the portal keeps data in each user's browser; this backend makes it shared and production-grade. |
 
@@ -259,11 +260,33 @@ The screens stay the same; each context function swaps its `setState` for an API
 - Mail relay for approval e-mails; object storage for files and GC images.
 - Data retention for audit and import files.
 
+## 14. Part 3: configuration, devices, sessions, default views, audit coverage
+
+Part 3 gives the Admin Portal screens **Configuration, Devices, Sessions and Default Views** a shared, governed home, and makes
+the **Audit Log** complete. Identity and passwords stay with TML SSO; part 3 stores only what the portal itself must control.
+
+| Area | Tables | Rules enforced in the database |
+| --- | --- | --- |
+| Configuration | `system_setting`, `system_setting_history` | 16 portal settings + 1 new (`session.history_retention_days`); typed (number / switch), range-checked, idle timeout ≤ session timeout; stale saves refused (`row_version`); history and audit on every change |
+| Devices | `user_device`, `user_device_event` | Only a SHA-256 fingerprint is stored. A new device is PENDING until a TML admin approves it (when *Device registration required* is on) and the admins get a notification. Block needs a reason; blocking or deactivating ends the device's sessions |
+| Sessions | `user_session`, `login_attempt`, view `user_session_status` | Sign-in refused for a user or device that is not ACTIVE; concurrent limit ends the least recently used session; session and idle timeouts; an ended session can never be reopened; suspending, locking or deactivating a user, or an SSO password change, ends their sessions; *N* failed sign-ins in a row lock the account for the configured time (admins notified) and the lock lifts itself at the next sign-in after that time; housekeeping removes history older than the retention |
+| Default views | `ui_card`, `ui_tab`, `ui_list`, `ui_list_column`, `default_view_policy`, `default_view_card / _tab / _column`, `default_view_history` | Per role, with `*` as the default for every role without its own view. At least one card and two tabs visible, landing tab visible, pinned columns visible, unknown or retired items refused; versions and history; personal layouts are **not** stored (BU decision 6 Oct 2026: session only) |
+| Audit coverage | `audit_action_catalog`, views `audit_log_uncatalogued`, `audit_log_security` | Every action is catalogued with who writes it (14 by the database, the rest by the API), whether it is security-relevant and whether it is a DPDP personal-data access (`UNMASK_PII`, `CTI_CALL`, `EXPORT_WORKLIST`). The governance view must stay empty |
+
+Housekeeping jobs the API runs: `expire_sessions()` every few minutes, `purge_session_history()` daily.
+Every API request calls `touch_session(sessionId)`; `false` means "sign in again".
+
+Decisions for the architect (part 3): which role's default view a user with several roles gets (proposal: a fixed role
+priority, TML_ADMIN first); whether workshop devices report a MAC address through MDM (the column is ready, browsers cannot read it);
+whether failed sign-ins at SSO are forwarded to the portal (otherwise only portal-side failures count towards the lock).
+
 ## Verify locally
 
 ```bash
 # Database: load the schema and run its tests (needs PostgreSQL 16)
-createdb tml && psql -d tml -v ON_ERROR_STOP=1 -f docs/backend/schema.sql -f docs/backend/schema_test.sql
+createdb tml && psql -d tml -v ON_ERROR_STOP=1 -f docs/backend/schema.sql -f docs/backend/schema_test.sql \
+  -f docs/backend/schema_masters_crm.sql -f docs/backend/schema_masters_crm_test.sql \
+  -f docs/backend/schema_platform.sql -f docs/backend/schema_platform_test.sql
 # API contract
 npx @redocly/cli lint public/api-docs/openapi.yaml
 ```
