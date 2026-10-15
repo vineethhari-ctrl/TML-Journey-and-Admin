@@ -2334,7 +2334,7 @@ components:
             allowed: { type: array, items: { type: string }, minItems: 1 }
             order: { type: array, items: { type: string } }
             hidden: { type: array, items: { type: string } }
-            landing: { type: string, description: Must be an allowed, visible tab }
+            landing: { type: string, description: 'Must be an allowed, visible tab' }
         columns:
           type: object
           description: Per list id; lists not given use the default for all roles
