@@ -11,7 +11,7 @@ doc = start('TML Service Transformation · Platform backend design (part 3) · d
 para('TML Service Transformation', bold=True, size=12, color=RGBColor(0x0B, 0x4F, 0x8A), space_after=2)
 para('Platform backend design (part 3)', bold=True, size=26, color=NAVY, space_after=2)
 para('Configuration, devices, sessions, default views and audit coverage of the Admin Portal', size=14, color=RGBColor(0x47, 0x55, 0x69), space_after=10)
-para('For: Solution Architect · Draft for review · 15 October 2026 · Test data only', italic=True, size=10, space_after=12)
+para('For: Solution Architect · Draft for review · version 2 · 18 October 2026 · Test data only', italic=True, size=10, space_after=12)
 
 doc.add_heading('1. In one page', level=1)
 para('Parts 1 and 2 of the database design cover the masters (the generic master engine, and masters from CRM with the business control layer). '
@@ -24,7 +24,7 @@ bullets([
     ('Nothing is missed in the audit. ', 'Every audit action is catalogued with who writes it (the database or the API) and whether it is security-relevant or a DPDP personal-data access. A governance view lists any action nobody catalogued; it must stay empty.'),
 ])
 para('The design is delivered as a database script for PostgreSQL 16 (schema_platform.sql, on top of parts 1 and 2) and is proven by a self-checking test '
-     '(103 checks and 56 refused wrong actions) that runs on every change together with the tests of parts 1 and 2. Section 11 lists the decisions we need from the architect.', space_after=8)
+     '(103 checks and 56 refused wrong actions) that runs on every change together with the tests of parts 1 and 2. Section 11 lists the decisions we need from the architect (11 in this version).', space_after=8)
 
 doc.add_heading('2. What part 3 covers', level=1)
 table(['Admin Portal screen', 'Tables', 'API (tag in the contract)'], [
@@ -146,7 +146,7 @@ bullets([
 
 # ------------------------------------------------------------------ api
 doc.add_heading('10. API list', level=1)
-para('The full contract (request and response shapes, errors) is in public/api-docs/openapi.yaml, under the tags Configuration, Devices & sessions and Default views.')
+para('The full contract (request and response shapes, errors) is in public/api-docs/openapi.yaml (85 operations in all), under the tags Configuration, Devices & sessions, Default views and Users & roles, plus the rule endpoints under Rule resolution.')
 table(['Method and path', 'Purpose', 'Who'], [
     ['GET /settings', 'All settings with value, default, range, version', 'TML Admin'],
     ['PUT /settings/{key}', 'Change one setting (If-Match = version)', 'TML Admin'],
@@ -166,6 +166,15 @@ table(['Method and path', 'Purpose', 'Who'], [
     ['GET /default-views/{role}/history', 'Versions of a role\'s view', 'TML Admin'],
     ['GET /audit-actions', 'The audit catalogue', 'TML Admin'],
     ['GET /audit-log?securityOnly=true', 'Security review of the audit', 'TML Admin'],
+    ['POST /rules/thd/auto-trigger', 'Which auto-THD rules fire for a job card event; which are pending a value from business', 'Portal, dealer apps'],
+    ['POST /rules/claims/route', 'Who approves an authorization request of a given amount', 'Portal, dealer apps'],
+    ['POST /rules/claims/goodwill-category', 'Issue Type and Category for an Issue Description', 'Portal, dealer apps'],
+    ['GET / POST /users, GET / PATCH /users/{id}', 'List, create, change users and their roles', 'TML Admin, Dealer Admin (own dealer)'],
+    ['POST /users/{id}/status', 'Activate, suspend, deactivate, unlock', 'TML Admin, Dealer Admin (own dealer)'],
+    ['POST /imports  (kind USER_LIST)', 'Bulk upload of users: preview, then commit', 'TML Admin, Dealer Admin (own dealer)'],
+    ['GET / POST /roles, GET / PATCH /roles/{id}', 'Roles', 'TML Admin'],
+    ['PUT /roles/{id}/permissions', 'Save the permission matrix of a role', 'TML Admin'],
+    ['GET / PUT /employees/{id}/profile', 'Employment details, skills, certificates', 'TML Admin'],
 ], widths=[2.3, 3.0, 1.7], font=9)
 
 # ------------------------------------------------------------------ decisions
@@ -179,6 +188,9 @@ table(['#', 'Question', 'Default in this design'], [
     ['6', 'Retention of ended sessions and sign-in attempts', '180 days (new setting)'],
     ['7', 'Scheduler for housekeeping (expire_sessions, purge_session_history)', 'The API\'s scheduler; pg_cron is an alternative'],
     ['8', 'Password expiry in Configuration', 'Kept for reference only (enforced_by = SSO); can be hidden'],
+    ['9', 'The portal\'s user record has department, zone and workshop; the database holds none of these on the user (region comes from the dealer). Where should they live?', 'Not stored yet; proposal: department from the employee profile, zone and region from the dealer, workshop from the dealer division'],
+    ['10', 'Users created by bulk upload: ACTIVE at once, or PENDING until the first SSO sign-in?', 'ACTIVE (the database default), unless the file has a Status column'],
+    ['11', 'Dealer scope for the user list: add row-level security on the user table in the database?', 'Not yet; for now the API enforces that a Dealer Admin sees and changes only their own dealer\'s users'],
 ], widths=[0.4, 3.2, 3.4])
 
 # ------------------------------------------------------------------ guarantees
@@ -198,10 +210,11 @@ para('Proof: schema_platform_test.sql (103 checks and 56 refused wrong actions) 
 
 doc.add_heading('13. Not covered yet', level=1)
 bullets([
+    'The rule endpoints for THD and Claims, and the API for users, roles and bulk upload of users, were added in version 2 (section 10). Their worked examples are proven against the portal\'s rules by an automated test.',
     'Part 4: the TML Journey tables (journey events, stages, exceptions, escalations). The journey settings above are ready for it; the tables follow once the BA teams confirm the journey masters.',
     'The SSO integration itself (token validation, role mapping from AD groups) and the scheduler: decisions for TML IT.',
     'Switching the portal screens from browser storage to these APIs.',
 ])
 para('Files: docs/backend/schema_platform.sql (the design), schema_platform_test.sql (the tests), README.md section 14, and the API contract public/api-docs/openapi.yaml. Test data only: no real Tata Motors data is used.', italic=True, size=9.5)
 
-save('TML_Platform_Backend_Design_Part3.docx')
+save('TML_Platform_Backend_Design_Part3_v2.docx')
