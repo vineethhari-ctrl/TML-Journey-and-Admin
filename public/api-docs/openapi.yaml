@@ -65,6 +65,8 @@ tags:
     description: Sign-in, devices (approval, block), sessions (timeouts, terminate), failed sign-ins and locks. Database part 3.
   - name: Default views
     description: What each role starts with (cards, header tabs, list columns). TML Admin only; users personalise for the session only.
+  - name: Users & roles
+    description: Users, their roles and status, role permissions, employee profiles. Bulk upload of users goes through /imports (kind USER_LIST).
 
 paths:
   /me:
@@ -389,6 +391,10 @@ paths:
         - `BA_WORKBOOK`: the TML master-definition workbook (Masters / Fields / record sheets)
         - `BULK_RECORDS`: rows for one existing master (`masterId` required)
         - `FLEET_LIST`: fleet chassis numbers (needs the fleet-upload privilege); `mode` = MERGE (add / update) or REPLACE
+        - `USER_LIST`: users and their roles. Columns: Employee ID, Name, E-mail, Mobile, User type, Dealer code, Role (and
+          optionally Status, default ACTIVE). The preview reports duplicates (same employee ID or e-mail, in the file or already
+          in the system), unknown roles, unknown dealer codes, a dealer role without a dealer code, and invalid e-mail or
+          mobile numbers, each with the Excel row. Needs permission to create users; a Dealer Admin can only upload users of their own dealer.
       operationId: createImport
       requestBody:
         required: true
@@ -1539,6 +1545,338 @@ paths:
                         changedBy: { type: string }
                         changedAt: { type: string, format: date-time }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  # ---------------------------------------------------------------- THD and Claims rules
+  /rules/thd/auto-trigger:
+    post:
+      tags: [Rule resolution]
+      summary: Which auto-THD rules fire for a job card event, and which are still waiting for a value from business
+      description: |
+        Same rules as the portal's THD Rule Tester (`src/utils/thdRules.ts`). The server reads the active rows of the THD
+        masters (auto-trigger rules, critical complaints per PPL), so the caller sends only what it knows about the job card.
+        - Only rows with Status = Active are used.
+        - A critical complaint applies to its own PPL only; a critical row without a PPL never raises a case.
+        - A rule whose Time Window is still blank (X / Y pending from business) never fires; it is returned under `pending`.
+        - `fired` is in rule-number order.
+      operationId: evaluateThdAutoTrigger
+      security: [{ sso: [] }, { dealerApp: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ThdEvent' }
+            examples:
+              criticalAtCreation:
+                summary: A critical complaint (PPL Nexon, code E32) in a new job card
+                value: { ppl: Nexon, complaintCodes: [E32] }
+              criticalAddedLater:
+                summary: The same complaint added 5 hours after the job card was created
+                value: { ppl: Nexon, complaintCodes: [E32], hoursSinceCriticalAddedLater: 5 }
+      responses:
+        '200':
+          description: Rules that fire and rules that are pending
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ThdTriggerResponse' }
+              examples:
+                criticalAtCreation:
+                  value:
+                    fired:
+                      - ruleNo: 2
+                        scenarioCode: CRITICAL_AT_JC_CREATION
+                        businessCondition: A Critical Complaint (PPL-CC list) is added in the Job Card.
+                        triggerPoint: Job Card Creation
+                        thdTag: Critical / Escalation
+                        assignedTo: DET
+                        escalationComplaint: Yes/No
+                        reason: Critical complaint E32 in the Job Card.
+                    pending: []
+                criticalAddedLater:
+                  summary: Rule 3 would apply, but its Time Window (X) is still pending from business
+                  value:
+                    fired: []
+                    pending:
+                      - ruleNo: 3
+                        scenarioCode: CRITICAL_AFTER_JC_CREATION
+                        reason: Would apply, but the Time Window is still pending from business.
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+  /rules/claims/route:
+    post:
+      tags: [Rule resolution]
+      summary: Who approves an Authorization Request (Warranty / AMC / EW) of a given amount
+      description: |
+        Same rules as the portal's Claims Rule Tester (`src/utils/claimRules.ts`), over the active rows of the Warranty Approval Matrix.
+        Levels are visited in order until one can approve. The limit is inclusive (a level that approves up to 20,000 approves 20,000).
+        A blank limit means no upper limit. If no level can approve, `approver` is null and `gap` says who is missing from the matrix.
+      operationId: routeAuthorizationRequest
+      security: [{ sso: [] }, { dealerApp: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClaimRouteRequest' }
+            examples:
+              aboveFirstLimit: { value: { amount: 20001 } }
+      responses:
+        '200':
+          description: The levels visited and the approver
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClaimRouteResponse' }
+              examples:
+                aboveFirstLimit:
+                  value:
+                    steps:
+                      - { level: 1, persona: Claim Manager, canApprove: false, reminderHours: 24 }
+                      - { level: 2, persona: CCM/ACCM, canApprove: false, reminderHours: 24 }
+                      - { level: 3, persona: SHQ Lead 1, canApprove: true, reminderHours: 24 }
+                    approver: SHQ Lead 1
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+  /rules/claims/goodwill-category:
+    post:
+      tags: [Rule resolution]
+      summary: Issue Type and Request Category of a Goodwill Request for an Issue Description
+      description: Same rule as `goodwillCategory` in `src/utils/claimRules.ts` (active rows of the Goodwill Category master, matched without regard to case).
+      operationId: resolveGoodwillCategory
+      security: [{ sso: [] }, { dealerApp: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [issueDescription]
+              properties:
+                issueDescription: { type: string, example: Thermal Incident }
+      responses:
+        '200':
+          description: 'Mapping, or mapped = false when the Issue Description is not in the master'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GoodwillCategoryResponse' }
+              examples:
+                mapped: { value: { mapped: true, issueType: Catastrophic Situation, category: Red } }
+                unmapped: { value: { mapped: false } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+
+  # ---------------------------------------------------------------- Users & roles
+  /users:
+    get:
+      tags: [Users & roles]
+      summary: 'Users (TML Admin: all; Dealer Admin: own dealer only)'
+      operationId: listUsers
+      parameters:
+        - { name: q, in: query, description: 'Matches name, employee ID, e-mail or user ID', schema: { type: string } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/UserStatus' } }
+        - { name: role, in: query, schema: { type: string } }
+        - { name: userType, in: query, schema: { $ref: '#/components/schemas/UserType' } }
+        - { name: dealerCode, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/User' } }
+                  nextCursor: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Users & roles]
+      summary: Create a user
+      description: |
+        Writes the audit entry "User Created". Rules:
+        - Employee ID and name are required; the e-mail must be valid and unique; the employee ID must be unique.
+        - The mobile number, when given, must be a valid 10-digit Indian number (`+91` allowed).
+        - `dealerCode` is required when the user holds a dealer role (for example DEALER_ADMIN) and must be an existing dealer.
+        - Every role must exist and be active. A Dealer Admin can only create users of their own dealer and cannot give TML roles.
+        - Passwords are never stored: sign-in is by TML SSO.
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserInput' }
+      responses:
+        '201':
+          description: Created
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /users/{userId}:
+    parameters: [{ name: userId, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [Users & roles]
+      summary: One user
+      operationId: getUser
+      responses:
+        '200':
+          description: The user
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Users & roles]
+      summary: Change a user's details or roles
+      description: Writes the audit entry "User Updated" (old and new roles). The same rules as when creating apply to the fields that are sent. Status is changed with `/users/{userId}/status`.
+      operationId: updateUser
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserPatch' }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+  /users/{userId}/status:
+    parameters: [{ name: userId, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [Users & roles]
+      summary: Activate, suspend, deactivate or unlock a user
+      description: |
+        - `ACTIVATE`: PENDING, INACTIVE or SUSPENDED → ACTIVE (audit "User Activated").
+        - `SUSPEND`: ACTIVE → SUSPENDED, reason required (audit "User Suspended").
+        - `DEACTIVATE`: any other status → INACTIVE.
+        - `UNLOCK`: LOCKED → ACTIVE (lifts an automatic or admin lock and clears the failed sign-in count).
+        Suspending, locking or deactivating a user ends all their sessions at once (done by the database).
+        A user cannot suspend or deactivate themselves.
+      operationId: setUserStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [ACTIVATE, SUSPEND, DEACTIVATE, UNLOCK] }
+                reason: { type: string, maxLength: 200 }
+      responses:
+        '200': { description: New state, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /roles:
+    get:
+      tags: [Users & roles]
+      summary: Roles with their user counts
+      operationId: listRoles
+      responses:
+        '200':
+          description: Roles
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Role' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Users & roles]
+      summary: Create a role (TML Admin)
+      description: The role id is upper case letters, digits and underscores, up to 40 characters, and cannot be changed later. A new role starts with no permissions.
+      operationId: createRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoleInput' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Role' } } } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /roles/{roleId}:
+    parameters: [{ name: roleId, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [Users & roles]
+      summary: One role with its permission matrix
+      operationId: getRole
+      responses:
+        '200': { description: The role, content: { application/json: { schema: { $ref: '#/components/schemas/Role' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Users & roles]
+      summary: Change a role's name, description or active flag (TML Admin)
+      description: Writes the audit entry "Role Updated". A role that active users still hold cannot be made inactive (409).
+      operationId: updateRole
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roleName: { type: string, maxLength: 100 }
+                description: { type: string }
+                isActive: { type: boolean }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { $ref: '#/components/schemas/Role' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+  /roles/{roleId}/permissions:
+    parameters: [{ name: roleId, in: path, required: true, schema: { type: string } }]
+    put:
+      tags: [Users & roles]
+      summary: Save the permission matrix of a role (TML Admin)
+      description: Replaces the whole matrix of the role in one transaction. Writes the audit entry "Permissions Matrix Saved" with the number of changed cells.
+      operationId: saveRolePermissions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissions]
+              properties:
+                permissions: { type: array, items: { $ref: '#/components/schemas/RolePermission' } }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { $ref: '#/components/schemas/Role' } } } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /employees/{employeeId}/profile:
+    parameters: [{ name: employeeId, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [Users & roles]
+      summary: Employment details, skills and certificates of an employee
+      operationId: getEmployeeProfile
+      responses:
+        '200': { description: Profile, content: { application/json: { schema: { $ref: '#/components/schemas/EmployeeProfile' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Users & roles]
+      summary: Save employment details, skills and certificates
+      description: Writes "Employee Profile Updated" and, when skills or certificates changed, "Employee Skills Updated". A certificate cannot expire before it was issued.
+      operationId: saveEmployeeProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmployeeProfile' }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { $ref: '#/components/schemas/EmployeeProfile' } } } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
   securitySchemes:
     sso:
@@ -1660,7 +1998,7 @@ components:
     BU: { type: string, enum: [PV, EV, CV] }
     ApprovalStatus: { type: string, enum: [Draft, Approved, Pending Approval, Rejected] }
     DealerTargetModule: { type: string, enum: [vehicle_journey, job_card, reception, workshop_floor, general] }
-    ImportKind: { type: string, enum: [SMART_EXCEL, BA_WORKBOOK, BULK_RECORDS, FLEET_LIST] }
+    ImportKind: { type: string, enum: [SMART_EXCEL, BA_WORKBOOK, BULK_RECORDS, FLEET_LIST, USER_LIST] }
 
     Me:
       type: object
@@ -2347,3 +2685,191 @@ components:
           properties:
             role: { type: string }
             source: { type: string, description: 'The role whose own view is used, or `*`' }
+
+    ThdEvent:
+      type: object
+      required: [ppl, complaintCodes]
+      description: What the dealer system knows about the job card or THD case when it checks the rules.
+      properties:
+        ppl: { type: string, example: Nexon }
+        complaintCodes: { type: array, items: { type: string } }
+        aggregates: { type: array, items: { type: string }, description: Aggregates of the complaint codes in this job card (repeat-complaint rule) }
+        previousJobCard:
+          type: object
+          required: [daysSinceClosure, aggregates]
+          properties:
+            daysSinceClosure: { type: integer, minimum: 0 }
+            aggregates: { type: array, items: { type: string } }
+        hoursSinceCriticalAddedLater: { type: number, minimum: 0, description: Hours since a critical complaint was added after JC creation; leave out when not added later }
+        jobCardOpenHours: { type: number, minimum: 0 }
+        delayReason: { type: string }
+        qiMarkedThdRequired: { type: boolean }
+        openEscalation: { type: boolean }
+        criticalDtcReceived: { type: boolean }
+        thdUnattendedHours: { type: number, minimum: 0, description: Hours an existing THD case has been unattended by DET }
+
+    ThdTriggerResponse:
+      type: object
+      required: [fired, pending]
+      properties:
+        fired:
+          type: array
+          items:
+            type: object
+            required: [ruleNo, scenarioCode, reason]
+            properties:
+              ruleNo: { type: integer }
+              scenarioCode:
+                type: string
+                enum: [REPEAT_COMPLAINT, CRITICAL_AT_JC_CREATION, CRITICAL_AFTER_JC_CREATION, DELAY_REASON, QI_THD_REQUIRED, OPEN_ESCALATION, CRITICAL_DTC, THD_UNATTENDED]
+              businessCondition: { type: string }
+              triggerPoint: { type: string }
+              thdTag: { type: string }
+              assignedTo: { type: string }
+              escalationComplaint: { type: string }
+              reason: { type: string }
+        pending:
+          type: array
+          description: Rules that would apply but whose Time Window is still pending from business
+          items:
+            type: object
+            required: [ruleNo, scenarioCode, reason]
+            properties:
+              ruleNo: { type: integer }
+              scenarioCode: { type: string }
+              reason: { type: string }
+
+    ClaimRouteRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: number, minimum: 0, description: Amount of the request in rupees, example: 20001 }
+
+    ClaimRouteResponse:
+      type: object
+      required: [steps, approver]
+      properties:
+        steps:
+          type: array
+          items:
+            type: object
+            required: [level, persona, canApprove, reminderHours]
+            properties:
+              level: { type: integer }
+              persona: { type: string }
+              canApprove: { type: boolean }
+              reminderHours: { type: integer }
+        approver: { type: [string, 'null'], description: The persona that approves; null when no level can }
+        gap: { type: string, description: Only when approver is null }
+
+    GoodwillCategoryResponse:
+      type: object
+      required: [mapped]
+      properties:
+        mapped: { type: boolean }
+        issueType: { type: string }
+        category: { type: string }
+
+    UserType: { type: string, enum: [CRM, NON-CRM, ADMIN] }
+    UserStatus: { type: string, enum: [ACTIVE, INACTIVE, SUSPENDED, LOCKED, PENDING] }
+
+    UserInput:
+      type: object
+      required: [userId, employeeId, fullName, email, userType, roles]
+      properties:
+        userId: { type: string, maxLength: 60, description: The SSO subject or employee ID }
+        employeeId: { type: string, maxLength: 30 }
+        fullName: { type: string, maxLength: 150 }
+        email: { type: string, format: email, maxLength: 200 }
+        mobile: { type: string, maxLength: 20, example: '+91 98200 12345' }
+        userType: { $ref: '#/components/schemas/UserType' }
+        dealerCode: { type: [string, 'null'], description: Required for dealer roles }
+        roles: { type: array, minItems: 1, items: { type: string } }
+
+    UserPatch:
+      type: object
+      description: Any of the fields of UserInput except `userId`.
+      properties:
+        employeeId: { type: string }
+        fullName: { type: string }
+        email: { type: string, format: email }
+        mobile: { type: string }
+        userType: { $ref: '#/components/schemas/UserType' }
+        dealerCode: { type: [string, 'null'] }
+        roles: { type: array, minItems: 1, items: { type: string } }
+
+    User:
+      allOf:
+        - { $ref: '#/components/schemas/UserInput' }
+        - type: object
+          required: [status]
+          properties:
+            status: { $ref: '#/components/schemas/UserStatus' }
+            lockedUntil: { type: [string, 'null'], format: date-time, description: Set by an automatic lock; null with status LOCKED = locked by an admin }
+            lockReason: { type: [string, 'null'] }
+            lastLoginAt: { type: [string, 'null'], format: date-time }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+
+    RolePermission:
+      type: object
+      required: [module]
+      properties:
+        module: { type: string, example: MASTERS }
+        view: { type: boolean }
+        create: { type: boolean }
+        edit: { type: boolean }
+        approve: { type: boolean }
+        delete: { type: boolean }
+        export: { type: boolean }
+
+    RoleInput:
+      type: object
+      required: [roleId, roleName]
+      properties:
+        roleId: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,39}$', example: SERVICE_ADVISOR }
+        roleName: { type: string, maxLength: 100 }
+        description: { type: string }
+
+    Role:
+      type: object
+      required: [roleId, roleName, isActive]
+      properties:
+        roleId: { type: string }
+        roleName: { type: string }
+        description: { type: [string, 'null'] }
+        isActive: { type: boolean }
+        userCount: { type: integer }
+        permissions: { type: array, items: { $ref: '#/components/schemas/RolePermission' } }
+
+    EmployeeProfile:
+      type: object
+      required: [employeeId, designation]
+      properties:
+        employeeId: { type: string }
+        designation: { type: string }
+        employmentType: { type: string, default: Permanent }
+        lifecycle: { type: string, enum: [Active, On Leave, On Notice, Left], default: Active }
+        joinedOn: { type: [string, 'null'], format: date }
+        shiftCode: { type: string, default: GEN }
+        saExpertise: { type: [string, 'null'], enum: [Mechanical, Bodyshop, Both, null], description: Service Advisors only }
+        skills:
+          type: array
+          items:
+            type: object
+            required: [skillCode, level]
+            properties:
+              skillCode: { type: string }
+              level: { type: string, enum: [L1, L2, L3, L4] }
+              since: { type: [string, 'null'], format: date }
+              source: { type: string, enum: [LMS, Assessment, Manual], default: Manual }
+        certifications:
+          type: array
+          items:
+            type: object
+            required: [certCode, issuedOn, expiresOn]
+            properties:
+              certCode: { type: string }
+              issuedOn: { type: string, format: date }
+              expiresOn: { type: string, format: date }
+              certificateNo: { type: [string, 'null'] }

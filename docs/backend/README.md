@@ -280,6 +280,29 @@ Decisions for the architect (part 3): which role's default view a user with seve
 priority, TML_ADMIN first); whether workshop devices report a MAC address through MDM (the column is ready, browsers cannot read it);
 whether failed sign-ins at SSO are forwarded to the portal (otherwise only portal-side failures count towards the lock).
 
+## 15. Rule endpoints for THD and Claims, users and roles (API contract)
+
+Added to `public/api-docs/openapi.yaml` (85 operations in all). No new database tables: the users, roles, permissions and
+employee-profile tables already exist in `schema.sql`, and the THD and Claims masters are ordinary masters.
+
+| Area | Endpoints | Notes |
+| --- | --- | --- |
+| THD rules | `POST /rules/thd/auto-trigger` | Which auto-THD rules fire for a job card event, and which are still waiting for a Time Window from business. Same rules as `thdRules.ts` |
+| Claims rules | `POST /rules/claims/route`, `POST /rules/claims/goodwill-category` | Who approves a request of a given amount (limit inclusive), and the Issue Type / Category of a Goodwill Request. Same rules as `claimRules.ts` |
+| Users | `GET/POST /users`, `GET/PATCH /users/{id}`, `POST /users/{id}/status` | Status actions ACTIVATE, SUSPEND, DEACTIVATE, UNLOCK; the database ends the user's sessions when a user is suspended, locked or deactivated |
+| Bulk upload of users | `POST /imports` with kind `USER_LIST` | Same preview, then commit, as the other imports; duplicates, unknown roles and dealers, invalid e-mail or mobile are reported with the Excel row |
+| Roles | `GET/POST /roles`, `GET/PATCH /roles/{id}`, `PUT /roles/{id}/permissions` | The permission matrix of a role is replaced in one transaction |
+| Employee profiles | `GET/PUT /employees/{id}/profile` | Employment details, skills and certificates |
+
+The worked examples of the three rule endpoints are proven against the real rules by `src/utils/__tests__/apiRuleContract.test.ts`.
+
+Points for the architect: (1) the portal's user record has department, zone and workshop, which the database does not hold on
+the user (region comes from the dealer): where should they live? (2) users created by bulk upload start ACTIVE (the database
+default) unless the file says otherwise; or should they start PENDING until the first SSO sign-in? (3) row-level security by dealer
+exists for sessions, devices and sign-ins but not yet for the user list, so for now the API enforces "a Dealer Admin sees and
+changes only their own dealer's users"; add the same rule in the database? (4) "a role that active users still hold cannot be
+made inactive" is an API rule, not a database rule.
+
 ## Verify locally
 
 ```bash
