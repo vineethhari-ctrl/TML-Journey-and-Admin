@@ -67,6 +67,8 @@ tags:
     description: What each role starts with (cards, header tabs, list columns). TML Admin only; users personalise for the session only.
   - name: Users & roles
     description: Users, their roles and status, role permissions, employee profiles. Bulk upload of users goes through /imports (kind USER_LIST).
+  - name: Claims people
+    description: 'CCM / ACCM per division and KAM users, kept in User Management (Claims BA). Database part 3b.'
 
 paths:
   /me:
@@ -395,6 +397,10 @@ paths:
           optionally Status, default ACTIVE). The preview reports duplicates (same employee ID or e-mail, in the file or already
           in the system), unknown roles, unknown dealer codes, a dealer role without a dealer code, and invalid e-mail or
           mobile numbers, each with the Excel row. Needs permission to create users; a Dealer Admin can only upload users of their own dealer.
+        - `CCM_ACCM_LIST`: CCM / ACCM per division. Columns: Dealer code, Division, Type (CCM / ACCM), User ID. Each row calls
+          `assign_division_owner`, so the same rules apply (active CRM user with the role, one CCM and one ACCM per division,
+          not both for one division); the preview lists the person each row replaces.
+        - `KAM_LIST`: KAM users. Columns: BU (PV / EV), User ID, Zone, Region.
       operationId: createImport
       requestBody:
         required: true
@@ -1877,6 +1883,155 @@ paths:
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  # ---------------------------------------------------------------- Claims people (part 3b)
+  /claim-owners:
+    get:
+      tags: [Claims people]
+      summary: 'Every active division with its current CCM and ACCM (Dealer Admin: own dealer only)'
+      operationId: listClaimOwners
+      parameters:
+        - { name: dealerCode, in: query, schema: { type: string } }
+        - { name: gapsOnly, in: query, description: 'Only divisions without a CCM or ACCM, or whose person is not ACTIVE (claim_owner_gaps)', schema: { type: boolean } }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Divisions with their CCM and ACCM
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/DivisionClaimOwners' } }
+                  nextCursor: { type: [string, 'null'] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /divisions/{divisionId}/claim-owners:
+    parameters: [{ $ref: '#/components/parameters/DivisionId' }]
+    get:
+      tags: [Claims people]
+      summary: 'The CCM and ACCM of a division, today or at a given moment (for an old claim)'
+      operationId: getDivisionClaimOwners
+      parameters:
+        - { name: at, in: query, description: 'A past moment; default now', schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: 'Zero, one or two people'
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [ownerType, userId]
+                      properties:
+                        ownerType: { type: string, enum: [CCM, ACCM] }
+                        userId: { type: string }
+                        fullName: { type: string }
+                        userStatus: { $ref: '#/components/schemas/UserStatus' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /divisions/{divisionId}/claim-owners/{ownerType}:
+    parameters:
+      - { $ref: '#/components/parameters/DivisionId' }
+      - { name: ownerType, in: path, required: true, schema: { type: string, enum: [CCM, ACCM] } }
+    put:
+      tags: [Claims people]
+      summary: 'Make a person the CCM or ACCM of a division (TML Admin)'
+      description: |
+        Calls `assign_division_owner`. The current person, if any, is ended in the same transaction and kept in the history.
+        The person must be an ACTIVE CRM user holding the CCM or ACCM role, and cannot be both CCM and ACCM of the same division.
+        Assigning the person who already holds it changes nothing. Audit "Claim Owner Assigned" (old and new person).
+      operationId: assignClaimOwner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId: { type: string }
+                reason: { type: string, maxLength: 200 }
+      responses:
+        '200': { description: Assigned, content: { application/json: { schema: { type: object, properties: { assignmentId: { type: integer } } } } } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /divisions/{divisionId}/claim-owners/{ownerType}/end:
+    parameters:
+      - { $ref: '#/components/parameters/DivisionId' }
+      - { name: ownerType, in: path, required: true, schema: { type: string, enum: [CCM, ACCM] } }
+    post:
+      tags: [Claims people]
+      summary: 'End the CCM or ACCM of a division without a successor (reason required)'
+      description: 'The division then appears in /claim-owners?gapsOnly=true until someone is assigned. Audit "Claim Owner Ended".'
+      operationId: endClaimOwner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 1, maxLength: 200 } } }
+      responses:
+        '204': { description: Ended }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /kams:
+    get:
+      tags: [Claims people]
+      summary: 'Current KAM users, optionally for one BU, zone and region'
+      operationId: listKams
+      parameters:
+        - { name: bu, in: query, schema: { type: string, enum: [PV, EV] } }
+        - { name: zone, in: query, schema: { type: string } }
+        - { name: region, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: 'KAM assignments (zone and region matched without regard to case)'
+          content:
+            application/json:
+              schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/KamAssignment' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Claims people]
+      summary: 'Assign a KAM to a BU, zone and region (TML Admin)'
+      description: 'Calls `assign_kam`. The person must be an ACTIVE CRM user holding the KAM role. Several KAMs may cover one area; the same person cannot be assigned twice to it.'
+      operationId: assignKam
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bu, userId, zone, region]
+              properties:
+                bu: { type: string, enum: [PV, EV] }
+                userId: { type: string }
+                zone: { type: string, minLength: 1 }
+                region: { type: string, minLength: 1 }
+      responses:
+        '201': { description: Assigned, content: { application/json: { schema: { $ref: '#/components/schemas/KamAssignment' } } } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /kams/{assignmentId}/end:
+    parameters: [{ name: assignmentId, in: path, required: true, schema: { type: integer } }]
+    post:
+      tags: [Claims people]
+      summary: 'End a KAM assignment (reason required)'
+      operationId: endKam
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 1, maxLength: 200 } } }
+      responses:
+        '204': { description: Ended }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
 components:
   securitySchemes:
     sso:
@@ -1998,7 +2153,7 @@ components:
     BU: { type: string, enum: [PV, EV, CV] }
     ApprovalStatus: { type: string, enum: [Draft, Approved, Pending Approval, Rejected] }
     DealerTargetModule: { type: string, enum: [vehicle_journey, job_card, reception, workshop_floor, general] }
-    ImportKind: { type: string, enum: [SMART_EXCEL, BA_WORKBOOK, BULK_RECORDS, FLEET_LIST, USER_LIST] }
+    ImportKind: { type: string, enum: [SMART_EXCEL, BA_WORKBOOK, BULK_RECORDS, FLEET_LIST, USER_LIST, CCM_ACCM_LIST, KAM_LIST] }
 
     Me:
       type: object
@@ -2873,3 +3028,28 @@ components:
               issuedOn: { type: string, format: date }
               expiresOn: { type: string, format: date }
               certificateNo: { type: [string, 'null'] }
+
+    DivisionClaimOwners:
+      type: object
+      required: [dealerCode, divisionId, divisionName]
+      properties:
+        dealerCode: { type: string }
+        dealerName: { type: string }
+        divisionId: { type: string, format: uuid }
+        divisionName: { type: string }
+        ccm: { type: [object, 'null'], properties: { userId: { type: string }, fullName: { type: string }, status: { $ref: '#/components/schemas/UserStatus' } } }
+        accm: { type: [object, 'null'], properties: { userId: { type: string }, fullName: { type: string }, status: { $ref: '#/components/schemas/UserStatus' } } }
+        gaps: { type: array, items: { type: string }, example: ['No ACCM'] }
+
+    KamAssignment:
+      type: object
+      required: [assignmentId, bu, userId, zone, region, assignedAt]
+      properties:
+        assignmentId: { type: integer }
+        bu: { type: string, enum: [PV, EV] }
+        userId: { type: string }
+        fullName: { type: string }
+        zone: { type: string }
+        region: { type: string }
+        assignedAt: { type: string, format: date-time }
+        assignedBy: { type: string }
