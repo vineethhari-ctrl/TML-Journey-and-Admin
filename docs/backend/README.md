@@ -5,7 +5,7 @@
 | **API contract** | [`public/api-docs/openapi.yaml`](../../public/api-docs/openapi.yaml), browsable at **`<portal>/api-docs/`** on the live site |
 | **Database** | [`schema.sql`](schema.sql) (PostgreSQL 16) + self-checking tests [`schema_test.sql`](schema_test.sql), run in CI on every change |
 | **Masters from CRM + business control** | [`schema_masters_crm.sql`](schema_masters_crm.sql) (part 2, loads on top of `schema.sql`) + tests [`schema_masters_crm_test.sql`](schema_masters_crm_test.sql); approach in [`MASTER_DATA_STRATEGY.md`](MASTER_DATA_STRATEGY.md); the review document for the architect is built with `npm run backend-doc` |
-| **Platform: configuration, devices, sessions, default views, audit coverage** | [`schema_platform.sql`](schema_platform.sql) (part 3, loads on top of parts 1 and 2) + tests [`schema_platform_test.sql`](schema_platform_test.sql); summary in section 14 below; endpoints under the tags *Configuration*, *Devices & sessions* and *Default views* of the API contract |
+| **Platform: configuration, devices, sessions, default views, audit coverage** | [`schema_platform.sql`](schema_platform.sql) (part 3, loads on top of parts 1 and 2) + tests [`schema_platform_test.sql`](schema_platform_test.sql); CCM / ACCM and KAM users in [`schema_claim_people.sql`](schema_claim_people.sql) (part 3b, section 16); summary in section 14 below; endpoints under the tags *Configuration*, *Devices & sessions* and *Default views* of the API contract |
 | **Business rules** | Already written and unit-tested in the portal: `src/utils/eqcRules.ts`, `bodyshopRules.ts`, `bayGovernance.ts`, `holidayCalendar.ts`, `masterValidationSchema.ts`, `smartExcelImport.ts` |
 | **Status** | Design ready for review by TML IT / architecture. Today the portal keeps data in each user's browser; this backend makes it shared and production-grade. |
 
@@ -282,7 +282,7 @@ whether failed sign-ins at SSO are forwarded to the portal (otherwise only porta
 
 ## 15. Rule endpoints for THD and Claims, users and roles (API contract)
 
-Added to `public/api-docs/openapi.yaml` (85 operations in all). No new database tables: the users, roles, permissions and
+Added to `public/api-docs/openapi.yaml`. No new database tables: the users, roles, permissions and
 employee-profile tables already exist in `schema.sql`, and the THD and Claims masters are ordinary masters.
 
 | Area | Endpoints | Notes |
@@ -303,13 +303,31 @@ exists for sessions, devices and sign-ins but not yet for the user list, so for 
 changes only their own dealer's users"; add the same rule in the database? (4) "a role that active users still hold cannot be
 made inactive" is an API rule, not a database rule.
 
+## 16. Part 3b: CCM / ACCM per division and KAM users
+
+[`schema_claim_people.sql`](schema_claim_people.sql) + tests [`schema_claim_people_test.sql`](schema_claim_people_test.sql)
+(36 checks, 25 refused wrong actions). The Claims BA keeps these in User Management, not masters.
+
+- `division_claim_owner`: one current CCM and one current ACCM per active division; never the same person for both. Level 2 of
+  the Warranty Approval Matrix resolves to them (`division_claim_owners(division, at)` also answers "who was it when this claim was decided").
+- `kam_assignment`: KAM users per BU (PV / EV), zone and region; several per area allowed, not the same person twice.
+- The person must be an ACTIVE CRM user holding the role CCM, ACCM or KAM (roles added here). A role cannot be removed while assigned.
+- Rows are history: changing the person ends the current row and starts a new one; nothing is edited or deleted. Deactivating a
+  user ends their assignments; a suspended or locked person stays assigned but shows in `claim_owner_gaps` (should be empty at go-live).
+- Dealer Admins see only their own dealer's mapping (row-level security). 5 audit actions, written by the database and catalogued.
+- API: tag *Claims people* (`/claim-owners`, `/divisions/{id}/claim-owners…`, `/kams…`); bulk upload as `/imports` kinds `CCM_ACCM_LIST` and `KAM_LIST`.
+
+Open for the architect: the zone / region naming (the dealer table's "region" holds North / South / East / West), and the defaults
+above (role required, several KAMs per area, what happens when a person leaves).
+
 ## Verify locally
 
 ```bash
 # Database: load the schema and run its tests (needs PostgreSQL 16)
 createdb tml && psql -d tml -v ON_ERROR_STOP=1 -f docs/backend/schema.sql -f docs/backend/schema_test.sql \
   -f docs/backend/schema_masters_crm.sql -f docs/backend/schema_masters_crm_test.sql \
-  -f docs/backend/schema_platform.sql -f docs/backend/schema_platform_test.sql
+  -f docs/backend/schema_platform.sql -f docs/backend/schema_platform_test.sql \
+  -f docs/backend/schema_claim_people.sql -f docs/backend/schema_claim_people_test.sql
 # API contract
 npx @redocly/cli lint public/api-docs/openapi.yaml
 ```
