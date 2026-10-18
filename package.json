@@ -14,6 +14,7 @@
     "test:e2e": "playwright test",
     "templates": "tsx scripts/generate-master-templates.ts",
     "master-pack": "tsx scripts/build-master-pack.ts",
+    "bay-review": "tsx scripts/build-bay-review.ts",
     "ba-questionnaire": "tsx scripts/build-ba-questionnaire.ts",
     "ba-spec": "tsx scripts/build-ba-spec.ts",
     "backend-doc": "tsx scripts/backend-doc/render-diagrams.ts && python3 scripts/backend-doc/build_doc.py && python3 scripts/backend-doc/build_doc_platform.py",

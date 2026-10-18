@@ -1,8 +1,9 @@
 /**
  * The simple sheet for the BA leads (test data only):
- *   npm run ba-questionnaire   →   build/TML_BA_Master_Questionnaire_v3.xlsx
+ *   npm run ba-questionnaire   →   build/TML_BA_Master_Questionnaire_v4.xlsx
  * One row per master and TWO yes/no questions. The answer sheet works out the class (new ST master / CRM as it is / CRM + business control).
- * The masters the BA has confirmed (eQC, Bodyshop) are listed as the BA confirmed them; the other modules are the earlier draft list, for their BAs to correct. No portal / UI columns.
+ * The masters the BA has confirmed (eQC, Bodyshop) are listed as the BA confirmed them. Masters a BA has SENT but not confirmed (Bay Operations: JC Tracking and Appointment) are listed as "Received, not final".
+ * The other modules are the earlier draft list, for their BAs to correct. No portal / UI columns.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -10,6 +11,7 @@ import ExcelJS from 'exceljs';
 import { MASTER_COLLECTIONS, WORKSHOP_MODULES } from '../src/data/masterCatalogue';
 import { draftClassification } from '../src/data/masterClassification';
 import { CONFIRMED_BA_MASTERS } from '../src/data/confirmedBaMasters';
+import { RECEIVED_BA_MASTERS } from '../src/data/receivedBaMasters';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const outDir = path.join(root, 'build');
@@ -36,7 +38,8 @@ help.columns = [{ width: 120 }];
   [],
   ['The last column fills itself in with the result: "New ST master", "CRM master, used as it is" or "CRM master + business control".'],
   ['"Our guess" is only a starting point. Please correct it.'],
-  ['Green = the BA has confirmed this master (eQC and Bodyshop files). Orange = still waiting for the BA: this is the earlier draft list, so please add masters that are missing and strike out the ones you do not need.'],
+  ['Green = the BA has confirmed this master (eQC and Bodyshop files). Lavender = the BA has sent a first list, not yet confirmed as final. Orange = still waiting for the BA: this is the earlier draft list, so please add masters that are missing and strike out the ones you do not need.'],
+  ['New in v4: the Bay Operations masters received on 18 Oct 2026 (lavender rows, under JC Tracking and Appointment). In those two modules the orange rows are our earlier draft: please say in Remarks which orange rows the lavender ones replace.'],
   [],
   ['BEFORE YOU SEND IT BACK: make sure ALL modules and ALL masters of yours are covered.'],
   ['   1. Sheet "Masters": add every master that is missing in the empty blue rows at the bottom (module, master name, Q1, Q2), and strike out or mark "Not needed" in Remarks the ones you do not need.'],
@@ -44,7 +47,8 @@ help.columns = [{ width: 120 }];
   [],
   ['Test data only. Nothing in this file is real Tata Motors data.'],
 ].forEach((r) => help.addRow(r));
-help.getCell('A15').font = { bold: true, color: { argb: 'FFB45309' } };
+help.getCell('A14').font = { bold: true, color: { argb: 'FF5B21B6' } };
+help.getCell('A16').font = { bold: true, color: { argb: 'FFB45309' } };
 help.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF002244' } };
 help.getCell('A5').font = { bold: true };
 help.getCell('A8').font = { bold: true };
@@ -64,14 +68,20 @@ interface Line { module: string; code: string; master: string; status: string; g
 const lines: Line[] = [];
 // 1. The masters the BA has confirmed, exactly as confirmed (eQC, Bodyshop)
 CONFIRMED_BA_MASTERS.forEach((c) => lines.push({ module: c.module, code: c.moduleCodes[0], master: c.name, status: 'Confirmed by BA', guessText: 'New for ST: probably not in CRM' }));
-// 2. Everything the other BAs have not shared yet: the earlier draft list, for them to correct
+// 2. Masters a BA has sent but not confirmed as final (Bay Operations), under their own modules
+const titleOf = (code: string) => WORKSHOP_MODULES.find((m) => m.code === code)?.title ?? code;
+RECEIVED_BA_MASTERS.forEach((m) => lines.push({
+  module: titleOf(m.moduleCode), code: m.moduleCode, master: m.name, status: 'Received, not final',
+  guessText: 'New for ST: probably not in CRM' + (m.overlapsWith.length ? ` (overlaps our draft master: ${m.overlapsWith.join(', ')})` : ''),
+}));
+// 3. Everything the other BAs have not shared yet: the earlier draft list, for them to correct
 const confirmedIds = new Set(CONFIRMED_BA_MASTERS.flatMap((c) => c.portalMasterIds));
 const confirmedModules = new Set(CONFIRMED_BA_MASTERS.flatMap((c) => c.moduleCodes));
 MASTER_COLLECTIONS.filter((m) => !confirmedIds.has(m.id) && !confirmedModules.has(m.moduleCode))
   .sort((a, b) => a.moduleName.localeCompare(b.moduleName) || a.name.localeCompare(b.name))
   .forEach((m) => lines.push({ module: m.moduleName, code: m.moduleCode, master: m.name, status: 'Waiting for BA', guessText: guess(m.id) }));
 
-const COLOUR: Record<string, string> = { 'Confirmed by BA': 'FFD1FAE5', 'Waiting for BA': 'FFFFEDD5' };
+const COLOUR: Record<string, string> = { 'Confirmed by BA': 'FFD1FAE5', 'Received, not final': 'FFEDE9FE', 'Waiting for BA': 'FFFFEDD5' };
 lines.forEach((l) => {
   const row = ws.addRow([l.module, l.master, l.status, l.guessText, '', '', '', '', '']);
   const r = row.number;
@@ -113,9 +123,10 @@ crow.eachCell((c, col) => {
 const modules = [...WORKSHOP_MODULES.map((m) => ({ code: m.code, title: m.title })), { code: 'common', title: 'Common Masters' }];
 modules.forEach((m) => {
   const listed = lines.filter((l) => l.code === m.code).length;
-  const confirmed = lines.some((l) => l.code === m.code && l.status === 'Confirmed by BA');
-  const row = check.addRow([m.title, listed, confirmed ? 'Confirmed by BA' : 'Waiting for BA', '', '', '', '', '']);
-  row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: confirmed ? 'FFD1FAE5' : 'FFFFEDD5' } };
+  const state = lines.some((l) => l.code === m.code && l.status === 'Confirmed by BA') ? 'Confirmed by BA'
+    : lines.some((l) => l.code === m.code && l.status === 'Received, not final') ? 'Received, not final' : 'Waiting for BA';
+  const row = check.addRow([m.title, listed, state, '', '', '', '', '']);
+  row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOUR[state] } };
   for (const col of [4, 5, 6, 7, 8]) row.getCell(col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF08A' } };
   row.getCell(4).dataValidation = { type: 'list', allowBlank: true, formulae: ['"Yes,No"'] };
   row.alignment = { vertical: 'top', wrapText: true };
@@ -126,7 +137,7 @@ for (let i = 0; i < 3; i++) {
   row.getCell(4).dataValidation = { type: 'list', allowBlank: true, formulae: ['"Yes,No"'] };
 }
 
-const targets = [path.join(outDir, 'TML_BA_Master_Questionnaire_v3.xlsx')];
-if (fs.existsSync(path.join(outDir, 'master-pack'))) targets.push(path.join(outDir, 'master-pack', 'TML_BA_Master_Questionnaire_v3.xlsx'));
+const targets = [path.join(outDir, 'TML_BA_Master_Questionnaire_v4.xlsx')];
+if (fs.existsSync(path.join(outDir, 'master-pack'))) targets.push(path.join(outDir, 'master-pack', 'TML_BA_Master_Questionnaire_v4.xlsx'));
 await Promise.all(targets.map((t) => wb.xlsx.writeFile(t)));
-console.log(`questionnaire written: ${lines.length} rows, ${CONFIRMED_BA_MASTERS.length} confirmed by BA, ${lines.length - CONFIRMED_BA_MASTERS.length} waiting for their BAs`);
+console.log(`questionnaire written: ${lines.length} rows, ${CONFIRMED_BA_MASTERS.length} confirmed by BA, ${RECEIVED_BA_MASTERS.length} received not final, ${lines.length - CONFIRMED_BA_MASTERS.length - RECEIVED_BA_MASTERS.length} waiting for their BAs`);
