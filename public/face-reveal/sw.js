@@ -1,6 +1,6 @@
 // Offline cache: every file the app needs is precached on install.
 // Bump CACHE when any listed file changes so installed copies update.
-const CACHE = 'face-reveal-v1';
+const CACHE = 'face-reveal-v2';
 const FILES = [
   './', './index.html', './manifest.webmanifest',
   './src/app.js', './src/similarity.js', './src/bundle.js', './src/zip.js',

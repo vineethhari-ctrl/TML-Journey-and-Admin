@@ -4,6 +4,12 @@ import { buildBundle, requestMessage, CONSENT_STATEMENT } from './bundle.js';
 const $ = (id) => document.getElementById(id);
 const state = { covered: null, original: null, cmp: null, verdict: null };
 
+function toBase64(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
 async function sha256Hex(bytes) {
   const d = await crypto.subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -113,6 +119,10 @@ $('download').addEventListener('click', async () => {
   const { zip } = buildBundle({ original: state.original, covered: state.covered, cmp: state.cmp });
   const name = `face-reveal-${state.covered.sha256.slice(0, 8)}.zip`;
   const file = new File([zip], name, { type: 'application/zip' });
+  if (window.AndroidBridge) { // Android app: save to Downloads and open the share sheet
+    window.AndroidBridge.saveFile(name, 'application/zip', toBase64(zip));
+    return;
+  }
   // On phones the share sheet is the natural way to deliver; fall back to a download.
   if (navigator.canShare?.({ files: [file] })) {
     try { await navigator.share({ files: [file], title: 'Face Reveal' }); return; }
@@ -126,7 +136,9 @@ $('download').addEventListener('click', async () => {
 wireDrop($('dropCovered'), $('fileCovered'), setCovered);
 wireDrop($('dropOriginal'), $('fileOriginal'), setOriginal);
 
-if ('serviceWorker' in navigator) {
+if (window.AndroidBridge) {
+  $('offlineStatus').textContent = 'Offline app: everything runs on this phone.';
+} else if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').then(
     () => navigator.serviceWorker.ready.then(() => { $('offlineStatus').textContent = 'Ready to use offline.'; }),
     () => {},
