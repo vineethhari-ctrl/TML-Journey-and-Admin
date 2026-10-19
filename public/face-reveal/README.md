@@ -29,4 +29,4 @@ If you change any app file, bump `CACHE` in `sw.js` so installed copies update.
 ## Run / test
 
     python3 -m http.server 8000     # then open http://localhost:8000
-    node --test test/face-reveal.test.js
+    node --test public/face-reveal/test/face-reveal.test.js
