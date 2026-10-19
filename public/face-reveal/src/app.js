@@ -76,6 +76,17 @@ async function analyse() {
   el.textContent = msgs.join(' ');
 }
 
+// The AI engine lays a face's landmarks out inside the smiley; this mirrors Engine.syntheticKps so the overlay is honest.
+const AI_FACE_RATIO = 0.48; // detector-box width as a share of the smiley's diameter, at Face size 100%
+const ARC = [[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366], [41.5493, 92.3655], [70.7299, 92.2041]];
+function aiRatio() { return AI_FACE_RATIO * (Number($('faceScale').value) / 100); }
+function syntheticKps(cx, cy, r, ratio) {
+  const wb = 2 * r * ratio, eye = 0.48 * wb;
+  const sc = eye / Math.hypot(ARC[1][0] - ARC[0][0], ARC[1][1] - ARC[0][1]);
+  const mx = ARC.reduce((s, p) => s + p[0], 0) / 5, my = ARC.reduce((s, p) => s + p[1], 0) / 5;
+  return ARC.map((p) => [(p[0] - mx) * sc + cx - 0.011 * wb, (p[1] - my) * sc + cy + 0.042 * wb]);
+}
+
 // ---- drawing ---------------------------------------------------------------------------------
 
 function drawEditor(cv, item, shape) {
@@ -95,6 +106,21 @@ function drawEditor(cv, item, shape) {
   ctx.strokeStyle = '#fff';
   ctx.lineDashOffset = 7;
   ctx.stroke();
+  if (shape.circle && shape.ratio) { // where the AI will put the face: its outline, eyes, nose and mouth corners
+    const c = shape.circle, wb = 2 * c.r * shape.ratio;
+    ctx.setLineDash([]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#00e5ff';
+    ctx.beginPath();
+    ctx.ellipse(c.cx * k, c.cy * k, (wb / 2) * k, (wb * 0.67) * k, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#00e5ff';
+    for (const [x, y] of syntheticKps(c.cx, c.cy, c.r, shape.ratio)) {
+      ctx.beginPath();
+      ctx.arc(x * k, y * k, Math.max(2.5, 0.012 * item.w * k), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 }
 
 // Draw photo A with the face from B pasted over the smiley, at `scale` of A's size.
@@ -172,7 +198,7 @@ function render() {
   queued = true;
   requestAnimationFrame(() => {
     queued = false;
-    drawEditor($('edA'), state.A, { circle: state.circle });
+    drawEditor($('edA'), state.A, { circle: state.circle, ratio: AI ? aiRatio() : 0 });
     if (AI) return;
     drawEditor($('edB'), state.B, { face: state.face });
     compose($('out'), Math.min(1, 1000 / Math.max(state.A.w, state.A.h)));
@@ -368,6 +394,8 @@ if (AI) {
   for (const el of document.querySelectorAll('[data-web]')) el.hidden = true;
   for (const el of document.querySelectorAll('[data-ai]')) el.hidden = false;
   $('aiBox').hidden = false;
+  $('faceScale').min = 30;
+  $('faceScale').max = 170;
   showModels();
   $('dlModels').addEventListener('click', () => {
     $('aiStatus').textContent = 'Starting download…';
@@ -389,7 +417,7 @@ if (AI) {
     const { circle } = state;
     window.AndroidBridge.startSwap(
       a.b64, b.b64, circle.cx * a.k, circle.cy * a.k, circle.r * a.k,
-      0.55 * (Number($('faceScale').value) / 100), Number($('reach').value) / 100, Number($('toneAI').value) / 100, true,
+      aiRatio(), Number($('reach').value) / 100, Number($('toneAI').value) / 100, true,
     );
   });
   setRunning(false);

@@ -8,6 +8,8 @@ using AI face-swap models that run on the phone.
   After that everything works with no internet.
 - Pick the photo with the smiley, then another photo of the same person with the face visible. Check the circle sits on the
   smiley, then **Swap with AI**. Expect roughly half a minute per photo on a mid-range phone (not measured on a phone yet).
+- The blue oval and dots on the photo show where the face, eyes, nose and mouth will go, live as you move the circle or drag
+  **Face size**, so you can fit them to the visible head (hair, ears, neck) before the half-minute AI run.
 - Sliders: **Face size**, **Pasted area** (how much of the other photo's hair and neck is used), **Match lighting**.
 - Save the image, or a zip with the edited image first and both originals untouched plus a manifest that labels it as AI-made.
 

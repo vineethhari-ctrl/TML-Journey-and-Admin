@@ -85,7 +85,8 @@
     <h2>Result</h2>
     <canvas id="out" class="result" hidden aria-label="Result with the face replaced"></canvas>
     <label class="slide">Face size <input type="range" id="faceScale" min="50" max="150" value="100"></label>
-    <p class="note">The face is sized to the covered face automatically (stickers are bigger than the face under them). Use this to make it bigger or smaller.</p>
+    <p class="note" data-web>The face is sized to the covered face automatically (stickers are bigger than the face under them). Use this to make it bigger or smaller.</p>
+    <p class="note" data-ai hidden>The blue oval and dots show where the face, eyes, nose and mouth will go. Move the circle and use Face size so they fit the head you can see (hair, ears, neck), then tap Swap. A smiley is usually bigger than the face under it.</p>
     <label class="slide">Pasted area <input type="range" id="reach" min="30" max="100" value="100"></label>
     <p class="note">Lower it to paste only the face and a little around it, so the other photo's hair and background stay out.</p>
     <label class="slide" data-web>Soft edge <input type="range" id="soft" min="5" max="50" value="18"></label>
