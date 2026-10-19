@@ -131,7 +131,10 @@ public final class Engine {
     }
 
     private static List<Face> nms(List<Face> in) {
-        Collections.sort(in, (a, b) -> Double.compare(b.score, a.score));
+        Collections.sort(in, new java.util.Comparator<Face>() {
+            @Override
+            public int compare(Face a, Face b) { return Double.compare(b.score, a.score); }
+        });
         List<Face> keep = new ArrayList<>();
         for (Face f : in) {
             boolean ok = true;
@@ -203,7 +206,7 @@ public final class Engine {
 
     /** Returns a copy of `a` with the smiley (circle cx, cy, r in a's pixels) replaced by the face found in `b`. */
     public Img swap(Img a, double cx, double cy, double r, Img b, Params p, Progress pr) throws Exception {
-        if (pr == null) pr = m -> { };
+        if (pr == null) pr = new Progress() { @Override public void on(String message) { } };
         pr.on("Finding the face in photo 2…");
         List<Face> found = detect(b, p.threads, 0.5);
         if (found.isEmpty()) found = detect(b, p.threads, 0.3);
@@ -350,18 +353,24 @@ public final class Engine {
     // ---- colour helpers ---------------------------------------------------------------------
 
     /** Per-channel (b, g, r) gain moving photo 2's face skin toward the skin around the smiley; 1s if unsure. */
-    private static float[] toneGain(Img a, Img b, Face bf, double cx, double cy, double r, double strength) {
+    private static float[] toneGain(Img a, Img b, Face bf, final double cx, final double cy, final double r, double strength) {
         float[] one = {1f, 1f, 1f};
         if (strength <= 0) return one;
-        double[] dst = skinMean(a, (x, y) -> {
-            double d = Math.hypot(x - cx, y - cy);
-            return d > 1.05 * r && d < 1.7 * r;
+        double[] dst = skinMean(a, new Region() {
+            @Override
+            public boolean in(int x, int y) {
+                double d = Math.hypot(x - cx, y - cy);
+                return d > 1.05 * r && d < 1.7 * r;
+            }
         }, (int) (cx - 1.7 * r), (int) (cy - 1.7 * r), (int) (cx + 1.7 * r) + 1, (int) (cy + 1.7 * r) + 1);
         double mx = 0, my = 0;
         for (double[] k : bf.kps) { mx += k[0] / 5; my += k[1] / 5; }
         double eye = Math.hypot(bf.kps[1][0] - bf.kps[0][0], bf.kps[1][1] - bf.kps[0][1]), rad = 0.53 * eye;
-        final double fx = mx, fy = my;
-        double[] src = skinMean(b, (x, y) -> Math.hypot(x - fx, y - fy) < rad, (int) (mx - rad), (int) (my - rad), (int) (mx + rad) + 1, (int) (my + rad) + 1);
+        final double fx = mx, fy = my, frad = rad;
+        double[] src = skinMean(b, new Region() {
+            @Override
+            public boolean in(int x, int y) { return Math.hypot(x - fx, y - fy) < frad; }
+        }, (int) (mx - rad), (int) (my - rad), (int) (mx + rad) + 1, (int) (my + rad) + 1);
         if (dst == null || src == null) return one;
         float[] g = new float[3];
         for (int i = 0; i < 3; i++) {

@@ -138,6 +138,11 @@ def main():
 
     run('javac', '-source', '8', '-target', '8', '-Xlint:-options', '-cp', f'{android}{os.pathsep}{ort_classes}',
         '-d', BUILD / 'classes', *(ROOT / 'src').rglob('*.java'))
+    # dx cannot desugar lambdas, and a phone without that desugaring fails with "No static method metafactory": refuse them.
+    for cls in sorted((BUILD / 'classes').rglob('*.class')):
+        dis = subprocess.run(['javap', '-c', '-p', str(cls)], capture_output=True, text=True, check=True).stdout
+        if 'invokedynamic' in dis:
+            raise SystemExit(f'{cls.name} uses a lambda or method reference (invokedynamic); write an anonymous class instead')
     run('java', '-cp', dx, 'com.android.dx.command.Main', '--dex', '--min-sdk-version=29',
         f'--output={BUILD / "classes.dex"}', BUILD / 'classes', ort_classes)
 

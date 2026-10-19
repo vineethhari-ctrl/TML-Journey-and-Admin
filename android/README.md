@@ -48,6 +48,5 @@ Desktop check of the engine (needs the models, `emap.bin`, and the ONNX Runtime 
 Checked off-device: the Java engine matches the Python prototype (35.9 dB), runs in about 6 s on a desktop CPU, and the page
 flow (model gate, download progress, swap, stale-result clearing, labelled zip) works in Chromium with the real engine
 behind a stand-in bridge. The APK signature verifies, the manifest types are checked, and the dex contains ONNX Runtime
-and the engine. **The AI version has not been run on a phone**: the Android glue (download, native call, ONNX Runtime on
-arm64) is untested, and so are the speed and memory use on a real device. A smiley much bigger than the head still can't be
+and the engine. The first AI build was run on a real phone: the page, the model download and the Swap button worked, but the swap stopped at once with "No static method metafactory" (the code used Java lambdas, which the `dx` tool in this build can't convert for Android). That is fixed and the build now refuses any lambda; the fixed build has **not yet been run on a phone**, so ONNX Runtime on arm64, the speed and the memory use are still unverified. A smiley much bigger than the head still can't be
 hidden well, and a very different pose or lighting between the two photos will still show.
