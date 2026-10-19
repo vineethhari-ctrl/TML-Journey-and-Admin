@@ -5,8 +5,8 @@ It needs no network at all: every file is served from inside the APK, and reques
 
 - Install: copy `release/FaceReveal.apk` to the phone, open it, and allow "install unknown apps" for the app you opened it from.
   Android 10 or newer.
-- Pick the covered image and the original from the phone's gallery or Files.
-- The result zip is saved to `Downloads/FaceReveal/` and the share sheet opens.
+- Pick the photo with the smiley, then a second photo of the same person with the face visible, from the gallery or Files.
+- Check the automatic match, then save the edited image (or a zip with the originals) to `Downloads/FaceReveal/`; the share sheet opens.
 
 ## Rebuilding
 
@@ -24,5 +24,6 @@ was signed with a key that is not stored in this repo.
 ## Verification status
 
 Checked off-device: the signature verifies with the apksig verifier, the manifest parses with typed attributes, the
-dex loads, and the web bridge hands over a valid zip. **Not yet run on a real phone or emulator**; no Android runtime was available.
+dex loads, and the web bridge hands over a valid zip. The first version was run on a real phone (install, pick, save worked).
+The face-swap version is checked in desktop Chromium only; face detection speed on phones is unknown.
 No app icon yet (Android's default is used). iPhone is not covered; use the web version there.

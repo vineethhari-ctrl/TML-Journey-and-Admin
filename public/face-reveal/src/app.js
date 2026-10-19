@@ -1,8 +1,11 @@
-import { GRID, compareGrids, luminance, verdict } from './similarity.js';
-import { buildBundle, requestMessage, CONSENT_STATEMENT } from './bundle.js';
+import { findEmoji, skinMean, ringSkin, toneGain, targetRect, expandFace, inpaintDisc } from './composite.js';
+import { detectFace } from './detect.js';
+import { buildBundle, CONSENT_STATEMENT } from './bundle.js';
 
 const $ = (id) => document.getElementById(id);
-const state = { covered: null, original: null, cmp: null, verdict: null };
+// A = photo with the smiley, B = photo with the face.
+// circle: smiley position in A pixels. face: crop box in B pixels (its proportions stay fixed).
+const state = { A: null, B: null, circle: null, face: null };
 
 function toBase64(bytes) {
   let bin = '';
@@ -21,109 +24,195 @@ async function load(file) {
   const img = await new Promise((res, rej) => {
     const i = new Image();
     i.onload = () => res(i);
-    i.onerror = () => rej(new Error('That file is not an image the browser can read.'));
+    i.onerror = () => rej(new Error('That file is not an image this device can read.'));
     i.src = url;
   });
-  const c = document.createElement('canvas');
-  c.width = c.height = GRID;
-  const ctx = c.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(img, 0, 0, GRID, GRID);
-  return {
-    name: file.name, type: file.type, bytes, url,
-    width: img.naturalWidth, height: img.naturalHeight,
-    sha256: await sha256Hex(bytes),
-    lum: luminance(ctx.getImageData(0, 0, GRID, GRID).data),
-  };
+  return { name: file.name, type: file.type, bytes, img, w: img.naturalWidth, h: img.naturalHeight, sha256: await sha256Hex(bytes) };
 }
 
-function wireDrop(zone, input, onFile) {
-  input.addEventListener('change', () => input.files[0] && onFile(input.files[0]));
-  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('over'); });
-  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
-  zone.addEventListener('drop', (e) => {
-    e.preventDefault(); zone.classList.remove('over');
-    if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]);
+// ---- detection -------------------------------------------------------------------------------
+
+function detectSmiley(A) {
+  const k = Math.min(1, 256 / Math.max(A.w, A.h));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(A.w * k));
+  c.height = Math.max(1, Math.round(A.h * k));
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(A.img, 0, 0, c.width, c.height);
+  const f = findEmoji(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
+  return f && { cx: f.cx * A.w, cy: f.cy * A.h, r: f.r * A.w };
+}
+
+async function analyse() {
+  const { A, B } = state;
+  const smiley = detectSmiley(A);
+  const face = await detectFace(B.img);
+  state.circle = smiley || { cx: A.w / 2, cy: A.h / 2, r: A.w * 0.12 };
+  state.face = face ? expandFace(face) : { x: B.w * 0.3, y: B.h * 0.2, w: B.w * 0.4, h: B.w * 0.5 };
+  $('sizeA').value = Math.round((state.circle.r / A.w) * 100);
+  $('sizeB').value = Math.round((state.face.w / B.w) * 100);
+  const msgs = [
+    smiley ? 'Smiley found.' : 'Could not find the smiley automatically: drag the circle onto it.',
+    face ? 'Face found.' : 'Could not find the face automatically: drag the box onto it.',
+  ];
+  const el = $('detectStatus');
+  el.className = `status ${smiley && face ? 'ok' : 'warn'}`;
+  el.textContent = msgs.join(' ');
+}
+
+// ---- drawing ---------------------------------------------------------------------------------
+
+function drawEditor(cv, item, shape) {
+  const width = cv.parentElement.clientWidth || 320;
+  const k = Math.min(1, width / item.w);
+  cv.width = Math.round(item.w * k);
+  cv.height = Math.round(item.h * k);
+  const ctx = cv.getContext('2d');
+  ctx.drawImage(item.img, 0, 0, cv.width, cv.height);
+  ctx.lineWidth = 3;
+  ctx.setLineDash([8, 6]);
+  ctx.strokeStyle = '#1b5fd1';
+  ctx.beginPath();
+  if (shape.circle) ctx.arc(shape.circle.cx * k, shape.circle.cy * k, shape.circle.r * k, 0, Math.PI * 2);
+  else ctx.rect(shape.face.x * k, shape.face.y * k, shape.face.w * k, shape.face.h * k);
+  ctx.stroke();
+  ctx.strokeStyle = '#fff';
+  ctx.lineDashOffset = 7;
+  ctx.stroke();
+}
+
+// Draw photo A with the face from B pasted over the smiley, at `scale` of A's size.
+function compose(canvas, scale) {
+  const { A, B, circle, face } = state;
+  const w = Math.round(A.w * scale), h = Math.round(A.h * scale);
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(A.img, 0, 0, w, h);
+
+  const c = { cx: circle.cx * scale, cy: circle.cy * scale, r: circle.r * scale };
+  // Measure the skin around the smiley first, then blank the smiley out.
+  const x0 = Math.max(0, Math.floor(c.cx - c.r * 1.7)), y0 = Math.max(0, Math.floor(c.cy - c.r * 1.7));
+  const x1 = Math.min(w, Math.ceil(c.cx + c.r * 1.7)), y1 = Math.min(h, Math.ceil(c.cy + c.r * 1.7));
+  const around = x1 > x0 && y1 > y0 ? ctx.getImageData(x0, y0, x1 - x0, y1 - y0) : null;
+  const skinAround = around ? ringSkin(around.data, x1 - x0, y1 - y0, c.cx - x0, c.cy - y0, c.r) : null;
+  if (around) {
+    inpaintDisc(around.data, x1 - x0, y1 - y0, c.cx - x0, c.cy - y0, c.r);
+    ctx.putImageData(around, x0, y0);
+  }
+  const t = targetRect(c, face);
+  const tw = Math.max(2, Math.round(t.w)), th = Math.max(2, Math.round(t.h));
+  const oc = document.createElement('canvas');
+  oc.width = tw;
+  oc.height = th;
+  const octx = oc.getContext('2d', { willReadFrequently: true });
+  octx.drawImage(B.img, face.x, face.y, face.w, face.h, 0, 0, tw, th);
+
+  if ($('tone').checked) {
+    const px = octx.getImageData(0, 0, tw, th);
+    const src = skinMean(px.data, tw, th, (x, y) => x > tw * 0.25 && x < tw * 0.75 && y > th * 0.25 && y < th * 0.75);
+    const dst = skinAround;
+    const gain = toneGain(src, dst);
+    if (gain) {
+      for (let i = 0; i < px.data.length; i += 4) {
+        for (let k = 0; k < 3; k++) px.data[i + k] = Math.min(255, px.data[i + k] * gain[k]);
+      }
+      octx.putImageData(px, 0, 0);
+    }
+  }
+
+  // Feather the edge with an elliptical fade so the paste has no hard outline.
+  const soft = Number($('soft').value) / 100;
+  octx.globalCompositeOperation = 'destination-in';
+  octx.save();
+  octx.translate(tw / 2, th / 2);
+  octx.scale(1, th / tw);
+  const g = octx.createRadialGradient(0, 0, 0, 0, 0, tw / 2);
+  g.addColorStop(0, 'rgba(0,0,0,1)');
+  g.addColorStop(1 - soft, 'rgba(0,0,0,1)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  octx.fillStyle = g;
+  octx.fillRect(-tw / 2, -tw / 2, tw, tw);
+  octx.restore();
+  ctx.drawImage(oc, Math.round(t.x), Math.round(t.y));
+}
+
+let queued = false;
+function render() {
+  if (queued || !state.A || !state.B || !state.circle) return;
+  queued = true;
+  requestAnimationFrame(() => {
+    queued = false;
+    drawEditor($('edA'), state.A, { circle: state.circle });
+    drawEditor($('edB'), state.B, { face: state.face });
+    compose($('out'), Math.min(1, 1000 / Math.max(state.A.w, state.A.h)));
   });
 }
 
-function setStatus(kind, text) {
-  const el = $('matchStatus');
-  el.className = `status ${kind}`;
-  el.textContent = text;
+// ---- interaction -----------------------------------------------------------------------------
+
+function wireDrag(cv, item, move) {
+  let down = false;
+  const at = (e) => {
+    const r = cv.getBoundingClientRect();
+    move(((e.clientX - r.left) / r.width) * item().w, ((e.clientY - r.top) / r.height) * item().h);
+    render();
+  };
+  cv.addEventListener('pointerdown', (e) => { down = true; cv.setPointerCapture(e.pointerId); at(e); });
+  cv.addEventListener('pointermove', (e) => down && at(e));
+  cv.addEventListener('pointerup', () => { down = false; });
+  cv.addEventListener('pointercancel', () => { down = false; });
 }
 
-const MESSAGES = {
-  ok: ['ok', 'Match: same photo, the covered area is outlined.'],
-  identical: ['bad', 'No difference found. This looks like the covered image again, not an original.'],
-  mismatch: ['warn', 'These do not look like the same photo.'],
-  aspect: ['warn', 'Different proportions. The original may be cropped or from another photo.'],
-};
+wireDrag($('edA'), () => state.A, (x, y) => { state.circle.cx = x; state.circle.cy = y; });
+wireDrag($('edB'), () => state.B, (x, y) => { state.face.x = x - state.face.w / 2; state.face.y = y - state.face.h / 2; });
 
-function refresh() {
-  const { covered, original } = state;
-  $('step2').hidden = !covered;
-  if (!covered || !original) { $('step3').hidden = true; return; }
-  state.cmp = compareGrids(original.lum, covered.lum);
-  state.verdict = verdict(original, covered, state.cmp);
-  const [kind, text] = MESSAGES[state.verdict];
-  setStatus(kind, text);
-  $('step3').hidden = state.verdict === 'identical';
-  $('outOriginal').src = original.url;
-  $('outCovered').src = covered.url;
-  const r = state.cmp.region;
-  const box = $('regionBox');
-  box.hidden = !r || state.verdict === 'aspect';
-  if (r) Object.assign(box.style, { left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: `${r.h * 100}%` });
-  const needsOverride = state.verdict === 'mismatch' || state.verdict === 'aspect';
-  $('override').hidden = $('overrideText').hidden = !needsOverride;
-  $('override').checked = false;
-  updateDownload();
-}
+$('sizeA').addEventListener('input', () => { state.circle.r = (Number($('sizeA').value) / 100) * state.A.w; render(); });
+$('sizeB').addEventListener('input', () => {
+  const f = state.face, ratio = f.h / f.w, cx = f.x + f.w / 2, cy = f.y + f.h / 2;
+  f.w = (Number($('sizeB').value) / 100) * state.B.w;
+  f.h = f.w * ratio;
+  f.x = cx - f.w / 2;
+  f.y = cy - f.h / 2;
+  render();
+});
+$('soft').addEventListener('input', render);
+$('tone').addEventListener('change', render);
+window.addEventListener('resize', render);
 
-function updateDownload() {
-  const needsOverride = state.verdict === 'mismatch' || state.verdict === 'aspect';
-  $('download').disabled = !($('consent').checked && (!needsOverride || $('override').checked));
-}
-
-async function setCovered(file) {
+async function pick(which, file) {
   try {
-    state.covered = await load(file);
-    state.original = null;
-    $('prevCovered').src = state.covered.url;
-    $('prevCovered').hidden = false;
-    $('dropCovered').classList.add('has');
-    $('prevOriginal').hidden = true;
-    const ref = state.covered.sha256.slice(0, 12);
-    $('refId').textContent = ref;
-    $('requestText').value = requestMessage(ref);
-    setStatus('', 'Waiting for the original.');
-  } catch (e) { alert(e.message); }
-  refresh();
+    state[which] = await load(file);
+    $(which === 'A' ? 'dropA' : 'dropB').classList.add('has');
+    $(which === 'A' ? 'dropA' : 'dropB').querySelector('span').textContent = `${file.name} ✓`;
+  } catch (e) { alert(e.message); return; }
+  if (state.A && state.B) {
+    $('step3').hidden = false;
+    $('detectStatus').className = 'status';
+    $('detectStatus').textContent = 'Looking for the smiley and the face…';
+    await analyse();
+    render();
+  }
+}
+$('fileA').addEventListener('change', () => $('fileA').files[0] && pick('A', $('fileA').files[0]));
+$('fileB').addEventListener('change', () => $('fileB').files[0] && pick('B', $('fileB').files[0]));
+
+// ---- delivery --------------------------------------------------------------------------------
+
+async function exportComposite() {
+  const cv = document.createElement('canvas');
+  compose(cv, 1);
+  const blob = await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.92));
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  return { bytes, width: cv.width, height: cv.height, sha256: await sha256Hex(bytes) };
 }
 
-async function setOriginal(file) {
-  try {
-    state.original = await load(file);
-    $('prevOriginal').src = state.original.url;
-    $('prevOriginal').hidden = false;
-    $('dropOriginal').classList.add('has');
-  } catch (e) { alert(e.message); }
-  refresh();
-}
-
-$('consentText').textContent = CONSENT_STATEMENT;
-$('consent').addEventListener('change', updateDownload);
-$('override').addEventListener('change', updateDownload);
-$('copyReq').addEventListener('click', () => navigator.clipboard?.writeText($('requestText').value));
-$('download').addEventListener('click', async () => {
-  const { zip } = buildBundle({ original: state.original, covered: state.covered, cmp: state.cmp });
-  const name = `face-reveal-${state.covered.sha256.slice(0, 8)}.zip`;
-  const file = new File([zip], name, { type: 'application/zip' });
+async function deliver(name, type, bytes) {
   if (window.AndroidBridge) { // Android app: save to Downloads and open the share sheet
-    window.AndroidBridge.saveFile(name, 'application/zip', toBase64(zip));
+    window.AndroidBridge.saveFile(name, type, toBase64(bytes));
     return;
   }
-  // On phones the share sheet is the natural way to deliver; fall back to a download.
+  const file = new File([bytes], name, { type });
   if (navigator.canShare?.({ files: [file] })) {
     try { await navigator.share({ files: [file], title: 'Face Reveal' }); return; }
     catch (e) { if (e.name === 'AbortError') return; }
@@ -132,9 +221,32 @@ $('download').addEventListener('click', async () => {
   a.href = URL.createObjectURL(file);
   a.download = name;
   a.click();
+}
+
+const stamp = () => state.A.sha256.slice(0, 8);
+
+$('consentText').textContent = CONSENT_STATEMENT;
+$('consent').addEventListener('change', () => {
+  $('saveImg').disabled = $('saveZip').disabled = !$('consent').checked;
 });
-wireDrop($('dropCovered'), $('fileCovered'), setCovered);
-wireDrop($('dropOriginal'), $('fileOriginal'), setOriginal);
+$('saveImg').addEventListener('click', async () => {
+  const c = await exportComposite();
+  await deliver(`face-restored-${stamp()}.jpg`, 'image/jpeg', c.bytes);
+});
+$('saveZip').addEventListener('click', async () => {
+  const composite = await exportComposite();
+  const { A, B, circle, face } = state;
+  const { zip } = buildBundle({
+    composite, covered: A, face: B,
+    regions: {
+      smiley: { cx: Math.round(circle.cx), cy: Math.round(circle.cy), r: Math.round(circle.r) },
+      face: { x: Math.round(face.x), y: Math.round(face.y), w: Math.round(face.w), h: Math.round(face.h) },
+      softEdge: Number($('soft').value) / 100,
+      skinToneMatched: $('tone').checked,
+    },
+  });
+  await deliver(`face-reveal-${stamp()}.zip`, 'application/zip', zip);
+});
 
 if (window.AndroidBridge) {
   $('offlineStatus').textContent = 'Offline app: everything runs on this phone.';

@@ -23,7 +23,10 @@
   .drop.has { border-style:solid; }
   .drop input { display:none; }
   .drop:focus-within, .drop.over { border-color:var(--accent); }
-  img.preview { max-width:100%; max-height:260px; border-radius:8px; display:block; margin:10px auto 0; }
+  canvas { max-width:100%; border-radius:8px; display:block; }
+  canvas.edit { width:100%; touch-action:none; background:var(--bg); }
+  canvas.result { width:100%; max-height:70vh; object-fit:contain; margin-bottom:8px; }
+  .slide { display:flex; gap:10px; align-items:center; margin:8px 0; } .slide input { flex:1; }
   .note { font-size:.9rem; color:var(--muted); }
   .status { margin:8px 0 0; font-weight:600; }
   .status.ok { color:var(--ok); } .status.warn { color:var(--warn); } .status.bad { color:var(--bad); }
@@ -43,40 +46,44 @@
 <body>
 <main>
   <h1>Face Reveal</h1>
-  <p class="lead">A face hidden under an emoji can't be recovered from the covered picture itself. This tool pairs the covered picture with the original and delivers the <strong>face-visible original first</strong>, then the covered one. Everything runs in your browser; nothing is uploaded.</p>
+  <p class="lead">Replace a smiley that hides someone's face with their real face from a second photo. Everything runs on your device, with no internet needed.</p>
   <p class="status" id="offlineStatus" role="status"></p>
 
   <section aria-labelledby="s1">
-    <h2 id="s1">1. Covered image (face hidden by an emoji)</h2>
-    <label class="drop" id="dropCovered"><input type="file" accept="image/*" id="fileCovered"><span>Drop the covered image here or click to choose</span></label>
-    <img class="preview" id="prevCovered" alt="Covered image preview" hidden>
+    <h2 id="s1">1. Photo with the smiley</h2>
+    <label class="drop" id="dropA"><input type="file" accept="image/*" id="fileA"><span>Choose the photo where a smiley covers the face</span></label>
   </section>
 
-  <section aria-labelledby="s2" id="step2" hidden>
-    <h2 id="s2">2. Original image (face visible)</h2>
-    <label class="drop" id="dropOriginal"><input type="file" accept="image/*" id="fileOriginal"><span>Drop the original here or click to choose</span></label>
-    <img class="preview" id="prevOriginal" alt="Original image preview" hidden>
-    <p class="status" id="matchStatus" role="status"></p>
-    <details style="margin-top:12px">
-      <summary>Don't have the original? Ask the sender for it</summary>
-      <p class="note">Reference <code id="refId"></code>. Send this to whoever shared the image, then come back with the file they send.</p>
-      <textarea id="requestText" readonly aria-label="Request message"></textarea>
-      <p><button type="button" class="secondary" id="copyReq">Copy message</button></p>
-    </details>
+  <section aria-labelledby="s2">
+    <h2 id="s2">2. Photo with the face visible</h2>
+    <label class="drop" id="dropB"><input type="file" accept="image/*" id="fileB"><span>Choose another photo of the same person, face visible</span></label>
   </section>
 
   <section aria-labelledby="s3" id="step3" hidden>
-    <h2 id="s3">3. Deliver</h2>
+    <h2 id="s3">3. Check and adjust</h2>
+    <p class="status" id="detectStatus" role="status"></p>
     <div class="pair">
-      <figure><figcaption>1 · Face visible</figcaption><img id="outOriginal" alt="Face-visible original" style="max-width:100%;border-radius:8px"></figure>
-      <figure><figcaption>2 · Covered</figcaption>
-        <span class="frame"><img id="outCovered" alt="Covered image" style="max-width:100%;border-radius:8px;display:block"><span class="box" id="regionBox" hidden></span></span>
+      <figure>
+        <figcaption>Smiley: drag the circle over it</figcaption>
+        <canvas id="edA" class="edit" aria-label="Photo with the smiley"></canvas>
+        <label class="slide">Size <input type="range" id="sizeA" min="2" max="60" value="15"></label>
+      </figure>
+      <figure>
+        <figcaption>Face: drag the box over it</figcaption>
+        <canvas id="edB" class="edit" aria-label="Photo with the face"></canvas>
+        <label class="slide">Size <input type="range" id="sizeB" min="5" max="100" value="30"></label>
       </figure>
     </div>
-    <label class="check"><input type="checkbox" id="override" hidden><span id="overrideText" hidden>I confirm these are the same photo.</span></label>
+    <h2>Result</h2>
+    <canvas id="out" class="result" aria-label="Result with the face replaced"></canvas>
+    <label class="slide">Soft edge <input type="range" id="soft" min="5" max="50" value="25"></label>
+    <label class="check"><input type="checkbox" id="tone" checked><span>Match skin tone to the photo</span></label>
+    <p class="note">This is an edited image: the face comes from photo 2. The zip also keeps both original photos unchanged.</p>
     <label class="check"><input type="checkbox" id="consent"><span id="consentText"></span></label>
-    <button type="button" id="download" disabled>Save / share bundle (.zip)</button>
-    <p class="note">The zip holds <code>1_face_visible</code>, <code>2_face_covered</code> and a <code>manifest.json</code> (checksums and consent). Files are delivered exactly as received.</p>
+    <p>
+      <button type="button" id="saveImg" disabled>Save image</button>
+      <button type="button" class="secondary" id="saveZip" disabled>Save all (.zip)</button>
+    </p>
   </section>
 </main>
 <script type="module" src="src/app.js"></script>
