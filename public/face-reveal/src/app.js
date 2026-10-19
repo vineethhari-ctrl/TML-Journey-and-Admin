@@ -1,4 +1,4 @@
-import { findEmoji, skinMean, ringSkin, toneGain, targetRect, expandFace, inpaintDisc } from './composite.js';
+import { findEmoji, skinMean, ringSkin, toneGain, pastePlan, inpaintDisc } from './composite.js';
 import { detectFace } from './detect.js';
 import { buildBundle, CONSENT_STATEMENT } from './bundle.js';
 
@@ -49,7 +49,7 @@ async function analyse() {
   const face = await detectFace(B.img, (m) => { $('detectStatus').textContent = m; });
   state.circle = smiley || { cx: A.w / 2, cy: A.h / 2, r: A.w * 0.12 };
   // No face found: start from a centred box and ask the user to place it.
-  state.face = face ? expandFace(face) : { x: B.w * 0.3, y: B.h * 0.2, w: B.w * 0.4, h: B.w * 0.5 };
+  state.face = face ? { x: face.x, y: face.y, w: face.w, h: face.h } : { x: B.w * 0.3, y: B.h * 0.2, w: B.w * 0.4, h: B.w * 0.5 };
   $('sizeA').value = Math.round((state.circle.r / A.w) * 100);
   $('sizeB').value = Math.round((state.face.w / B.w) * 100);
   $('faceScale').value = 100;
@@ -106,17 +106,20 @@ function compose(canvas, scale) {
     inpaintDisc(around.data, x1 - x0, y1 - y0, c.cx - x0, c.cy - y0, c.r);
     ctx.putImageData(around, x0, y0);
   }
-  const t = targetRect(c, face, Number($('faceScale').value) / 100);
-  const tw = Math.max(2, Math.round(t.w)), th = Math.max(2, Math.round(t.h));
+  const plan = pastePlan(c, face, Number($('faceScale').value) / 100);
+  const tw = Math.max(2, Math.round(plan.dst.w)), th = tw;
   const oc = document.createElement('canvas');
   oc.width = tw;
   oc.height = th;
   const octx = oc.getContext('2d', { willReadFrequently: true });
-  octx.drawImage(B.img, face.x, face.y, face.w, face.h, 0, 0, tw, th);
+  octx.drawImage(B.img, plan.src.x, plan.src.y, plan.src.w, plan.src.h, 0, 0, tw, th);
 
   if ($('tone').checked) {
     const px = octx.getImageData(0, 0, tw, th);
-    const src = skinMean(px.data, tw, th, (x, y) => x > tw * 0.25 && x < tw * 0.75 && y > th * 0.25 && y < th * 0.75);
+    // Skin of the face itself (the detector's box, as it lands in the patch).
+    const fx = (face.x - plan.src.x) * (tw / plan.src.w), fy = (face.y - plan.src.y) * (th / plan.src.h);
+    const fw = face.w * (tw / plan.src.w), fh = face.h * (th / plan.src.h);
+    const src = skinMean(px.data, tw, th, (x, y) => x > fx + fw * 0.2 && x < fx + fw * 0.8 && y > fy + fh * 0.3 && y < fy + fh * 0.9);
     const dst = skinAround;
     const gain = toneGain(src, dst);
     if (gain) {
@@ -127,20 +130,22 @@ function compose(canvas, scale) {
     }
   }
 
-  // Feather the edge with an elliptical fade so the paste has no hard outline.
+  // Keep only the face and as much of its surroundings as the "Pasted area" slider allows; feather the rim.
   const soft = Number($('soft').value) / 100;
+  const faceW = face.w * plan.scale; // the face's width on the photo
+  const reach = Number($('reach').value) / 100;
+  const R = Math.max(tw / 2 * reach, Math.min(tw / 2, faceW * 0.56));
   octx.globalCompositeOperation = 'destination-in';
   octx.save();
   octx.translate(tw / 2, th / 2);
-  octx.scale(1, th / tw);
-  const g = octx.createRadialGradient(0, 0, 0, 0, 0, tw / 2);
+  const g = octx.createRadialGradient(0, 0, 0, 0, 0, R);
   g.addColorStop(0, 'rgba(0,0,0,1)');
   g.addColorStop(1 - soft, 'rgba(0,0,0,1)');
   g.addColorStop(1, 'rgba(0,0,0,0)');
   octx.fillStyle = g;
-  octx.fillRect(-tw / 2, -tw / 2, tw, tw);
+  octx.fillRect(-tw / 2, -th / 2, tw, th);
   octx.restore();
-  ctx.drawImage(oc, Math.round(t.x), Math.round(t.y));
+  ctx.drawImage(oc, Math.round(plan.dst.x), Math.round(plan.dst.y));
 }
 
 let queued = false;
@@ -184,6 +189,7 @@ $('sizeB').addEventListener('input', () => {
 });
 $('soft').addEventListener('input', render);
 $('faceScale').addEventListener('input', render);
+$('reach').addEventListener('input', render);
 $('tone').addEventListener('change', render);
 window.addEventListener('resize', render);
 

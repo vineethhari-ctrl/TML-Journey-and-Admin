@@ -76,9 +76,11 @@
     </div>
     <h2>Result</h2>
     <canvas id="out" class="result" aria-label="Result with the face replaced"></canvas>
-    <label class="slide">Face size <input type="range" id="faceScale" min="50" max="170" value="100"></label>
-    <p class="note">The face is scaled automatically to fit the smiley. Use this to make it bigger or smaller.</p>
-    <label class="slide">Soft edge <input type="range" id="soft" min="5" max="50" value="25"></label>
+    <label class="slide">Face size <input type="range" id="faceScale" min="50" max="150" value="100"></label>
+    <p class="note">The face is sized to the covered face automatically (stickers are bigger than the face under them). Use this to make it bigger or smaller.</p>
+    <label class="slide">Pasted area <input type="range" id="reach" min="30" max="100" value="100"></label>
+    <p class="note">Lower it to paste only the face and a little around it, so the other photo's hair and background stay out.</p>
+    <label class="slide">Soft edge <input type="range" id="soft" min="5" max="50" value="18"></label>
     <label class="check"><input type="checkbox" id="tone" checked><span>Match skin tone to the photo</span></label>
     <p class="note">This is an edited image: the face comes from photo 2. The zip also keeps both original photos unchanged.</p>
     <label class="check"><input type="checkbox" id="consent"><span id="consentText"></span></label>

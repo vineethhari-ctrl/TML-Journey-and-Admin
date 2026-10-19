@@ -91,17 +91,26 @@ export function toneGain(src, dst) {
   return src.mean.map((s, i) => Math.min(1.3, Math.max(0.75, dst.mean[i] / (s || 1))));
 }
 
-// Where the face lands on the photo: width = the smiley's diameter times `scale`, height keeps the face's proportions.
-export function targetRect(circle, face, scale = 1) {
-  const w = circle.r * 2 * scale;
-  const h = w * (face.h / face.w);
-  return { x: circle.cx - w / 2, y: circle.cy - h / 2, w, h };
-}
+// Stickers are bigger than the face under them: the cheek-to-cheek width of a covered face is about this share of the
+// smiley's diameter. The "Face size" control multiplies it.
+export const FACE_TO_SMILEY = 0.72;
+// The detector's box runs brows to chin; the head's centre sits a little above the middle of it.
+const HEAD_CENTRE = 0.4;
 
-// Detector boxes are tight; add forehead and cheeks so the swap covers the whole smiley.
-export function expandFace(b) {
-  const w = b.w * 1.16, h = b.h * 1.25;
-  return { x: b.x - (w - b.w) / 2, y: b.y - (h - b.h) * 0.7, w, h };
+// How to cut the patch from the face photo and lay it over the smiley.
+// The face itself is scaled to the covered face's size; the patch also takes in the hair, ears and neck around it, so the
+// whole smiley is covered with real texture rather than a smear.
+//   scale: face-photo pixels -> photo pixels; src: square cut from the face photo; side: its size on the photo.
+export function pastePlan(circle, face, userScale = 1) {
+  const side = circle.r * 2 * 1.08; // a touch past the smiley's edge
+  const scale = (circle.r * 2 * FACE_TO_SMILEY * userScale) / face.w;
+  const srcSide = side / scale;
+  const cx = face.x + face.w / 2, cy = face.y + face.h * HEAD_CENTRE;
+  return {
+    scale,
+    src: { x: cx - srcSide / 2, y: cy - srcSide / 2, w: srcSide, h: srcSide },
+    dst: { x: circle.cx - side / 2, y: circle.cy - side / 2, w: side, h: side },
+  };
 }
 
 // Paint over the smiley before the face goes on, so its yellow can't show through the soft edge.

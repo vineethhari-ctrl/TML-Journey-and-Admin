@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findEmoji, isSkin, isEmojiYellow, skinMean, ringSkin, toneGain, targetRect, expandFace, inpaintDisc } from '../src/composite.js';
+import { findEmoji, isSkin, isEmojiYellow, skinMean, ringSkin, toneGain, pastePlan, FACE_TO_SMILEY, inpaintDisc } from '../src/composite.js';
 import { crc32, makeZip } from '../src/zip.js';
 // detect.js touches the DOM only inside detectFace, so the pure helpers import fine under node.
 import { pickFace, tiles } from '../src/detect.js';
@@ -62,12 +62,23 @@ test('ringSkin only samples the band just outside the smiley', () => {
   assert.equal(ringSkin(d, 200, 200, 100, 100, 60), null); // ring lies entirely on the plain background
 });
 
-test('geometry: face lands centred on the smiley with its own proportions; detector box grows upward', () => {
-  const t = targetRect({ cx: 100, cy: 80, r: 20 }, { x: 0, y: 0, w: 50, h: 75 });
-  assert.deepEqual(t, { x: 80, y: 50, w: 40, h: 60 });
-  assert.deepEqual(targetRect({ cx: 100, cy: 80, r: 20 }, { x: 0, y: 0, w: 50, h: 75 }, 1.5), { x: 70, y: 35, w: 60, h: 90 });
-  const e = expandFace({ x: 100, y: 100, w: 100, h: 100 });
-  assert.ok(e.w > 100 && e.h > 100 && e.y < 100 && e.y + e.h > 200 - 1);
+test('pastePlan sizes the face to the covered face and centres the patch on the smiley', () => {
+  const circle = { cx: 400, cy: 300, r: 100 };
+  const face = { x: 200, y: 100, w: 150, h: 160 };
+  const p = pastePlan(circle, face);
+  // the detected face lands FACE_TO_SMILEY of the smiley's diameter wide, whatever its size in its own photo
+  assert.ok(Math.abs(face.w * p.scale - 200 * FACE_TO_SMILEY) < 1e-9);
+  const bigger = pastePlan(circle, { ...face, w: 300, h: 320 });
+  assert.ok(Math.abs(300 * bigger.scale - 200 * FACE_TO_SMILEY) < 1e-9);
+  // patch covers the smiley, is square, and maps onto the photo at the same scale
+  assert.ok(p.dst.w > 200 && p.dst.w === p.dst.h);
+  assert.ok(Math.abs(p.dst.x + p.dst.w / 2 - 400) < 1e-9 && Math.abs(p.dst.y + p.dst.h / 2 - 300) < 1e-9);
+  assert.ok(Math.abs(p.src.w * p.scale - p.dst.w) < 1e-9);
+  // the face box centre sits at the patch centre horizontally, a little above middle vertically
+  assert.ok(Math.abs(p.src.x + p.src.w / 2 - 275) < 1e-9 && Math.abs(p.src.y + p.src.h / 2 - (100 + 160 * 0.4)) < 1e-9);
+  // the user's face-size control scales the face, not the patch
+  const half = pastePlan(circle, face, 0.5);
+  assert.ok(Math.abs(half.scale - p.scale / 2) < 1e-9 && half.dst.w === p.dst.w);
 });
 
 test('inpaintDisc removes the smiley and blends the surroundings in', () => {

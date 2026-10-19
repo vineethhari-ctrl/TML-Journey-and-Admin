@@ -7,15 +7,21 @@ Replaces a smiley that hides a person's face with their real face from a second 
 1. Choose the photo where a smiley covers the face.
 2. Choose another photo of the same person with the face visible.
 3. The app finds the smiley (the biggest round yellow shape) and the face (face-api's tiny detector, bundled in `vendor/`).
-   The face is **scaled to the smiley automatically**, whatever size it is in its own photo, so a small face is enlarged
-   and a big one reduced. It then fills the smiley's circle with colours blended in from around it, pastes the face over it
-   with a soft edge, and matches the skin tone to the neck/forehead around it. Drag the circle or box and use the sliders
-   (smiley size, **face size** relative to the smiley, soft edge) if the automatic result is off.
+   The face is **sized to the covered face automatically**: stickers are bigger than the face under them, so the face's
+   width is set to 72% of the smiley's diameter, whatever its size in its own photo. The patch cut from photo 2 includes the
+   hair and neck around the face and covers the smiley; the colours under the smiley are first filled in from around it, and
+   the skin tone is matched to the skin around the smiley.
+   The app can't see the hidden face, so this size is a guess. Tune it with the sliders: **Face size** (bigger/smaller face),
+   **Pasted area** (paste only the face and a little around it, so photo 2's hair and background stay out), soft edge, and
+   drag the circle or box to place them.
 4. Tick the consent box, then **Save image** (the edited JPG) or **Save all (.zip)**:
    `1_face_restored.jpg` (edited), `2_covered_original.*` and `3_face_source.*` (both untouched), `manifest.json`
    (checksums, regions, consent, and a note that image 1 is a composite).
 
-It is an edited image: the face comes from the second photo, so head angle and lighting may not match. Nothing is uploaded;
+It is an edited image: the face comes from the second photo, so head angle and lighting may not match, and it will look
+pasted when they differ a lot. A smiley far bigger than the head also can't be hidden well: the area it covered beyond the
+head is filled from the surroundings, not generated. A natural result in those cases needs an AI model, which this app does
+not have. Nothing is uploaded;
 it works offline and has no server.
 
 The face can't be recovered from the covered photo itself, only taken from another photo.
