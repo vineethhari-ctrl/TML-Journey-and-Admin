@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { findEmoji, isSkin, isEmojiYellow, skinMean, ringSkin, toneGain, targetRect, expandFace, inpaintDisc } from '../src/composite.js';
 import { crc32, makeZip } from '../src/zip.js';
+// detect.js touches the DOM only inside detectFace, so the pure helpers import fine under node.
+import { pickFace, tiles } from '../src/detect.js';
 import { buildBundle } from '../src/bundle.js';
 
 // RGBA canvas: grey background with optional discs painted as [cx, cy, radius, [r,g,b]].
@@ -63,6 +65,7 @@ test('ringSkin only samples the band just outside the smiley', () => {
 test('geometry: face lands centred on the smiley with its own proportions; detector box grows upward', () => {
   const t = targetRect({ cx: 100, cy: 80, r: 20 }, { x: 0, y: 0, w: 50, h: 75 });
   assert.deepEqual(t, { x: 80, y: 50, w: 40, h: 60 });
+  assert.deepEqual(targetRect({ cx: 100, cy: 80, r: 20 }, { x: 0, y: 0, w: 50, h: 75 }, 1.5), { x: 70, y: 35, w: 60, h: 90 });
   const e = expandFace({ x: 100, y: 100, w: 100, h: 100 });
   assert.ok(e.w > 100 && e.h > 100 && e.y < 100 && e.y + e.h > 200 - 1);
 });
@@ -79,6 +82,25 @@ test('inpaintDisc removes the smiley and blends the surroundings in', () => {
   inpaintDisc(e, 120, 120, 60, 60, 30);
   const top = [...e.slice((40 * 120 + 60) * 4, (40 * 120 + 60) * 4 + 3)], bottom = [...e.slice((80 * 120 + 60) * 4, (80 * 120 + 60) * 4 + 3)];
   assert.ok(top[0] > bottom[0]); // nearer the skin side is warmer than the far side
+});
+
+test('pickFace takes the most confident clear face and ignores weak hits', () => {
+  const f = (score, w) => ({ score, x: 0, y: 0, w, h: w });
+  assert.equal(pickFace([f(0.9, 50), f(0.7, 120), f(0.4, 300)]).w, 50);
+  assert.equal(pickFace([f(0.55, 80), f(0.52, 200)]).w, 80);
+  assert.equal(pickFace([f(0.45, 80), f(0.3, 200)]), null); // e.g. a round badge: better to ask than to guess
+  assert.equal(pickFace([]), null);
+});
+
+test('tiles cover the whole photo with overlap and stay inside it', () => {
+  const W = 1600, H = 1200, side = 600;
+  const ts = tiles(W, H, side);
+  for (const t of ts) assert.ok(t.sx >= 0 && t.sy >= 0 && t.sx + t.side <= W && t.sy + t.side <= H);
+  assert.ok(ts.some((t) => t.sx + t.side === W) && ts.some((t) => t.sy + t.side === H));
+  for (let x = 0; x < W; x += 50) for (let y = 0; y < H; y += 50) {
+    assert.ok(ts.some((t) => x >= t.sx && x < t.sx + t.side && y >= t.sy && y < t.sy + t.side), `uncovered ${x},${y}`);
+  }
+  assert.equal(tiles(300, 200, 600).length, 1); // photo smaller than a tile
 });
 
 test('bundle puts the edited face image first and keeps the sources byte-for-byte', () => {

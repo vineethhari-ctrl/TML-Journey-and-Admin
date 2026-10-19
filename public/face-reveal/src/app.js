@@ -46,17 +46,23 @@ function detectSmiley(A) {
 async function analyse() {
   const { A, B } = state;
   const smiley = detectSmiley(A);
-  const face = await detectFace(B.img);
+  const face = await detectFace(B.img, (m) => { $('detectStatus').textContent = m; });
   state.circle = smiley || { cx: A.w / 2, cy: A.h / 2, r: A.w * 0.12 };
+  // No face found: start from a centred box and ask the user to place it.
   state.face = face ? expandFace(face) : { x: B.w * 0.3, y: B.h * 0.2, w: B.w * 0.4, h: B.w * 0.5 };
   $('sizeA').value = Math.round((state.circle.r / A.w) * 100);
   $('sizeB').value = Math.round((state.face.w / B.w) * 100);
+  $('faceScale').value = 100;
+  // The face box is sized by the detector; only when it failed does the user size it by hand.
+  $('sizeBRow').hidden = !!face;
+  const shaky = face && face.score < 0.65;
   const msgs = [
     smiley ? 'Smiley found.' : 'Could not find the smiley automatically: drag the circle onto it.',
-    face ? 'Face found.' : 'Could not find the face automatically: drag the box onto it.',
+    !face ? 'Could not find the face automatically: drag the box onto it and set its size.'
+      : shaky ? 'Face found, but not sure: check the box is on the face.' : 'Face found.',
   ];
   const el = $('detectStatus');
-  el.className = `status ${smiley && face ? 'ok' : 'warn'}`;
+  el.className = `status ${smiley && face && !shaky ? 'ok' : 'warn'}`;
   el.textContent = msgs.join(' ');
 }
 
@@ -100,7 +106,7 @@ function compose(canvas, scale) {
     inpaintDisc(around.data, x1 - x0, y1 - y0, c.cx - x0, c.cy - y0, c.r);
     ctx.putImageData(around, x0, y0);
   }
-  const t = targetRect(c, face);
+  const t = targetRect(c, face, Number($('faceScale').value) / 100);
   const tw = Math.max(2, Math.round(t.w)), th = Math.max(2, Math.round(t.h));
   const oc = document.createElement('canvas');
   oc.width = tw;
@@ -177,6 +183,7 @@ $('sizeB').addEventListener('input', () => {
   render();
 });
 $('soft').addEventListener('input', render);
+$('faceScale').addEventListener('input', render);
 $('tone').addEventListener('change', render);
 window.addEventListener('resize', render);
 

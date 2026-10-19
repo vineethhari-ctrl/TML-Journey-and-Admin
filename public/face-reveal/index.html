@@ -71,11 +71,13 @@
       <figure>
         <figcaption>Face: drag the box over it</figcaption>
         <canvas id="edB" class="edit" aria-label="Photo with the face"></canvas>
-        <label class="slide">Size <input type="range" id="sizeB" min="5" max="100" value="30"></label>
+        <label class="slide" id="sizeBRow" hidden>Box size <input type="range" id="sizeB" min="5" max="100" value="30"></label>
       </figure>
     </div>
     <h2>Result</h2>
     <canvas id="out" class="result" aria-label="Result with the face replaced"></canvas>
+    <label class="slide">Face size <input type="range" id="faceScale" min="50" max="170" value="100"></label>
+    <p class="note">The face is scaled automatically to fit the smiley. Use this to make it bigger or smaller.</p>
     <label class="slide">Soft edge <input type="range" id="soft" min="5" max="50" value="25"></label>
     <label class="check"><input type="checkbox" id="tone" checked><span>Match skin tone to the photo</span></label>
     <p class="note">This is an edited image: the face comes from photo 2. The zip also keeps both original photos unchanged.</p>

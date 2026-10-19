@@ -91,9 +91,9 @@ export function toneGain(src, dst) {
   return src.mean.map((s, i) => Math.min(1.3, Math.max(0.75, dst.mean[i] / (s || 1))));
 }
 
-// Where the face lands on the photo: width = the smiley's diameter, height keeps the face's proportions.
-export function targetRect(circle, face) {
-  const w = circle.r * 2;
+// Where the face lands on the photo: width = the smiley's diameter times `scale`, height keeps the face's proportions.
+export function targetRect(circle, face, scale = 1) {
+  const w = circle.r * 2 * scale;
   const h = w * (face.h / face.w);
   return { x: circle.cx - w / 2, y: circle.cy - h / 2, w, h };
 }
