@@ -32,6 +32,12 @@ Allocation-driven bay governance with approvals (TML Network Manager / TML Admin
 policy switches — see [`docs/BAY_MANAGEMENT.md`](docs/BAY_MANAGEMENT.md). Rules: `src/utils/bayGovernance.ts` (pure, unit-tested);
 state: `src/context/BayContext.tsx`; UI: `BayManagementConsole.tsx`, `pages/BayApprovalsPage.tsx`.
 
+## Face Reveal (offline mobile app)
+
+Separate tool in `public/face-reveal/`, published with the site at `/face-reveal/`. Pairs an emoji-covered photo with its
+original and delivers the face-visible original first. Installable and works offline — see
+[`public/face-reveal/README.md`](public/face-reveal/README.md).
+
 ## No AI at runtime
 
 The portal runs entirely in the browser with plain, tested code: Excel reading (SheetJS), validation, duplicate checks and
