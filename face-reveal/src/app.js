@@ -109,12 +109,26 @@ $('consentText').textContent = CONSENT_STATEMENT;
 $('consent').addEventListener('change', updateDownload);
 $('override').addEventListener('change', updateDownload);
 $('copyReq').addEventListener('click', () => navigator.clipboard?.writeText($('requestText').value));
-$('download').addEventListener('click', () => {
+$('download').addEventListener('click', async () => {
   const { zip } = buildBundle({ original: state.original, covered: state.covered, cmp: state.cmp });
+  const name = `face-reveal-${state.covered.sha256.slice(0, 8)}.zip`;
+  const file = new File([zip], name, { type: 'application/zip' });
+  // On phones the share sheet is the natural way to deliver; fall back to a download.
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: 'Face Reveal' }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([zip], { type: 'application/zip' }));
-  a.download = `face-reveal-${state.covered.sha256.slice(0, 8)}.zip`;
+  a.href = URL.createObjectURL(file);
+  a.download = name;
   a.click();
 });
 wireDrop($('dropCovered'), $('fileCovered'), setCovered);
 wireDrop($('dropOriginal'), $('fileOriginal'), setOriginal);
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(
+    () => navigator.serviceWorker.ready.then(() => { $('offlineStatus').textContent = 'Ready to use offline.'; }),
+    () => {},
+  );
+}

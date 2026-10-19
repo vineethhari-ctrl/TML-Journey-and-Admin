@@ -18,6 +18,14 @@ inpainting tool would only invent a face. So the app works from the original fil
 
 Images are delivered byte-for-byte. Everything runs in the browser; nothing is uploaded and there are no dependencies.
 
+## Mobile app (installable, works offline)
+
+Face Reveal is a Progressive Web App. Host the folder over HTTPS (any static host, e.g. GitHub Pages), open it on the phone,
+then **Add to Home Screen** (Android Chrome: menu > Install app; iPhone Safari: Share > Add to Home Screen). It opens full
+screen like a native app. The first visit caches everything (`sw.js`), after which it works with no connection at all.
+On phones the bundle is delivered through the share sheet (save to Files, WhatsApp, email), with a plain download as fallback.
+If you change any app file, bump `CACHE` in `sw.js` so installed copies update.
+
 ## Run / test
 
     python3 -m http.server 8000     # then open http://localhost:8000

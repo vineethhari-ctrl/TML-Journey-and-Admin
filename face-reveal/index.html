@@ -2,14 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Face Reveal</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1b5fd1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Face Reveal">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <style>
   :root { --bg:#f7f7f5; --fg:#1d1d1b; --muted:#66655f; --card:#fff; --line:#dcdad2; --accent:#1b5fd1; --warn:#b45309; --ok:#15803d; --bad:#b91c1c; }
   @media (prefers-color-scheme: dark) { :root { --bg:#161615; --fg:#ecebe6; --muted:#a3a29a; --card:#20201e; --line:#3a3a36; --accent:#6ea0ff; --warn:#f59e0b; --ok:#4ade80; --bad:#f87171; } }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, sans-serif; }
-  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  main { max-width: 860px; margin: 0 auto; padding: max(24px, env(safe-area-inset-top)) 16px max(64px, env(safe-area-inset-bottom)); }
   h1 { font-size: 1.6rem; margin: 0 0 4px; }
   .lead { color: var(--muted); margin: 0 0 20px; }
   section { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
@@ -22,7 +27,7 @@
   .note { font-size:.9rem; color:var(--muted); }
   .status { margin:8px 0 0; font-weight:600; }
   .status.ok { color:var(--ok); } .status.warn { color:var(--warn); } .status.bad { color:var(--bad); }
-  button { font:inherit; border:1px solid var(--accent); background:var(--accent); color:#fff; padding:8px 16px; border-radius:8px; cursor:pointer; }
+  button { min-height:44px; font:inherit; border:1px solid var(--accent); background:var(--accent); color:#fff; padding:8px 16px; border-radius:8px; cursor:pointer; }
   button.secondary { background:transparent; color:var(--accent); }
   button:disabled { opacity:.45; cursor:not-allowed; }
   textarea { width:100%; min-height:130px; font:inherit; font-size:.9rem; border:1px solid var(--line); border-radius:8px; padding:8px; background:var(--bg); color:var(--fg); }
@@ -39,6 +44,7 @@
 <main>
   <h1>Face Reveal</h1>
   <p class="lead">A face hidden under an emoji can't be recovered from the covered picture itself. This tool pairs the covered picture with the original and delivers the <strong>face-visible original first</strong>, then the covered one. Everything runs in your browser; nothing is uploaded.</p>
+  <p class="status" id="offlineStatus" role="status"></p>
 
   <section aria-labelledby="s1">
     <h2 id="s1">1. Covered image (face hidden by an emoji)</h2>
@@ -69,7 +75,7 @@
     </div>
     <label class="check"><input type="checkbox" id="override" hidden><span id="overrideText" hidden>I confirm these are the same photo.</span></label>
     <label class="check"><input type="checkbox" id="consent"><span id="consentText"></span></label>
-    <button type="button" id="download" disabled>Download bundle (.zip)</button>
+    <button type="button" id="download" disabled>Save / share bundle (.zip)</button>
     <p class="note">The zip holds <code>1_face_visible</code>, <code>2_face_covered</code> and a <code>manifest.json</code> (checksums and consent). Files are delivered exactly as received.</p>
   </section>
 </main>
