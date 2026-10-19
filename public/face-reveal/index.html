@@ -23,7 +23,10 @@
   .drop.has { border-style:solid; }
   .drop input { display:none; }
   .drop:focus-within, .drop.over { border-color:var(--accent); }
-  img.preview { max-width:100%; max-height:260px; border-radius:8px; display:block; margin:10px auto 0; }
+  canvas { max-width:100%; border-radius:8px; display:block; }
+  canvas.edit { width:100%; touch-action:none; background:var(--bg); }
+  canvas.result { width:100%; max-height:70vh; object-fit:contain; margin-bottom:8px; }
+  .slide { display:flex; gap:10px; align-items:center; margin:8px 0; } .slide input { flex:1; }
   .note { font-size:.9rem; color:var(--muted); }
   .status { margin:8px 0 0; font-weight:600; }
   .status.ok { color:var(--ok); } .status.warn { color:var(--warn); } .status.bad { color:var(--bad); }
@@ -37,46 +40,80 @@
   .frame { position:relative; display:inline-block; max-width:100%; }
   .frame .box { position:absolute; border:2px solid var(--bad); pointer-events:none; }
   label.check { display:flex; gap:8px; align-items:flex-start; margin:12px 0; }
+  .angles { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+  .angles label { display:flex; flex-direction:column; align-items:center; gap:4px; font-size:.85rem; }
+  .angles img { width:72px; height:72px; object-fit:cover; border-radius:8px; border:2px solid var(--line); }
+  .angles input:checked + img { border-color:var(--accent); }
+  .angles input { margin:0; }
   [hidden] { display:none !important; }
 </style>
 </head>
 <body>
 <main>
   <h1>Face Reveal</h1>
-  <p class="lead">A face hidden under an emoji can't be recovered from the covered picture itself. This tool pairs the covered picture with the original and delivers the <strong>face-visible original first</strong>, then the covered one. Everything runs in your browser; nothing is uploaded.</p>
+  <p class="lead">Replace a smiley that hides someone's face with their real face from a second photo. Everything runs on your device, with no internet needed.</p>
   <p class="status" id="offlineStatus" role="status"></p>
 
-  <section aria-labelledby="s1">
-    <h2 id="s1">1. Covered image (face hidden by an emoji)</h2>
-    <label class="drop" id="dropCovered"><input type="file" accept="image/*" id="fileCovered"><span>Drop the covered image here or click to choose</span></label>
-    <img class="preview" id="prevCovered" alt="Covered image preview" hidden>
+  <section id="aiBox" aria-labelledby="sai" hidden>
+    <h2 id="sai">AI face swap</h2>
+    <p class="note" id="aiNote"></p>
+    <button type="button" id="dlModels" hidden>Download AI models</button>
+    <progress id="dlBar" max="100" value="0" hidden style="width:100%"></progress>
+    <p class="status" id="aiStatus" role="status"></p>
   </section>
 
-  <section aria-labelledby="s2" id="step2" hidden>
-    <h2 id="s2">2. Original image (face visible)</h2>
-    <label class="drop" id="dropOriginal"><input type="file" accept="image/*" id="fileOriginal"><span>Drop the original here or click to choose</span></label>
-    <img class="preview" id="prevOriginal" alt="Original image preview" hidden>
-    <p class="status" id="matchStatus" role="status"></p>
-    <details style="margin-top:12px">
-      <summary>Don't have the original? Ask the sender for it</summary>
-      <p class="note">Reference <code id="refId"></code>. Send this to whoever shared the image, then come back with the file they send.</p>
-      <textarea id="requestText" readonly aria-label="Request message"></textarea>
-      <p><button type="button" class="secondary" id="copyReq">Copy message</button></p>
-    </details>
+  <section aria-labelledby="s1">
+    <h2 id="s1">1. Photo with the smiley</h2>
+    <label class="drop" id="dropA"><input type="file" accept="image/*" id="fileA"><span>Choose the photo where a smiley covers the face</span></label>
+  </section>
+
+  <section aria-labelledby="s2">
+    <h2 id="s2">2. Photo with the face visible</h2>
+    <label class="drop" id="dropB"><input type="file" accept="image/*" id="fileB"><span>Choose another photo of the same person, face visible</span></label>
+  </section>
+
+  <section data-ai hidden aria-labelledby="s2b">
+    <h2 id="s2b">Optional: more photos of the same person</h2>
+    <p class="note">The AI keeps the angle of the face photo you pick, it cannot turn a head by itself. So add photos from other angles and choose the one that matches the head in photo 1. All of them are used to get the likeness right.</p>
+    <label class="drop" id="dropB2"><input type="file" accept="image/*" id="fileB2" multiple><span>Add more photos (up to 4)</span></label>
+    <div id="angleList" class="angles"></div>
   </section>
 
   <section aria-labelledby="s3" id="step3" hidden>
-    <h2 id="s3">3. Deliver</h2>
+    <h2 id="s3">3. Check and adjust</h2>
+    <p class="status" id="detectStatus" role="status"></p>
     <div class="pair">
-      <figure><figcaption>1 · Face visible</figcaption><img id="outOriginal" alt="Face-visible original" style="max-width:100%;border-radius:8px"></figure>
-      <figure><figcaption>2 · Covered</figcaption>
-        <span class="frame"><img id="outCovered" alt="Covered image" style="max-width:100%;border-radius:8px;display:block"><span class="box" id="regionBox" hidden></span></span>
+      <figure>
+        <figcaption>Smiley: drag the circle over it</figcaption>
+        <canvas id="edA" class="edit" aria-label="Photo with the smiley"></canvas>
+        <label class="slide">Size <input type="range" id="sizeA" min="2" max="60" value="15"></label>
+      </figure>
+      <figure data-web>
+        <figcaption>Face: drag the box over it</figcaption>
+        <canvas id="edB" class="edit" aria-label="Photo with the face"></canvas>
+        <label class="slide" id="sizeBRow" hidden>Box size <input type="range" id="sizeB" min="5" max="100" value="30"></label>
       </figure>
     </div>
-    <label class="check"><input type="checkbox" id="override" hidden><span id="overrideText" hidden>I confirm these are the same photo.</span></label>
+    <h2>Result</h2>
+    <canvas id="out" class="result" hidden aria-label="Result with the face replaced"></canvas>
+    <label class="slide">Face size <input type="range" id="faceScale" min="50" max="150" value="100"></label>
+    <p class="note" data-web>The face is sized to the covered face automatically (stickers are bigger than the face under them). Use this to make it bigger or smaller.</p>
+    <p class="note" data-ai hidden>The blue oval and dots show where the face, eyes, nose and mouth will go. Move the circle and use Face size so they fit the head you can see (hair, ears, neck), then tap Swap. A smiley is usually bigger than the face under it.</p>
+    <label class="slide">Pasted area <input type="range" id="reach" min="30" max="100" value="100"></label>
+    <p class="note">Lower it to paste only the face and a little around it, so the other photo's hair and background stay out.</p>
+    <label class="slide" data-web>Soft edge <input type="range" id="soft" min="5" max="50" value="18"></label>
+    <label class="check" data-web><input type="checkbox" id="tone" checked><span>Match skin tone to the photo</span></label>
+    <label class="slide" data-ai hidden>Tilt <input type="range" id="rollAI" min="-45" max="45" value="0"></label>
+    <label class="check" data-ai hidden><input type="checkbox" id="mirrorAI"><span>Mirror the chosen face photo (turns a three-quarter view the other way)</span></label>
+    <label class="slide" data-ai hidden>Match lighting <input type="range" id="toneAI" min="0" max="100" value="60"></label>
+    <p data-ai hidden><button type="button" id="runAI">Swap with AI</button></p>
+    <p class="status" id="runStatus" role="status" data-ai hidden></p>
+    <p class="note">This is an edited image: the face comes from photo 2. The zip also keeps both original photos unchanged.</p>
     <label class="check"><input type="checkbox" id="consent"><span id="consentText"></span></label>
-    <button type="button" id="download" disabled>Save / share bundle (.zip)</button>
-    <p class="note">The zip holds <code>1_face_visible</code>, <code>2_face_covered</code> and a <code>manifest.json</code> (checksums and consent). Files are delivered exactly as received.</p>
+    <p>
+      <button type="button" id="saveImg" disabled>Save image</button>
+      <button type="button" class="secondary" id="saveZip" disabled>Save all (.zip)</button>
+    </p>
   </section>
 </main>
 <script type="module" src="src/app.js"></script>
