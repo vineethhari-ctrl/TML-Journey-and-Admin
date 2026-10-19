@@ -18,7 +18,15 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import org.json.JSONObject;
+import app.facereveal.swap.Engine;
+import app.facereveal.swap.Img;
+
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 
@@ -116,6 +124,22 @@ public class MainActivity extends Activity {
         return "application/octet-stream";
     }
 
+    // ---- AI face swap (runs on the phone; models are downloaded once) ------------------------------
+
+    private volatile boolean busy = false;
+
+    private void post(final JSONObject o) {
+        runOnUiThread(new Runnable() {
+            public void run() { web.evaluateJavascript("window.__native && window.__native(" + o.toString() + ")", null); }
+        });
+    }
+
+    private void post(String type, String key, Object value) {
+        try { post(new JSONObject().put("type", type).put(key, value)); } catch (Exception ignored) { }
+    }
+
+    private File modelDir() { return new File(getFilesDir(), "models"); }
+
     /** Called from app.js: saves the zip to Downloads/FaceReveal, then opens the share sheet. */
     private class Bridge {
         @JavascriptInterface
@@ -149,6 +173,81 @@ public class MainActivity extends Activity {
                     }
                 });
             }
+        }
+
+        @JavascriptInterface
+        public boolean hasEngine() { return true; }
+
+        @JavascriptInterface
+        public boolean modelsReady() { return Models.ready(modelDir()); }
+
+        @JavascriptInterface
+        public double modelsMegabytes() { return Models.totalBytes() / 1048576.0; }
+
+        @JavascriptInterface
+        public void downloadModels() {
+            if (busy) return;
+            busy = true;
+            new Thread(new Runnable() {
+                public void run() {
+                    try {
+                        Models.download(modelDir(), new Models.Listener() {
+                            public void progress(String file, long done, long total) {
+                                try { post(new JSONObject().put("type", "dl").put("done", done).put("total", total).put("file", file)); }
+                                catch (Exception ignored) { }
+                            }
+                        });
+                        post("dlDone", "ok", true);
+                    } catch (Exception e) {
+                        post("error", "text", String.valueOf(e.getMessage()));
+                    } finally {
+                        busy = false;
+                    }
+                }
+            }).start();
+        }
+
+        /** Photo 1 (smiley) and photo 2 (face) as base64 JPEGs; the circle is in photo 1's pixels. */
+        @JavascriptInterface
+        public void startSwap(final String aB64, final String bB64, final double cx, final double cy, final double r,
+                              final double faceRatio, final double reach, final double tone, final boolean enhance) {
+            if (busy) return;
+            busy = true;
+            new Thread(new Runnable() {
+                public void run() {
+                    try {
+                        Img a = decode(aB64), b = decode(bB64);
+                        Engine e = new Engine(modelDir(), getAssets().open("emap.bin"));
+                        Engine.Params p = new Engine.Params();
+                        p.faceRatio = faceRatio;
+                        p.reach = reach;
+                        p.tone = tone;
+                        p.enhance = enhance;
+                        Img out = e.swap(a, cx, cy, r, b, p, new Engine.Progress() {
+                            public void on(String m) { post("progress", "text", m); }
+                        });
+                        Bitmap bmp = Bitmap.createBitmap(out.toArgb(), out.w, out.h, Bitmap.Config.ARGB_8888);
+                        ByteArrayOutputStream jpg = new ByteArrayOutputStream();
+                        bmp.compress(Bitmap.CompressFormat.JPEG, 92, jpg);
+                        post(new JSONObject().put("type", "done").put("w", out.w).put("h", out.h)
+                                .put("b64", Base64.encodeToString(jpg.toByteArray(), Base64.NO_WRAP)));
+                    } catch (Throwable t) {
+                        post("error", "text", String.valueOf(t.getMessage() != null ? t.getMessage() : t));
+                    } finally {
+                        busy = false;
+                    }
+                }
+            }).start();
+        }
+
+        private Img decode(String b64) {
+            byte[] raw = Base64.decode(b64, Base64.DEFAULT);
+            Bitmap bmp = BitmapFactory.decodeByteArray(raw, 0, raw.length);
+            int[] px = new int[bmp.getWidth() * bmp.getHeight()];
+            bmp.getPixels(px, 0, bmp.getWidth(), 0, 0, bmp.getWidth(), bmp.getHeight());
+            Img im = Img.fromArgb(px, bmp.getWidth(), bmp.getHeight());
+            bmp.recycle();
+            return im;
         }
     }
 }

@@ -18,6 +18,7 @@ CENTRAL = 'https://repo.maven.apache.org/maven2'
 JARS = {
     'android.jar': f'{CENTRAL}/org/robolectric/android-all/13-robolectric-9030017/android-all-13-robolectric-9030017.jar',
     'dx.jar': f'{CENTRAL}/com/jakewharton/android/repackaged/dalvik-dx/16.0.1/dalvik-dx-16.0.1.jar',
+    'ort.aar': f'{CENTRAL}/com/microsoft/onnxruntime/onnxruntime-android/1.20.0/onnxruntime-android-1.20.0.aar',
 }
 
 def run(*a, **k):
@@ -36,7 +37,7 @@ CONFIG_CHANGES = 0x80 | 0x400 | 0x20 | 0x100 | 0x800
 TYPE_INT_HEX = 0x11000008
 # Attributes Android reads as numbers/booleans: a text value here makes the package fail to parse.
 MUST_BE_TYPED = {'versionCode', 'minSdkVersion', 'targetSdkVersion', 'configChanges',
-                 'exported', 'allowBackup', 'usesCleartextTraffic'}
+                 'exported', 'allowBackup', 'usesCleartextTraffic', 'largeHeap'}
 TYPE_STRING = 0x03000008
 
 def _attributes(ax, proto):
@@ -130,20 +131,28 @@ def main():
     shutil.rmtree(BUILD, ignore_errors=True)
     (BUILD / 'classes').mkdir(parents=True)
     android, dx = CACHE / 'android.jar', CACHE / 'dx.jar'
+    with zipfile.ZipFile(CACHE / 'ort.aar') as aar:  # ONNX Runtime: its Java classes and the arm64 native libraries
+        ort_classes = BUILD / 'ort-classes.jar'
+        ort_classes.write_bytes(aar.read('classes.jar'))
+        ort_libs = {n: aar.read(n) for n in aar.namelist() if n.startswith('jni/arm64-v8a/') and n.endswith('.so')}
 
-    run('javac', '-source', '8', '-target', '8', '-Xlint:-options', '-cp', android,
+    run('javac', '-source', '8', '-target', '8', '-Xlint:-options', '-cp', f'{android}{os.pathsep}{ort_classes}',
         '-d', BUILD / 'classes', *(ROOT / 'src').rglob('*.java'))
     run('java', '-cp', dx, 'com.android.dx.command.Main', '--dex', '--min-sdk-version=29',
-        f'--output={BUILD / "classes.dex"}', BUILD / 'classes')
+        f'--output={BUILD / "classes.dex"}', BUILD / 'classes', ort_classes)
 
     unsigned = BUILD / 'unsigned.apk'
     web = REPO / 'public' / 'face-reveal'
     with zipfile.ZipFile(unsigned, 'w', zipfile.ZIP_DEFLATED) as z:
         z.writestr('AndroidManifest.xml', manifest())
         z.write(BUILD / 'classes.dex', 'classes.dex')
+        z.write(ROOT / 'assets-swap' / 'emap.bin', 'assets/emap.bin')
+        for name, data in sorted(ort_libs.items()):
+            z.writestr('lib/arm64-v8a/' + name.rsplit('/', 1)[1], data)
         for f in sorted(web.rglob('*')):
             rel = f.relative_to(web).as_posix()
-            if f.is_file() and not rel.startswith('test/') and f.name != 'README.md':
+            # the web build's face finder (vendor/) is not needed here: the app finds faces with its own models
+            if f.is_file() and not rel.startswith(('test/', 'vendor/')) and f.name != 'README.md':
                 z.write(f, f'assets/face-reveal/{rel}')
 
     out = BUILD / 'FaceReveal.apk'

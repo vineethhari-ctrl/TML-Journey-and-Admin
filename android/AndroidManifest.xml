@@ -4,9 +4,11 @@
     android:versionCode="1"
     android:versionName="1.0">
     <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="34" />
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="Face Reveal"
         android:allowBackup="false"
+        android:largeHeap="true"
         android:usesCleartextTraffic="false">
         <activity
             android:name="app.facereveal.MainActivity"

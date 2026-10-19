@@ -1,11 +1,13 @@
 import { findEmoji, skinMean, ringSkin, toneGain, pastePlan, inpaintDisc } from './composite.js';
 import { detectFace } from './detect.js';
-import { buildBundle, CONSENT_STATEMENT } from './bundle.js';
+import { buildBundle, CONSENT_STATEMENT, AI_NOTE } from './bundle.js';
 
 const $ = (id) => document.getElementById(id);
+// Inside the Android app the swap runs natively with AI models; in a browser the paste-based version is used.
+const AI = !!(window.AndroidBridge && window.AndroidBridge.hasEngine && window.AndroidBridge.hasEngine());
 // A = photo with the smiley, B = photo with the face.
 // circle: smiley position in A pixels. face: crop box in B pixels (its proportions stay fixed).
-const state = { A: null, B: null, circle: null, face: null };
+const state = { A: null, B: null, circle: null, face: null, aiResult: null };
 
 function toBase64(bytes) {
   let bin = '';
@@ -46,7 +48,7 @@ function detectSmiley(A) {
 async function analyse() {
   const { A, B } = state;
   const smiley = detectSmiley(A);
-  const face = await detectFace(B.img, (m) => { $('detectStatus').textContent = m; });
+  const face = AI ? null : await detectFace(B.img, (m) => { $('detectStatus').textContent = m; });
   state.circle = smiley || { cx: A.w / 2, cy: A.h / 2, r: A.w * 0.12 };
   // No face found: start from a centred box and ask the user to place it.
   state.face = face ? { x: face.x, y: face.y, w: face.w, h: face.h } : { x: B.w * 0.3, y: B.h * 0.2, w: B.w * 0.4, h: B.w * 0.5 };
@@ -56,6 +58,14 @@ async function analyse() {
   // The face box is sized by the detector; only when it failed does the user size it by hand.
   $('sizeBRow').hidden = !!face;
   const shaky = face && face.score < 0.65;
+  if (AI) {
+    const el = $('detectStatus');
+    el.className = `status ${smiley ? 'ok' : 'warn'}`;
+    el.textContent = smiley
+      ? 'Smiley found. Check the circle covers it, then tap "Swap with AI".'
+      : 'Could not find the smiley automatically: drag the circle onto it, then tap "Swap with AI".';
+    return;
+  }
   const msgs = [
     smiley ? 'Smiley found.' : 'Could not find the smiley automatically: drag the circle onto it.',
     !face ? 'Could not find the face automatically: drag the box onto it and set its size.'
@@ -148,6 +158,14 @@ function compose(canvas, scale) {
   ctx.drawImage(oc, Math.round(plan.dst.x), Math.round(plan.dst.y));
 }
 
+function clearAI() {
+  if (!state.aiResult) return;
+  state.aiResult = null;
+  $('out').hidden = true;
+  syncSave();
+}
+function changed() { if (AI) clearAI(); render(); }
+
 let queued = false;
 function render() {
   if (queued || !state.A || !state.B || !state.circle) return;
@@ -155,8 +173,10 @@ function render() {
   requestAnimationFrame(() => {
     queued = false;
     drawEditor($('edA'), state.A, { circle: state.circle });
+    if (AI) return;
     drawEditor($('edB'), state.B, { face: state.face });
     compose($('out'), Math.min(1, 1000 / Math.max(state.A.w, state.A.h)));
+    $('out').hidden = false;
   });
 }
 
@@ -167,7 +187,7 @@ function wireDrag(cv, item, move) {
   const at = (e) => {
     const r = cv.getBoundingClientRect();
     move(((e.clientX - r.left) / r.width) * item().w, ((e.clientY - r.top) / r.height) * item().h);
-    render();
+    changed();
   };
   cv.addEventListener('pointerdown', (e) => { down = true; cv.setPointerCapture(e.pointerId); at(e); });
   cv.addEventListener('pointermove', (e) => down && at(e));
@@ -178,7 +198,7 @@ function wireDrag(cv, item, move) {
 wireDrag($('edA'), () => state.A, (x, y) => { state.circle.cx = x; state.circle.cy = y; });
 wireDrag($('edB'), () => state.B, (x, y) => { state.face.x = x - state.face.w / 2; state.face.y = y - state.face.h / 2; });
 
-$('sizeA').addEventListener('input', () => { state.circle.r = (Number($('sizeA').value) / 100) * state.A.w; render(); });
+$('sizeA').addEventListener('input', () => { state.circle.r = (Number($('sizeA').value) / 100) * state.A.w; changed(); });
 $('sizeB').addEventListener('input', () => {
   const f = state.face, ratio = f.h / f.w, cx = f.x + f.w / 2, cy = f.y + f.h / 2;
   f.w = (Number($('sizeB').value) / 100) * state.B.w;
@@ -187,10 +207,11 @@ $('sizeB').addEventListener('input', () => {
   f.y = cy - f.h / 2;
   render();
 });
-$('soft').addEventListener('input', render);
-$('faceScale').addEventListener('input', render);
-$('reach').addEventListener('input', render);
-$('tone').addEventListener('change', render);
+$('soft').addEventListener('input', changed);
+$('faceScale').addEventListener('input', changed);
+$('reach').addEventListener('input', changed);
+$('toneAI').addEventListener('input', changed);
+$('tone').addEventListener('change', changed);
 window.addEventListener('resize', render);
 
 async function pick(which, file) {
@@ -201,10 +222,12 @@ async function pick(which, file) {
   } catch (e) { alert(e.message); return; }
   if (state.A && state.B) {
     $('step3').hidden = false;
+    clearAI();
     $('detectStatus').className = 'status';
     $('detectStatus').textContent = 'Looking for the smiley and the face…';
     await analyse();
     render();
+    if (AI) setRunning(false);
   }
 }
 $('fileA').addEventListener('change', () => $('fileA').files[0] && pick('A', $('fileA').files[0]));
@@ -213,6 +236,7 @@ $('fileB').addEventListener('change', () => $('fileB').files[0] && pick('B', $('
 // ---- delivery --------------------------------------------------------------------------------
 
 async function exportComposite() {
+  if (AI) return state.aiResult;
   const cv = document.createElement('canvas');
   compose(cv, 1);
   const blob = await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.92));
@@ -239,9 +263,10 @@ async function deliver(name, type, bytes) {
 const stamp = () => state.A.sha256.slice(0, 8);
 
 $('consentText').textContent = CONSENT_STATEMENT;
-$('consent').addEventListener('change', () => {
-  $('saveImg').disabled = $('saveZip').disabled = !$('consent').checked;
-});
+function syncSave() {
+  $('saveImg').disabled = $('saveZip').disabled = !($('consent').checked && (!AI || state.aiResult));
+}
+$('consent').addEventListener('change', syncSave);
 $('saveImg').addEventListener('click', async () => {
   const c = await exportComposite();
   await deliver(`face-restored-${stamp()}.jpg`, 'image/jpeg', c.bytes);
@@ -251,6 +276,7 @@ $('saveZip').addEventListener('click', async () => {
   const { A, B, circle, face } = state;
   const { zip } = buildBundle({
     composite, covered: A, face: B,
+    note: AI ? AI_NOTE : undefined,
     regions: {
       smiley: { cx: Math.round(circle.cx), cy: Math.round(circle.cy), r: Math.round(circle.r) },
       face: { x: Math.round(face.x), y: Math.round(face.y), w: Math.round(face.w), h: Math.round(face.h) },
@@ -260,6 +286,114 @@ $('saveZip').addEventListener('click', async () => {
   });
   await deliver(`face-reveal-${stamp()}.zip`, 'application/zip', zip);
 });
+
+
+// ---- AI mode (Android app) -------------------------------------------------------------------
+
+async function toJpeg(img, maxSide) {
+  const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.naturalWidth * k);
+  c.height = Math.round(img.naturalHeight * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.95));
+  return { b64: toBase64(new Uint8Array(await blob.arrayBuffer())), k };
+}
+
+function fromBase64(b64) {
+  const bin = atob(b64), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function setRunning(on) {
+  $('runAI').disabled = on || !state.A || !state.B;
+  $('dlModels').disabled = on;
+}
+
+function showModels() {
+  const ready = window.AndroidBridge.modelsReady();
+  const mb = Math.round(window.AndroidBridge.modelsMegabytes());
+  $('aiNote').textContent = ready
+    ? 'AI models are on this phone. Swapping works fully offline.'
+    : `The AI models (about ${mb} MB) are downloaded once, then everything works offline. Use Wi-Fi.`;
+  $('dlModels').hidden = ready;
+  return ready;
+}
+
+window.__native = (m) => {
+  if (m.type === 'dl') {
+    $('dlBar').hidden = false;
+    $('dlBar').value = Math.round((m.done / m.total) * 100);
+    $('aiStatus').className = 'status';
+    $('aiStatus').textContent = `Downloading… ${Math.round(m.done / 1048576)} of ${Math.round(m.total / 1048576)} MB`;
+  } else if (m.type === 'dlDone') {
+    $('dlBar').hidden = true;
+    $('aiStatus').className = 'status ok';
+    $('aiStatus').textContent = 'Models downloaded.';
+    showModels();
+    setRunning(false);
+  } else if (m.type === 'progress') {
+    $('runStatus').className = 'status';
+    $('runStatus').textContent = m.text;
+  } else if (m.type === 'error') {
+    $('dlBar').hidden = true;
+    $('runStatus').className = 'status bad';
+    $('runStatus').textContent = m.text;
+    $('aiStatus').textContent = '';
+    setRunning(false);
+  } else if (m.type === 'done') {
+    const bytes = fromBase64(m.b64);
+    sha256Hex(bytes).then((sha) => {
+      state.aiResult = { bytes, width: m.w, height: m.h, sha256: sha };
+      const img = new Image();
+      img.onload = () => {
+        const cv = $('out');
+        cv.width = img.naturalWidth;
+        cv.height = img.naturalHeight;
+        cv.getContext('2d').drawImage(img, 0, 0);
+        cv.hidden = false;
+        cv.scrollIntoView({ block: 'nearest' });
+      };
+      img.src = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
+      $('runStatus').className = 'status ok';
+      $('runStatus').textContent = 'Done. Check the result, then save it.';
+      setRunning(false);
+      syncSave();
+    });
+  }
+};
+
+if (AI) {
+  for (const el of document.querySelectorAll('[data-web]')) el.hidden = true;
+  for (const el of document.querySelectorAll('[data-ai]')) el.hidden = false;
+  $('aiBox').hidden = false;
+  showModels();
+  $('dlModels').addEventListener('click', () => {
+    $('aiStatus').textContent = 'Starting download…';
+    setRunning(true);
+    window.AndroidBridge.downloadModels();
+  });
+  $('runAI').addEventListener('click', async () => {
+    if (!state.A || !state.B) return;
+    if (!window.AndroidBridge.modelsReady()) {
+      $('runStatus').className = 'status warn';
+      $('runStatus').textContent = 'Download the AI models first (top of the page).';
+      return;
+    }
+    clearAI();
+    setRunning(true);
+    $('runStatus').className = 'status';
+    $('runStatus').textContent = 'Preparing the photos…';
+    const a = await toJpeg(state.A.img, 3000), b = await toJpeg(state.B.img, 2000);
+    const { circle } = state;
+    window.AndroidBridge.startSwap(
+      a.b64, b.b64, circle.cx * a.k, circle.cy * a.k, circle.r * a.k,
+      0.55 * (Number($('faceScale').value) / 100), Number($('reach').value) / 100, Number($('toneAI').value) / 100, true,
+    );
+  });
+  setRunning(false);
+}
 
 if (window.AndroidBridge) {
   $('offlineStatus').textContent = 'Offline app: everything runs on this phone.';

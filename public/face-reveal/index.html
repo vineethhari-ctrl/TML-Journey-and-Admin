@@ -49,6 +49,14 @@
   <p class="lead">Replace a smiley that hides someone's face with their real face from a second photo. Everything runs on your device, with no internet needed.</p>
   <p class="status" id="offlineStatus" role="status"></p>
 
+  <section id="aiBox" aria-labelledby="sai" hidden>
+    <h2 id="sai">AI face swap</h2>
+    <p class="note" id="aiNote"></p>
+    <button type="button" id="dlModels" hidden>Download AI models</button>
+    <progress id="dlBar" max="100" value="0" hidden style="width:100%"></progress>
+    <p class="status" id="aiStatus" role="status"></p>
+  </section>
+
   <section aria-labelledby="s1">
     <h2 id="s1">1. Photo with the smiley</h2>
     <label class="drop" id="dropA"><input type="file" accept="image/*" id="fileA"><span>Choose the photo where a smiley covers the face</span></label>
@@ -68,20 +76,23 @@
         <canvas id="edA" class="edit" aria-label="Photo with the smiley"></canvas>
         <label class="slide">Size <input type="range" id="sizeA" min="2" max="60" value="15"></label>
       </figure>
-      <figure>
+      <figure data-web>
         <figcaption>Face: drag the box over it</figcaption>
         <canvas id="edB" class="edit" aria-label="Photo with the face"></canvas>
         <label class="slide" id="sizeBRow" hidden>Box size <input type="range" id="sizeB" min="5" max="100" value="30"></label>
       </figure>
     </div>
     <h2>Result</h2>
-    <canvas id="out" class="result" aria-label="Result with the face replaced"></canvas>
+    <canvas id="out" class="result" hidden aria-label="Result with the face replaced"></canvas>
     <label class="slide">Face size <input type="range" id="faceScale" min="50" max="150" value="100"></label>
     <p class="note">The face is sized to the covered face automatically (stickers are bigger than the face under them). Use this to make it bigger or smaller.</p>
     <label class="slide">Pasted area <input type="range" id="reach" min="30" max="100" value="100"></label>
     <p class="note">Lower it to paste only the face and a little around it, so the other photo's hair and background stay out.</p>
-    <label class="slide">Soft edge <input type="range" id="soft" min="5" max="50" value="18"></label>
-    <label class="check"><input type="checkbox" id="tone" checked><span>Match skin tone to the photo</span></label>
+    <label class="slide" data-web>Soft edge <input type="range" id="soft" min="5" max="50" value="18"></label>
+    <label class="check" data-web><input type="checkbox" id="tone" checked><span>Match skin tone to the photo</span></label>
+    <label class="slide" data-ai hidden>Match lighting <input type="range" id="toneAI" min="0" max="100" value="60"></label>
+    <p data-ai hidden><button type="button" id="runAI">Swap with AI</button></p>
+    <p class="status" id="runStatus" role="status" data-ai hidden></p>
     <p class="note">This is an edited image: the face comes from photo 2. The zip also keeps both original photos unchanged.</p>
     <label class="check"><input type="checkbox" id="consent"><span id="consentText"></span></label>
     <p>

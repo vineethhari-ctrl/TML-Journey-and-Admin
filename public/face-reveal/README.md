@@ -28,6 +28,8 @@ The face can't be recovered from the covered photo itself, only taken from anoth
 
 ## Notes
 
+- The Android app (`android/`) runs real AI face-swap models instead of the paste steps above; see its README.
+
 - Small faces: the detector only sees faces in a range of sizes, so the face photo is searched at several detector sizes and
   then in zoomed-in tiles (tested with the face from 6% to 100% of the photo width). A weak match is ignored rather than
   guessed at: the app then asks you to drag the box onto the face and set its size.
