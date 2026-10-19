@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Face Reveal</title>
+<style>
+  :root { --bg:#f7f7f5; --fg:#1d1d1b; --muted:#66655f; --card:#fff; --line:#dcdad2; --accent:#1b5fd1; --warn:#b45309; --ok:#15803d; --bad:#b91c1c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161615; --fg:#ecebe6; --muted:#a3a29a; --card:#20201e; --line:#3a3a36; --accent:#6ea0ff; --warn:#f59e0b; --ok:#4ade80; --bad:#f87171; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 20px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  h2 { font-size:1.05rem; margin:0 0 8px; }
+  .drop { display:block; border:2px dashed var(--line); border-radius:10px; padding:20px; text-align:center; cursor:pointer; color:var(--muted); }
+  .drop.has { border-style:solid; }
+  .drop input { display:none; }
+  .drop:focus-within, .drop.over { border-color:var(--accent); }
+  img.preview { max-width:100%; max-height:260px; border-radius:8px; display:block; margin:10px auto 0; }
+  .note { font-size:.9rem; color:var(--muted); }
+  .status { margin:8px 0 0; font-weight:600; }
+  .status.ok { color:var(--ok); } .status.warn { color:var(--warn); } .status.bad { color:var(--bad); }
+  button { font:inherit; border:1px solid var(--accent); background:var(--accent); color:#fff; padding:8px 16px; border-radius:8px; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--accent); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  textarea { width:100%; min-height:130px; font:inherit; font-size:.9rem; border:1px solid var(--line); border-radius:8px; padding:8px; background:var(--bg); color:var(--fg); }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:600px) { .pair { grid-template-columns:1fr; } }
+  .pair figure { margin:0; } .pair figcaption { font-weight:600; margin-bottom:6px; }
+  .frame { position:relative; display:inline-block; max-width:100%; }
+  .frame .box { position:absolute; border:2px solid var(--bad); pointer-events:none; }
+  label.check { display:flex; gap:8px; align-items:flex-start; margin:12px 0; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Face Reveal</h1>
+  <p class="lead">A face hidden under an emoji can't be recovered from the covered picture itself. This tool pairs the covered picture with the original and delivers the <strong>face-visible original first</strong>, then the covered one. Everything runs in your browser; nothing is uploaded.</p>
+
+  <section aria-labelledby="s1">
+    <h2 id="s1">1. Covered image (face hidden by an emoji)</h2>
+    <label class="drop" id="dropCovered"><input type="file" accept="image/*" id="fileCovered"><span>Drop the covered image here or click to choose</span></label>
+    <img class="preview" id="prevCovered" alt="Covered image preview" hidden>
+  </section>
+
+  <section aria-labelledby="s2" id="step2" hidden>
+    <h2 id="s2">2. Original image (face visible)</h2>
+    <label class="drop" id="dropOriginal"><input type="file" accept="image/*" id="fileOriginal"><span>Drop the original here or click to choose</span></label>
+    <img class="preview" id="prevOriginal" alt="Original image preview" hidden>
+    <p class="status" id="matchStatus" role="status"></p>
+    <details style="margin-top:12px">
+      <summary>Don't have the original? Ask the sender for it</summary>
+      <p class="note">Reference <code id="refId"></code>. Send this to whoever shared the image, then come back with the file they send.</p>
+      <textarea id="requestText" readonly aria-label="Request message"></textarea>
+      <p><button type="button" class="secondary" id="copyReq">Copy message</button></p>
+    </details>
+  </section>
+
+  <section aria-labelledby="s3" id="step3" hidden>
+    <h2 id="s3">3. Deliver</h2>
+    <div class="pair">
+      <figure><figcaption>1 · Face visible</figcaption><img id="outOriginal" alt="Face-visible original" style="max-width:100%;border-radius:8px"></figure>
+      <figure><figcaption>2 · Covered</figcaption>
+        <span class="frame"><img id="outCovered" alt="Covered image" style="max-width:100%;border-radius:8px;display:block"><span class="box" id="regionBox" hidden></span></span>
+      </figure>
+    </div>
+    <label class="check"><input type="checkbox" id="override" hidden><span id="overrideText" hidden>I confirm these are the same photo.</span></label>
+    <label class="check"><input type="checkbox" id="consent"><span id="consentText"></span></label>
+    <button type="button" id="download" disabled>Download bundle (.zip)</button>
+    <p class="note">The zip holds <code>1_face_visible</code>, <code>2_face_covered</code> and a <code>manifest.json</code> (checksums and consent). Files are delivered exactly as received.</p>
+  </section>
+</main>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
