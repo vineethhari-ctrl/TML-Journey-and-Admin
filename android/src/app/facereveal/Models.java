@@ -10,7 +10,7 @@ import java.net.URL;
 import java.security.MessageDigest;
 
 /**
- * The four AI models (about 810 MB). They are downloaded once, on the first swap, then kept in the app's own storage so
+ * The five AI models (about 900 MB). They are downloaded once, on the first swap, then kept in the app's own storage so
  * everything afterwards works with no internet. Downloads resume if interrupted and are checked against a SHA-256.
  */
 final class Models {
@@ -22,6 +22,7 @@ final class Models {
         {"arcface_w600k_r50.onnx", "174388474", "f1f79dc3b0b79a69f94799af1fffebff09fbd78fd96a275fd8f0cbbea23270d1"},
         {"inswapper_128_fp16.onnx", "277680829", "c4eccca86ad177586c85c28bf1a64a9d9ed237e283a15818d831f7facfd3f420"},
         {"gfpgan_1.4.onnx", "340299087", "accc4757b26bdb89b32b4d3500d4f79c9dff97c1dd7c7104bf9dcb95e3311385"},
+        {"bisenet_resnet_34.onnx", "93632546", "4a0b8c958a3c938913bd06a8365dbb3c8761afba6ecbf0d14b3b1f77eb230c96"},
     };
 
     interface Listener { void progress(String file, long done, long total); }
@@ -29,6 +30,16 @@ final class Models {
     static long totalBytes() {
         long t = 0;
         for (String[] m : LIST) t += Long.parseLong(m[1]);
+        return t;
+    }
+
+    /** Bytes still to download: models that are missing or incomplete. */
+    static long missingBytes(File dir) {
+        long t = 0;
+        for (String[] m : LIST) {
+            File f = new File(dir, m[0]);
+            if (!f.isFile() || f.length() != Long.parseLong(m[1])) t += Long.parseLong(m[1]);
+        }
         return t;
     }
 

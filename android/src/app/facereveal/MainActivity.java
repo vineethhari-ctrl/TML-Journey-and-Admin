@@ -182,7 +182,7 @@ public class MainActivity extends Activity {
         public boolean modelsReady() { return Models.ready(modelDir()); }
 
         @JavascriptInterface
-        public double modelsMegabytes() { return Models.totalBytes() / 1048576.0; }
+        public double modelsMegabytes() { return Models.missingBytes(modelDir()) / 1048576.0; }
 
         @JavascriptInterface
         public void downloadModels() {

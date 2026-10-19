@@ -4,7 +4,7 @@ A native Android app (`app.facereveal`) that replaces a smiley covering someone'
 using AI face-swap models that run on the phone.
 
 - Install: copy `release/FaceReveal.apk` to the phone, open it, allow "install unknown apps". Android 10 or newer, 64-bit ARM.
-- **First use:** the app downloads four AI models (about 810 MB, from GitHub) once, with a progress bar and resume. Use Wi-Fi.
+- **First use:** the app downloads five AI models (about 900 MB, from GitHub) once, with a progress bar and resume. Use Wi-Fi.
   After that everything works with no internet.
 - Pick the photo with the smiley, then a photo of the same person with the face visible. **The AI keeps the angle of the face
   photo; it cannot turn a head** (a swap model copies the pose of the face it is given, and the face under a smiley is hidden).
@@ -20,13 +20,14 @@ using AI face-swap models that run on the phone.
 ## How it works (`src/app/facereveal/swap/`)
 
 RetinaFace finds the face in photo 2, ArcFace reads its identity, inswapper_128 renders that face and GFPGAN 1.4 sharpens it,
-all through ONNX Runtime. The smiley hides the face in photo 1, so there is nothing to detect there: landmarks are laid out
-inside the smiley's circle instead, photo 2's head is placed under the face for hair and neck, and the skin tone is nudged
+all through ONNX Runtime. A BiSeNet face-parsing model outlines the head, hair and neck in photo 2 so only those are pasted
+(no background or clothes, which is what left a grey halo before). The smiley hides the face in photo 1, so there is nothing to detect there: landmarks are laid out
+inside the smiley's circle instead, photo 2's head, hair and neck (cut out with the parsing model) are placed under the face, and the skin tone is nudged
 toward the skin around the smiley. Only the area around the smiley is touched. The Java engine is plain Java (no Android
 classes), so it is tested on a desktop JVM against a Python prototype (`test/Desktop.java`).
 
 Models (personal, non-commercial use: inswapper and the insightface models are not licensed for commercial use):
-`retinaface_10g`, `arcface_w600k_r50`, `inswapper_128_fp16`, `gfpgan_1.4`, from the FaceFusion assets release
+`retinaface_10g`, `arcface_w600k_r50`, `inswapper_128_fp16`, `gfpgan_1.4`, `bisenet_resnet_34`, from the FaceFusion assets release
 `models-3.0.0`; sizes and SHA-256 checksums are in `src/app/facereveal/Models.java` and every download is checked.
 `assets-swap/emap.bin` is a 512x512 matrix extracted from the swap model (it is not used by the model at runtime but the
 pipeline needs it).

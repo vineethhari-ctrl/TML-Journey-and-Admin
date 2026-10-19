@@ -25,6 +25,12 @@ public final class Engine {
     public static final String ARCFACE = "arcface_w600k_r50.onnx";
     public static final String SWAPPER = "inswapper_128_fp16.onnx";
     public static final String ENHANCER = "gfpgan_1.4.onnx";
+    public static final String PARSER = "bisenet_resnet_34.onnx";
+
+    // BiSeNet face-parsing labels kept when cutting the head out of photo 2: skin, brows, eyes, glasses, ears, nose, mouth,
+    // lips, neck, hair, hat. Background, clothes and jewellery are left behind.
+    private static final int[] HEAD_LABELS = {1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 17, 18};
+    private static final double CROP_SCALE = 0.65; // parse a wider area than the face crop so the hair is not cut off
 
     public interface Progress { void on(String message); }
 
@@ -189,6 +195,56 @@ public final class Engine {
         return l;
     }
 
+    /** The photo-2 template for the parsing crop: the FFHQ layout shrunk about its centre so more of the head fits. */
+    static double[][] parseTemplate() {
+        double mx = 0, my = 0;
+        for (double[] p : FFHQ512) { mx += p[0] / 5; my += p[1] / 5; }
+        double[][] t = new double[5][2];
+        for (int i = 0; i < 5; i++) {
+            t[i][0] = (FFHQ512[i][0] - mx) * CROP_SCALE + 256;
+            t[i][1] = (FFHQ512[i][1] - my) * CROP_SCALE + 256;
+        }
+        return t;
+    }
+
+    /** 512x512 mask (1 = head, hair or neck) of photo 2 in the parsing-crop frame, softened at the edge. */
+    private float[] headMask(Img b, Face bf, int threads) throws Exception {
+        double[] inv = Geom.invert(Geom.similarity(bf.kps, parseTemplate()));
+        float[] blob = new float[3 * 512 * 512], px = new float[3];
+        for (int y = 0; y < 512; y++) for (int x = 0; x < 512; x++) {
+            b.sample(inv[0] * x + inv[1] * y + inv[2], inv[3] * x + inv[4] * y + inv[5], true, px);
+            int o = y * 512 + x;
+            blob[o] = px[2] / 127.5f - 1;
+            blob[512 * 512 + o] = px[1] / 127.5f - 1;
+            blob[2 * 512 * 512 + o] = px[0] / 127.5f - 1;
+        }
+        float[] out;
+        OrtSession s = open(PARSER, threads);
+        try (OnnxTensor in = tensor(blob, 1, 3, 512, 512);
+             OrtSession.Result r = s.run(Collections.singletonMap(s.getInputNames().iterator().next(), in))) {
+            out = read(r, 0);
+        } finally {
+            s.close();
+        }
+        int channels = out.length / (512 * 512);
+        boolean[] keep = new boolean[channels];
+        for (int l : HEAD_LABELS) if (l < channels) keep[l] = true;
+        float[] mask = new float[512 * 512];
+        for (int i = 0; i < 512 * 512; i++) {
+            int best = 0;
+            float bv = out[i];
+            for (int c = 1; c < channels; c++) {
+                float v = out[c * 512 * 512 + i];
+                if (v > bv) { bv = v; best = c; }
+            }
+            mask[i] = keep[best] ? 1f : 0f;
+        }
+        // soften the edge, then pull it inward a little so a fringe of photo 2's background is not carried over
+        float[] soft = Geom.blur(mask, 512, 512, 17);
+        for (int i = 0; i < soft.length; i++) soft[i] = Math.max(0f, Math.min(1f, (soft[i] - 0.6f) / 0.35f));
+        return soft;
+    }
+
     // ---- the pipeline -----------------------------------------------------------------------
 
     /** Landmarks for the face hidden under the smiley, laid out like a real face of the assumed size. */
@@ -262,12 +318,15 @@ public final class Engine {
         int rx0 = Math.max(0, (int) Math.floor(cx - 1.6 * r)), ry0 = Math.max(0, (int) Math.floor(cy - 1.6 * r));
         int rx1 = Math.min(a.w, (int) Math.ceil(cx + 1.6 * r)), ry1 = Math.min(a.h, (int) Math.ceil(cy + 1.6 * r));
         double[][] ring = ringColors(a, cx, cy, r);
-        double r0 = 1.05 * r * p.reach, soft = 0.1 * r;
-        float[] px = new float[3], bp = new float[3];
+        float[] head = headMask(b, bf, p.threads);
+        double[] toCrop = Geom.similarity(sk, parseTemplate()); // photo 1 -> parsing-crop frame
+        double limit = 1.3 * r * p.reach, softLimit = 0.1 * r;
+        float[] bp = new float[3];
         for (int y = ry0; y < ry1; y++) for (int x = rx0; x < rx1; x++) {
             double d = Math.hypot(x - cx, y - cy);
-            double t = (r0 + soft - d) / (2 * soft);
-            double w = t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
+            double lim = Math.max(0, Math.min(1, (limit - d) / softLimit));
+            double u = toCrop[0] * x + toCrop[1] * y + toCrop[2], v = toCrop[3] * x + toCrop[4] * y + toCrop[5];
+            double w = lim <= 0 ? 0 : lim * Geom.bilinear(head, 512, 512, u, v);
             if (w <= 0 && d > 1.12 * r) continue;
             int o = (y * a.w + x) * 3;
             float ob = a.bgr[o] & 0xff, og = a.bgr[o + 1] & 0xff, orr = a.bgr[o + 2] & 0xff;

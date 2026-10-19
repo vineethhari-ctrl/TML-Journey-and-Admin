@@ -378,7 +378,7 @@ function showModels() {
   const mb = Math.round(window.AndroidBridge.modelsMegabytes());
   $('aiNote').textContent = ready
     ? 'AI models are on this phone. Swapping works fully offline.'
-    : `The AI models (about ${mb} MB) are downloaded once, then everything works offline. Use Wi-Fi.`;
+    : `The AI models (${mb} MB to download) are saved on the phone once, then everything works offline. Use Wi-Fi.`;
   $('dlModels').hidden = ready;
   return ready;
 }
