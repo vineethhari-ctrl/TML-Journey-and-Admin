@@ -209,21 +209,27 @@ public class MainActivity extends Activity {
 
         /** Photo 1 (smiley) and photo 2 (face) as base64 JPEGs; the circle is in photo 1's pixels. */
         @JavascriptInterface
-        public void startSwap(final String aB64, final String bB64, final double cx, final double cy, final double r,
-                              final double faceRatio, final double reach, final double tone, final boolean enhance) {
+        public void startSwap(final String aB64, final String bB64, final String extrasJson, final double cx, final double cy,
+                              final double r, final double faceRatio, final double reach, final double tone,
+                              final double roll, final boolean mirror, final boolean enhance) {
             if (busy) return;
             busy = true;
             new Thread(new Runnable() {
                 public void run() {
                     try {
                         Img a = decode(aB64), b = decode(bB64);
+                        java.util.List<Img> extras = new java.util.ArrayList<Img>();
+                        org.json.JSONArray more = new org.json.JSONArray(extrasJson);
+                        for (int i = 0; i < more.length(); i++) extras.add(decode(more.getString(i)));
                         Engine e = new Engine(modelDir(), getAssets().open("emap.bin"));
                         Engine.Params p = new Engine.Params();
                         p.faceRatio = faceRatio;
                         p.reach = reach;
                         p.tone = tone;
                         p.enhance = enhance;
-                        Img out = e.swap(a, cx, cy, r, b, p, new Engine.Progress() {
+                        p.roll = roll;
+                        p.mirror = mirror;
+                        Img out = e.swap(a, cx, cy, r, b, extras, p, new Engine.Progress() {
                             public void on(String m) { post("progress", "text", m); }
                         });
                         Bitmap bmp = Bitmap.createBitmap(out.toArgb(), out.w, out.h, Bitmap.Config.ARGB_8888);

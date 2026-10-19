@@ -17,6 +17,17 @@ public final class Img {
         return c;
     }
 
+    /** Mirror image left to right. */
+    public Img flipped() {
+        Img o = new Img(w, h);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                System.arraycopy(bgr, (y * w + x) * 3, o.bgr, (y * w + (w - 1 - x)) * 3, 3);
+            }
+        }
+        return o;
+    }
+
     public static Img fromArgb(int[] argb, int w, int h) {
         Img im = new Img(w, h);
         for (int i = 0, p = 0; i < argb.length; i++) {

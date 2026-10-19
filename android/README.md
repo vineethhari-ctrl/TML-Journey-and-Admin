@@ -6,7 +6,11 @@ using AI face-swap models that run on the phone.
 - Install: copy `release/FaceReveal.apk` to the phone, open it, allow "install unknown apps". Android 10 or newer, 64-bit ARM.
 - **First use:** the app downloads four AI models (about 810 MB, from GitHub) once, with a progress bar and resume. Use Wi-Fi.
   After that everything works with no internet.
-- Pick the photo with the smiley, then another photo of the same person with the face visible. Check the circle sits on the
+- Pick the photo with the smiley, then a photo of the same person with the face visible. **The AI keeps the angle of the face
+  photo; it cannot turn a head** (a swap model copies the pose of the face it is given, and the face under a smiley is hidden).
+  So add more photos at other angles (optional) and tick the one that matches the head in photo 1; all of them are averaged
+  for the likeness. **Tilt** rotates the face in the picture, and **Mirror** flips the chosen photo (a three-quarter view turns
+  the other way). I tried warping a frontal photo to fake a turn: the model draws it frontal again, so that is not offered. Check the circle sits on the
   smiley, then **Swap with AI**. Expect roughly half a minute per photo on a mid-range phone (not measured on a phone yet).
 - The blue oval and dots on the photo show where the face, eyes, nose and mouth will go, live as you move the circle or drag
   **Face size**, so you can fit them to the visible head (hair, ears, neck) before the half-minute AI run.

@@ -34,6 +34,8 @@ public final class Engine {
         public double tone = 0.6;        // how far to move photo 2's skin tone toward the skin around the smiley (0 to 1)
         public boolean enhance = true;   // run GFPGAN
         public double enhanceWeight = 0.8;
+        public double roll = 0;          // tilt of the face in degrees, clockwise positive
+        public boolean mirror = false;   // flip the main face photo left to right (turns a 3/4 view the other way)
         public int threads = 4;
     }
 
@@ -190,7 +192,7 @@ public final class Engine {
     // ---- the pipeline -----------------------------------------------------------------------
 
     /** Landmarks for the face hidden under the smiley, laid out like a real face of the assumed size. */
-    static double[][] syntheticKps(double cx, double cy, double r, double faceRatio) {
+    static double[][] syntheticKps(double cx, double cy, double r, double faceRatio, double rollDeg) {
         double wb = 2 * r * faceRatio, eye = 0.48 * wb;
         double sc = eye / Math.hypot(ARC[1][0] - ARC[0][0], ARC[1][1] - ARC[0][1]);
         double mx = 0, my = 0;
@@ -201,12 +203,29 @@ public final class Engine {
             k[i][0] = (ARC[i][0] - mx) * sc + cx - 0.011 * wb;
             k[i][1] = (ARC[i][1] - my) * sc + cy + 0.042 * wb;
         }
+        if (rollDeg != 0) { // tilt the whole layout about its centre
+            double pxc = cx - 0.011 * wb, pyc = cy + 0.042 * wb, c = Math.cos(Math.toRadians(rollDeg)), s = Math.sin(Math.toRadians(rollDeg));
+            for (int i = 0; i < 5; i++) {
+                double dx = k[i][0] - pxc, dy = k[i][1] - pyc;
+                k[i][0] = pxc + c * dx - s * dy;
+                k[i][1] = pyc + s * dx + c * dy;
+            }
+        }
         return k;
     }
 
-    /** Returns a copy of `a` with the smiley (circle cx, cy, r in a's pixels) replaced by the face found in `b`. */
+    /** As below, with one face photo. */
     public Img swap(Img a, double cx, double cy, double r, Img b, Params p, Progress pr) throws Exception {
+        return swap(a, cx, cy, r, b, new ArrayList<Img>(), p, pr);
+    }
+
+    /**
+     * Returns a copy of `a` with the smiley (circle cx, cy, r in a's pixels) replaced by the face found in `b`.
+     * `b` sets the face's angle and look; any `extras` (more photos of the same person) only sharpen who it is.
+     */
+    public Img swap(Img a, double cx, double cy, double r, Img b, List<Img> extras, Params p, Progress pr) throws Exception {
         if (pr == null) pr = new Progress() { @Override public void on(String message) { } };
+        if (p.mirror) b = b.flipped();
         pr.on("Finding the face in photo 2…");
         List<Face> found = detect(b, p.threads, 0.5);
         if (found.isEmpty()) found = detect(b, p.threads, 0.3);
@@ -215,8 +234,24 @@ public final class Engine {
         for (Face f : found) if (f.area() > bf.area() && f.score >= 0.5) bf = f;
         pr.on("Learning the face…");
         float[] lat = latent(b, bf.kps, p.threads);
+        int used = 1;
+        for (Img x : extras) { // more photos of the same person: average who they are
+            List<Face> fx = detect(x, p.threads, 0.5);
+            if (fx.isEmpty()) continue;
+            Face best = fx.get(0);
+            for (Face f : fx) if (f.area() > best.area()) best = f;
+            float[] l2 = latent(x, best.kps, p.threads);
+            for (int i = 0; i < 512; i++) lat[i] += l2[i];
+            used++;
+        }
+        if (used > 1) {
+            double n = 0;
+            for (float v : lat) n += v * v;
+            n = Math.sqrt(n);
+            for (int i = 0; i < 512; i++) lat[i] /= n;
+        }
 
-        double[][] sk = syntheticKps(cx, cy, r, p.faceRatio);
+        double[][] sk = syntheticKps(cx, cy, r, p.faceRatio, p.roll);
         Img out = a.copy();
         double[] mBA = Geom.similarity(bf.kps, sk);      // photo 2 -> photo 1
         double[] iBA = Geom.invert(mBA);

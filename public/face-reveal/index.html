@@ -40,6 +40,11 @@
   .frame { position:relative; display:inline-block; max-width:100%; }
   .frame .box { position:absolute; border:2px solid var(--bad); pointer-events:none; }
   label.check { display:flex; gap:8px; align-items:flex-start; margin:12px 0; }
+  .angles { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+  .angles label { display:flex; flex-direction:column; align-items:center; gap:4px; font-size:.85rem; }
+  .angles img { width:72px; height:72px; object-fit:cover; border-radius:8px; border:2px solid var(--line); }
+  .angles input:checked + img { border-color:var(--accent); }
+  .angles input { margin:0; }
   [hidden] { display:none !important; }
 </style>
 </head>
@@ -67,6 +72,13 @@
     <label class="drop" id="dropB"><input type="file" accept="image/*" id="fileB"><span>Choose another photo of the same person, face visible</span></label>
   </section>
 
+  <section data-ai hidden aria-labelledby="s2b">
+    <h2 id="s2b">Optional: more photos of the same person</h2>
+    <p class="note">The AI keeps the angle of the face photo you pick, it cannot turn a head by itself. So add photos from other angles and choose the one that matches the head in photo 1. All of them are used to get the likeness right.</p>
+    <label class="drop" id="dropB2"><input type="file" accept="image/*" id="fileB2" multiple><span>Add more photos (up to 4)</span></label>
+    <div id="angleList" class="angles"></div>
+  </section>
+
   <section aria-labelledby="s3" id="step3" hidden>
     <h2 id="s3">3. Check and adjust</h2>
     <p class="status" id="detectStatus" role="status"></p>
@@ -91,6 +103,8 @@
     <p class="note">Lower it to paste only the face and a little around it, so the other photo's hair and background stay out.</p>
     <label class="slide" data-web>Soft edge <input type="range" id="soft" min="5" max="50" value="18"></label>
     <label class="check" data-web><input type="checkbox" id="tone" checked><span>Match skin tone to the photo</span></label>
+    <label class="slide" data-ai hidden>Tilt <input type="range" id="rollAI" min="-45" max="45" value="0"></label>
+    <label class="check" data-ai hidden><input type="checkbox" id="mirrorAI"><span>Mirror the chosen face photo (turns a three-quarter view the other way)</span></label>
     <label class="slide" data-ai hidden>Match lighting <input type="range" id="toneAI" min="0" max="100" value="60"></label>
     <p data-ai hidden><button type="button" id="runAI">Swap with AI</button></p>
     <p class="status" id="runStatus" role="status" data-ai hidden></p>

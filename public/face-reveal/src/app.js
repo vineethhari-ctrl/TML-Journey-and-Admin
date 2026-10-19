@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
 const AI = !!(window.AndroidBridge && window.AndroidBridge.hasEngine && window.AndroidBridge.hasEngine());
 // A = photo with the smiley, B = photo with the face.
 // circle: smiley position in A pixels. face: crop box in B pixels (its proportions stay fixed).
-const state = { A: null, B: null, circle: null, face: null, aiResult: null };
+const state = { A: null, B: null, Bs: [], primary: 0, circle: null, face: null, aiResult: null };
 
 function toBase64(bytes) {
   let bin = '';
@@ -80,11 +80,15 @@ async function analyse() {
 const AI_FACE_RATIO = 0.48; // detector-box width as a share of the smiley's diameter, at Face size 100%
 const ARC = [[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366], [41.5493, 92.3655], [70.7299, 92.2041]];
 function aiRatio() { return AI_FACE_RATIO * (Number($('faceScale').value) / 100); }
-function syntheticKps(cx, cy, r, ratio) {
+function syntheticKps(cx, cy, r, ratio, roll = 0) {
   const wb = 2 * r * ratio, eye = 0.48 * wb;
   const sc = eye / Math.hypot(ARC[1][0] - ARC[0][0], ARC[1][1] - ARC[0][1]);
   const mx = ARC.reduce((s, p) => s + p[0], 0) / 5, my = ARC.reduce((s, p) => s + p[1], 0) / 5;
-  return ARC.map((p) => [(p[0] - mx) * sc + cx - 0.011 * wb, (p[1] - my) * sc + cy + 0.042 * wb]);
+  const px = cx - 0.011 * wb, py = cy + 0.042 * wb, co = Math.cos((roll * Math.PI) / 180), si = Math.sin((roll * Math.PI) / 180);
+  return ARC.map((p) => {
+    const x = (p[0] - mx) * sc + px, y = (p[1] - my) * sc + py, dx = x - px, dy = y - py;
+    return [px + co * dx - si * dy, py + si * dx + co * dy];
+  });
 }
 
 // ---- drawing ---------------------------------------------------------------------------------
@@ -112,10 +116,10 @@ function drawEditor(cv, item, shape) {
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#00e5ff';
     ctx.beginPath();
-    ctx.ellipse(c.cx * k, c.cy * k, (wb / 2) * k, (wb * 0.67) * k, 0, 0, Math.PI * 2);
+    ctx.ellipse((c.cx - 0.011 * wb) * k, (c.cy + 0.042 * wb) * k, (wb / 2) * k, (wb * 0.67) * k, (shape.roll * Math.PI) / 180, 0, Math.PI * 2);
     ctx.stroke();
     ctx.fillStyle = '#00e5ff';
-    for (const [x, y] of syntheticKps(c.cx, c.cy, c.r, shape.ratio)) {
+    for (const [x, y] of syntheticKps(c.cx, c.cy, c.r, shape.ratio, shape.roll)) {
       ctx.beginPath();
       ctx.arc(x * k, y * k, Math.max(2.5, 0.012 * item.w * k), 0, Math.PI * 2);
       ctx.fill();
@@ -198,7 +202,7 @@ function render() {
   queued = true;
   requestAnimationFrame(() => {
     queued = false;
-    drawEditor($('edA'), state.A, { circle: state.circle, ratio: AI ? aiRatio() : 0 });
+    drawEditor($('edA'), state.A, { circle: state.circle, ratio: AI ? aiRatio() : 0, roll: AI ? Number($('rollAI').value) : 0 });
     if (AI) return;
     drawEditor($('edB'), state.B, { face: state.face });
     compose($('out'), Math.min(1, 1000 / Math.max(state.A.w, state.A.h)));
@@ -237,12 +241,15 @@ $('soft').addEventListener('input', changed);
 $('faceScale').addEventListener('input', changed);
 $('reach').addEventListener('input', changed);
 $('toneAI').addEventListener('input', changed);
+$('rollAI').addEventListener('input', changed);
+$('mirrorAI').addEventListener('change', changed);
 $('tone').addEventListener('change', changed);
 window.addEventListener('resize', render);
 
 async function pick(which, file) {
   try {
     state[which] = await load(file);
+    if (which === 'B') { state.Bs = [state.B]; state.primary = 0; renderAngles(); }
     $(which === 'A' ? 'dropA' : 'dropB').classList.add('has');
     $(which === 'A' ? 'dropA' : 'dropB').querySelector('span').textContent = `${file.name} ✓`;
   } catch (e) { alert(e.message); return; }
@@ -256,6 +263,35 @@ async function pick(which, file) {
     if (AI) setRunning(false);
   }
 }
+function renderAngles() {
+  const box = $('angleList');
+  box.textContent = '';
+  if (!AI || state.Bs.length < 2) return;
+  state.Bs.forEach((item, i) => {
+    const label = document.createElement('label');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'angle';
+    radio.checked = i === state.primary;
+    radio.addEventListener('change', () => { state.primary = i; state.B = state.Bs[i]; changed(); });
+    const img = document.createElement('img');
+    img.src = item.img.src;
+    img.alt = `Face photo ${i + 1}`;
+    label.append(radio, img, document.createTextNode(i === state.primary ? 'sets the angle' : ' '));
+    box.append(label);
+  });
+}
+
+$('fileB2').addEventListener('change', async () => {
+  if (!state.Bs.length) { alert('Choose the main face photo first.'); return; }
+  const files = [...$('fileB2').files].slice(0, 4 - (state.Bs.length - 1));
+  for (const f of files) {
+    try { state.Bs.push(await load(f)); } catch (e) { alert(e.message); }
+  }
+  $('dropB2').querySelector('span').textContent = `${state.Bs.length - 1} extra photo(s) ✓`;
+  renderAngles();
+  changed();
+});
 $('fileA').addEventListener('change', () => $('fileA').files[0] && pick('A', $('fileA').files[0]));
 $('fileB').addEventListener('change', () => $('fileB').files[0] && pick('B', $('fileB').files[0]));
 
@@ -413,11 +449,16 @@ if (AI) {
     setRunning(true);
     $('runStatus').className = 'status';
     $('runStatus').textContent = 'Preparing the photos…';
-    const a = await toJpeg(state.A.img, 3000), b = await toJpeg(state.B.img, 2000);
+    const a = await toJpeg(state.A.img, 3000);
+    const main = state.Bs[state.primary] || state.B;
+    const b = await toJpeg(main.img, 2000);
+    const extras = [];
+    for (const item of state.Bs) if (item !== main) extras.push((await toJpeg(item.img, 2000)).b64);
     const { circle } = state;
     window.AndroidBridge.startSwap(
-      a.b64, b.b64, circle.cx * a.k, circle.cy * a.k, circle.r * a.k,
-      aiRatio(), Number($('reach').value) / 100, Number($('toneAI').value) / 100, true,
+      a.b64, b.b64, JSON.stringify(extras), circle.cx * a.k, circle.cy * a.k, circle.r * a.k,
+      aiRatio(), Number($('reach').value) / 100, Number($('toneAI').value) / 100,
+      Number($('rollAI').value), $('mirrorAI').checked, true,
     );
   });
   setRunning(false);
