@@ -16,6 +16,17 @@ describe('App routing', () => {
     expect(window.location.hash).toBe('#/dashboard');
   });
 
+  it('has no "TML Journey" section in the sidebar (that work lives in another repository)', () => {
+    render(<App />);
+    const nav = screen.getByRole('complementary');
+    expect(within(nav).queryByText('TML Journey')).not.toBeInTheDocument();
+    expect(within(nav).queryByText('Cross-Module Visibility')).not.toBeInTheDocument();
+    expect(within(nav).queryByText('Vehicle Journey')).not.toBeInTheDocument();
+    expect(within(nav).queryByText('Journey Search')).not.toBeInTheDocument();
+    expect(within(nav).queryByText('Workshop Worklist')).not.toBeInTheDocument();
+    expect(within(nav).getByText('Administration')).toBeInTheDocument();
+  });
+
   it('opens a deep link from the URL hash', async () => {
     window.location.hash = '#/journey/JC20260930001205';
     render(<App />);
@@ -69,7 +80,8 @@ describe('Command palette', () => {
     await user.click(document.body);
     await user.keyboard('/');
     const dialog = await screen.findByRole('dialog', { name: 'Command palette' });
-    expect(within(dialog).getByText('Journey Search')).toBeInTheDocument();
+    expect(within(dialog).getByText('Home (module cards)')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Journey Search')).not.toBeInTheDocument();
     expect(within(dialog).queryByText('Audit Log')).not.toBeInTheDocument();
   });
 

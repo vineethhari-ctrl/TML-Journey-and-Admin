@@ -1,9 +1,6 @@
 import React from 'react';
 import {
   LayoutDashboard,
-  Compass,
-  Search,
-  ClipboardList,
   LayoutGrid,
   LayoutList,
   Users,
@@ -34,8 +31,6 @@ export const Sidebar: React.FC = () => {
   const commonOpen = currentRoute.startsWith('/admin/masters?') && currentRoute.includes('open=common');
   const isCurrent = (route: string) => {
     if (route === '/admin/masters' && (eqcOpen || bodyshopOpen || commonOpen)) return false;
-    if (route === '/journey' && (currentRoute === '/journey' || currentRoute.startsWith('/journey?'))) return true;
-    if (route === '/journey/JC20260930001234' && currentRoute.startsWith('/journey/')) return true;
     return currentRoute.split('?')[0] === route;
   };
 
@@ -83,53 +78,7 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
-        {/* Section 1: TML JOURNEY */}
-        {(canAccessRoute('/journey') || canAccessRoute('/journey/JC20260930001234')) && (
-          <div className="space-y-1">
-            <div className="px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-              <span>TML Journey</span>
-              <Compass className="h-3 w-3 text-blue-500" />
-            </div>
-            <p className="px-3 text-[10px] text-slate-400 mb-1.5">Cross-Module Visibility</p>
-
-            {canAccessRoute('/journey/JC20260930001234') && (
-              <button
-                onClick={() => navigate('/journey/JC20260930001234')}
-                className={`w-full cursor-pointer ${navItemClass(currentRoute.startsWith('/journey/JC'))}`}
-              >
-                <Layers className="h-4 w-4" />
-                <span className="flex-1 text-left">Vehicle Journey</span>
-                <span className="text-[10px] px-1.5 py-0.2 bg-blue-100/60 text-blue-800 rounded font-mono">
-                  MH01AB
-                </span>
-              </button>
-            )}
-
-            {canAccessRoute('/journey') && (
-              <button
-                onClick={() => navigate('/journey')}
-                className={`w-full cursor-pointer ${navItemClass(currentRoute === '/journey' || currentRoute.startsWith('/journey?'))}`}
-              >
-                <Search className="h-4 w-4" />
-                <span className="flex-1 text-left">Journey Search</span>
-                <ChevronRight className="h-3 w-3 opacity-40" />
-              </button>
-            )}
-
-            {canAccessRoute('/workshop') && (
-              <button
-                onClick={() => navigate('/workshop')}
-                className={`w-full cursor-pointer ${navItemClass(currentRoute.split('?')[0] === '/workshop')}`}
-              >
-                <ClipboardList className="h-4 w-4" />
-                <span className="flex-1 text-left">Workshop Worklist</span>
-                <ChevronRight className="h-3 w-3 opacity-40" />
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Section 2: ADMINISTRATION */}
+        {/* Section: ADMINISTRATION */}
         {hasAnyAdminAccess && (
           <div className="space-y-1">
             <div className="px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
@@ -314,7 +263,7 @@ export const Sidebar: React.FC = () => {
         )}
 
         {/* If Role has no permitted routes (like CRO) */}
-        {!canAccessRoute('/dashboard') && !canAccessRoute('/journey') && !hasAnyAdminAccess && (
+        {!canAccessRoute('/dashboard') && !hasAnyAdminAccess && (
           <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50 text-xs text-rose-800 space-y-1">
             <span className="font-bold block">Role: Not Configured</span>
             <p className="text-[11px] text-rose-700 leading-tight">
