@@ -1,18 +1,61 @@
 # TML Journey: record of everything built in this repository (handover to the other repository)
 
-**Status as of 22 Nov 2026.** TML Journey and the KPI dashboard are being built in another repository, so this portal no longer offers
-TML Journey in its menu (PR #58). The code is still here and still reachable from the Home cards and the Dashboard. This document
-records everything that was built for TML Journey in this repository, so that it can be copied across. Test data only: no real Tata
-Motors data is in this repository or in this document.
+**Status as of 22 Nov 2026.** TML Journey is being built in another repository, so this portal no longer offers TML Journey in its
+menu (PR #58). **Only TML Journey goes to the other repository. Master data and everything else stays here** (section 0). The
+journey code is still in this repository and still reachable from the Home cards and the Dashboard. This document records
+everything that was built for TML Journey, and the things around it, so that the right parts can be copied across. Test data only:
+no real Tata Motors data is in this repository or in this document.
 
-**How to use this document in the other repository.** Give it to whoever builds there. Section 3 lists what to copy, section 4 says
-what the copied code expects from the application shell, and sections 5 to 10 describe each feature and the rules in it. The
+**How to use this document in the other repository.** Give it to whoever builds there. Section 0 says what moves, what is only
+copied and what stays. Section 3 lists the files, section 4 says what the copied code expects from the application shell, and
+sections 5 to 10 describe each feature and the rules in it. The
 design documents `docs/WORKSHOP_UI_KIT.md` and `docs/FLEET_AND_ID_CHAIN.md` are the detailed specifications; this document adds the
 history, the file list, the tests, the backend pieces and the open points.
 
 ---
 
-## 1. What TML Journey is made of
+## 0. Scope: what moves, what is copied, what stays (decision of 22 Nov 2026)
+
+**Only TML Journey goes to the other repository. Master data and the remaining things stay here.**
+
+### Moves to the other repository (TML Journey)
+| Part | Files and documents |
+| --- | --- |
+| **Journey Search** and **Vehicle Journey** (detail, timeline, tracker, exceptions, performance, ID chain) | `JourneySearchPage`, `JourneyDetailPage`; `components/journey/*` (6 files); `journeyService`; `jcIdChain` and `JourneyIdChain` |
+| **Workshop Worklist** (counter tabs, filters, grids, vehicle render) | `WorkshopWorklistPage`; `components/workshop/*` (`WorkshopTabBar`, `ColumnCustomizer`, `VehicleRender`); `vehicleAsset`; `viewPreferences`; the personal-layout code (`usePreferenceStore`, `useTabPreferences`, `useColumnPreferences`, `personalisationSettings`) |
+| Journey demo data | the journey part of `mockDataGenerator` (events, stages, exceptions, the demo JC) |
+| Tests | `jcIdChain`, `journeyService`, `vehicleAsset`, `viewPreferences`, `personalisationSettings`; e2e `workshop-worklist`; the ID-chain test in `fleet-and-id-chain`; the Journey Search columns test in `personalisation` |
+| Documents | `WORKSHOP_UI_KIT.md` (worklist, tabs, columns, vehicle render), `FLEET_AND_ID_CHAIN.md` section 2 (ID chain) |
+| Backend, not built yet | **Part 4** (journey events, stages, exceptions, escalations) |
+
+### Copied, because both repositories need it (not moved)
+| Code | Why |
+| --- | --- |
+| `dpdp.ts`, `MaskedPii`, `useDpdp` | The moved screens mask phone numbers and names. The rules and the permission codes (`pii.unmask`, `pii.export`) are the same in both. |
+| `CustomerCategoryBadge` | The journey screens show Fleet or Individual under the customer name. |
+
+### Stays in this repository
+- **All master data:** the master engine, rules, uploads, sharing, the BA files and questionnaires, and every module's masters (eQC, Bodyshop, THD, Claims, bays, calendars, employees and the rest).
+- **Default Views** (admin screen `WorkshopPolicyPage` and `workshopPolicy.ts`): the TML admin keeps setting the defaults here. The moved screens read them (see the links below).
+- **The Home page and its landing cards.**
+- **Fleet Register** (admin screen, rules and the central list owned by TML).
+- **The Audit Log**, including the DPDP access log, and the audit catalogue.
+- **Users, roles and the permission matrix** (including the "TML Journey" row), devices, sessions, configuration, notifications.
+- **The whole backend design** (parts 1, 2, 3 and 3b) and the API contract, except Part 4.
+- **The Dashboard:** undecided. You said earlier that the KPI dashboard is also built in the other repository. This document treats it as staying until you confirm.
+
+### How the two repositories connect (proposal)
+| Need | Proposed way |
+| --- | --- |
+| Sign-in, roles and permissions (`journey.read`, `pii.unmask`, `pii.export`) | The same TML SSO and the same roles; the permission matrix stays here |
+| Default views for the worklist and Journey Search | `GET /me/default-view` (this repository's backend) |
+| Fields "exposed to the dealer app" and their rules | The dealer read API (`/dealer/masters`) and the rule endpoints; the page that draws them moves, the masters stay |
+| Fleet or Individual badge | `GET /fleet-vehicles/{chassisNo}/category` |
+| DPDP: reveal, click-to-call, export audit | Server side: the reveal and CTI endpoints write the audit rows; the access log stays here |
+| Journey ID chain and customer updates (`journey_id_link`, `customer_update`) | Owned by the other repository from now on (proposal); this repository keeps only the contract until it is moved |
+| Links from Home cards, Dashboard tiles, vehicle search and notifications | One configurable address of the other application, instead of the internal routes |
+
+## 1. What was built for and around TML Journey
 
 | # | Area | What it does | Built when |
 | --- | --- | --- | --- |
@@ -26,6 +69,8 @@ history, the file list, the tests, the backend pieces and the open points.
 | H | **ID chain and customer updates** | Appointment, Visit, SR, Pre-JC, JC and MR under one JC | 6 Oct |
 | I | **Backend design for the above** | Database tables, API paths, settings, audit catalogue | 2 Oct, 6 Oct, 15 and 18 Oct |
 | J | **Removal from the menu** | Sidebar section and command-palette entries removed | 22 Nov |
+
+**Which of these move (section 0):** A, B, C and H move; D (DPDP) is copied, and its audit trail stays here; E, F and G stay here (the badge of G is copied); I stays here except Part 4; J is done.
 
 The base screens (A and B, with the timeline, tracker, exceptions and performance tabs, and the Dashboard) were already in the first
 commit of this repository (`59bd209`, 1 Oct 2026, built outside this repository); they are described here from the code, not from a specification. Items C
@@ -50,7 +95,9 @@ to H were built in this repository on 6 Oct 2026 from the JC Creation walkthroug
 (Other work in these months, such as masters, bays, THD, Claims and the backend design for masters, is not part of TML Journey and is
 not listed.)
 
-## 3. Files to copy
+## 3. Files
+
+Only the files in the "Moves" and "Copied" tables of section 0 go to the other repository; files marked **(stays here)** below are listed for reference.
 
 Line counts are from 22 Nov 2026. "Adapt" means the file imports the application shell (section 4).
 
@@ -60,10 +107,10 @@ Line counts are from 22 Nov 2026. "Adapt" means the file imports the application
 | `src/pages/JourneySearchPage.tsx` | 805 | Adapt. Search, filters, "Columns displayed", DPDP masking, fleet badge |
 | `src/pages/JourneyDetailPage.tsx` | 855 | Adapt. Tabs timeline, ID chain, exceptions, performance, master mapping, rules engine; Dossier export |
 | `src/pages/WorkshopWorklistPage.tsx` | 394 | Adapt. Counter tabs, filter bar, grids for Gate-In, My Assignment, MR Details |
-| `src/pages/WorkshopPolicyPage.tsx` | 253 | Adapt. **Default Views** admin screen (TML admin only) |
-| `src/pages/HomePage.tsx` | 80 | Adapt. Landing cards; maps each card to a route (see 6.6) |
-| `src/pages/FleetRegisterPage.tsx` | 311 | Adapt. Admin screen for the fleet list |
-| `src/pages/AuditLogPage.tsx` | (shared) | Only the DPDP access log button and the `?module=DPDP` filter |
+| `src/pages/WorkshopPolicyPage.tsx` | 253 | **(stays here)** **Default Views** admin screen (TML admin only) |
+| `src/pages/HomePage.tsx` | 80 | **(stays here)** Landing cards; maps each card to a route (see 6.6) |
+| `src/pages/FleetRegisterPage.tsx` | 311 | **(stays here)** Admin screen for the fleet list |
+| `src/pages/AuditLogPage.tsx` | (shared) | **(stays here)** The DPDP access log button and the `?module=DPDP` filter |
 
 ### 3.2 Components
 | File | Lines |
@@ -87,11 +134,11 @@ Line counts are from 22 Nov 2026. "Adapt" means the file imports the application
 | `src/utils/viewPreferences.ts` | 109 | Tab and column rules (pure functions, reusable by the backend) |
 | `src/utils/personalisationSettings.ts` | 33 | Clears personal layouts at logout |
 | `src/utils/vehicleAsset.ts` | 54 | Vehicle image resolution and fallbacks |
-| `src/utils/fleetRegister.ts` | 224 | Fleet upload checks and classification |
+| `src/utils/fleetRegister.ts` | 224 | **(stays here)** Fleet upload checks and classification |
 | `src/utils/jcIdChain.ts` | 205 | ID chain building and validation |
 | `src/services/journeyService.ts` | 121 | Search, filters, search-type detection |
-| `src/data/workshopPolicy.ts` | 232 | Default views: role presets, `useWorkshopPolicy`, `policyForRole` |
-| `src/data/fleetRegister.ts` | 86 | Fleet list store |
+| `src/data/workshopPolicy.ts` | 232 | **(stays here)** Default views: role presets, `useWorkshopPolicy`, `policyForRole` (the other repository reads the result through the API) |
+| `src/data/fleetRegister.ts` | 86 | **(stays here)** Fleet list store |
 | `src/hooks/useDpdp.ts` | 37 | DPDP permissions and audit for the current user |
 | `src/hooks/useTabPreferences.ts` | 64 | Tab and card preferences |
 | `src/hooks/useColumnPreferences.ts` | 53 | Column preferences |
@@ -200,7 +247,9 @@ automatically from Service Buddy; the JC number is the key and is shown as "awai
 MRs and an MR cannot exist before the JC; times never go backwards; an ID belongs to one JC; customer updates hold template text only,
 never the name or number. Demo ID formats (`APT-`, `VIS-`, `SR-`, `PJC-`, `MR-`) are placeholders (`LINKED_ID_RE`).
 
-## 9. Dependencies from other parts of this repository
+## 9. Links between TML Journey and what stays here
+
+Because only TML Journey moves, these are the points where the two repositories touch. "Effect" is what happens if nothing is done.
 
 | Dependency | Where | Effect if TML Journey leaves this repository |
 | --- | --- | --- |
@@ -210,7 +259,7 @@ never the name or number. Demo ID formats (`APT-`, `VIS-`, `SR-`, `PJC-`, `MR-`)
 | Global search | `GlobalSearchModal.tsx` opens `/journey/...` and `/journey?search=...` for vehicles and JCs | Vehicle search would open nothing |
 | Notifications | demo notifications link to `/journey/JC20260930001234` | Dead links |
 | Role permissions | the permission matrix has a "TML Journey" module; `roleAccess.ts` has a rule for `/journey*` | Row and rule become unused |
-| Default Views | the admin screen controls the worklist and Journey Search columns | Becomes meaningless without those lists |
+| Default Views | the admin screen (stays here) controls the worklist and Journey Search columns | The other repository must read the defaults through the API |
 | Audit Log | DPDP access log, and the actions `UNMASK_PII`, `CTI_CALL`, `EXPORT_WORKLIST` | Stays useful only if DPDP applies to the screens that remain |
 | Fleet | the Fleet Register admin screen and badge | The badge is shown on the Journey screens |
 
@@ -264,7 +313,9 @@ never the name or number. Demo ID formats (`APT-`, `VIS-`, `SR-`, `PJC-`, `MR-`)
 
 - Where do the Home cards and the Dashboard tiles open once the Journey and Workshop pages live elsewhere?
 - Does the dealer-app preview ("Expose to Dealer App", target `vehicle_journey`) move with the Journey page?
-- Does Default Views stay in this repository (it also controls the home cards) or move with the worklist?
+- Is the Dashboard (the KPI dashboard) moving or staying? It is treated as staying until confirmed.
+- Who owns the `journey_id_link` and `customer_update` tables and the `/journeys` API from now on (proposed: the other repository)?
+- What is the address of the other application, and is it one setting for all links?
 - Real ID formats for the chain, real vehicle renders (CDN), the CTI and reveal APIs, and the Journey tables (Part 4).
 
 ## 14. What changed on 22 Nov 2026 (PR #58)
