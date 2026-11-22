@@ -42,7 +42,7 @@ history, the file list, the tests, the backend pieces and the open points.
 - **The Audit Log**, including the DPDP access log, and the audit catalogue.
 - **Users, roles and the permission matrix** (including the "TML Journey" row), devices, sessions, configuration, notifications.
 - **The whole backend design** (parts 1, 2, 3 and 3b) and the API contract, except Part 4.
-- **The Dashboard:** undecided. You said earlier that the KPI dashboard is also built in the other repository. This document treats it as staying until you confirm.
+- **The Dashboard:** the **KPI dashboards live in the TML Journey repository** (decision of 22 Nov 2026), not here. The Dashboard page in this repository stays only as the archive.
 
 ### How the two repositories connect (proposal)
 | Need | Proposed way |
@@ -54,6 +54,19 @@ history, the file list, the tests, the backend pieces and the open points.
 | DPDP: reveal, click-to-call, export audit | Server side: the reveal and CTI endpoints write the audit rows; the access log stays here |
 | Journey ID chain and customer updates (`journey_id_link`, `customer_update`) | Owned by the other repository from now on (proposal); this repository keeps only the contract until it is moved |
 | Links from Home cards, Dashboard tiles, vehicle search and notifications | One configurable address of the other application, instead of the internal routes |
+
+## 0A. Where things live now (decision of 22 Nov 2026, after finding the newer repositories)
+
+There are two working repositories, and this one is the archive:
+
+| Repository | Holds | State on 22 Nov 2026 |
+| --- | --- | --- |
+| **`TML-ST-Admin`** (private) | **ST Masters and the administration modules**: masters (98, from the BAs' exact files), dealer set-up, people and access (users, roles, devices, sessions, configuration), Default Views, Fleet Register (now a master), Audit Log and DPDP log, the whole backend design | Active. Last commit 31 Oct. It already has the backend parts 1, 2, 3 and 3b and the API contract identical to this repository, and it **removed the TML Journey section on 25 Oct** |
+| **`tml-appointment-journey`** (private) | **TML Journey and the KPI dashboards**: one app, by TML position (NSM, RSM, ZSM, RCSM), with the Control Tower, module screens, scorecards and KPI dashboards | Active. A newer build exists as `TML_Journey_app_20.zip` (17 Nov); on 22 Nov that build was committed to this repository so nothing is lost. The journey code removed from ST Admin is archived in its `reference/st_admin_journey/` |
+| **`TML-Journey-and-Admin`** (this one, public) | The old combined prototype and its history; **archive**. Its public GitHub Pages site shows the old masters and should not be shared with the BAs | Frozen after 22 Nov, except this document |
+
+Consequences for the sections below: the "moves" table is the list of what the Journey repository can reuse; the "stays" list is what
+ST Admin already keeps; and the open points at the end are marked where they were settled.
 
 ## 1. What was built for and around TML Journey
 
@@ -313,7 +326,9 @@ Because only TML Journey moves, these are the points where the two repositories 
 
 - Where do the Home cards and the Dashboard tiles open once the Journey and Workshop pages live elsewhere?
 - Does the dealer-app preview ("Expose to Dealer App", target `vehicle_journey`) move with the Journey page?
-- Is the Dashboard (the KPI dashboard) moving or staying? It is treated as staying until confirmed.
+- ~~Is the Dashboard moving or staying?~~ Settled 22 Nov: the KPI dashboards are in the TML Journey repository.
+- ~~Does Default Views stay?~~ Settled in `TML-ST-Admin` on 25 Oct: it stays there, trimmed to the landing-page cards (the worklist tabs and Journey columns were removed).
+- ~~Fleet Register~~: settled in `TML-ST-Admin` on 25 Oct: it is a master (Masters, Customer Journey and Dealer Network, Fleet Register); the Journey reads it through the reference pack.
 - Who owns the `journey_id_link` and `customer_update` tables and the `/journeys` API from now on (proposed: the other repository)?
 - What is the address of the other application, and is it one setting for all links?
 - Real ID formats for the chain, real vehicle renders (CDN), the CTI and reveal APIs, and the Journey tables (Part 4).
