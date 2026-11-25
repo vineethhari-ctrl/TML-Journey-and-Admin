@@ -34,8 +34,8 @@ state: `src/context/BayContext.tsx`; UI: `BayManagementConsole.tsx`, `pages/BayA
 
 ## Face Reveal (offline mobile app)
 
-Separate tool in `public/face-reveal/`, published with the site at `/face-reveal/`. Pairs an emoji-covered photo with its
-original and delivers the face-visible original first. Installable and works offline — see
+Separate tool in `public/face-reveal/`, published with the site at `/face-reveal/`. Replaces a smiley covering someone's
+face with their face from a second photo. Installable and works offline — see
 [`public/face-reveal/README.md`](public/face-reveal/README.md).
 
 ## No AI at runtime

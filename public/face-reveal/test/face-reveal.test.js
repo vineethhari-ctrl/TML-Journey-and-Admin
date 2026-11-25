@@ -1,52 +1,130 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareGrids, verdict, sameAspect, luminance, GRID } from '../src/similarity.js';
+import { findEmoji, isSkin, isEmojiYellow, skinMean, ringSkin, toneGain, pastePlan, FACE_TO_SMILEY, inpaintDisc } from '../src/composite.js';
 import { crc32, makeZip } from '../src/zip.js';
+// detect.js touches the DOM only inside detectFace, so the pure helpers import fine under node.
+import { pickFace, tiles } from '../src/detect.js';
 import { buildBundle } from '../src/bundle.js';
 
-const flat = (v) => new Float32Array(GRID * GRID).fill(v);
-const withBlock = (base, x0, y0, x1, y1, v) => {
-  const g = Float32Array.from(base);
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) g[y * GRID + x] = v;
-  return g;
-};
-const photo = Float32Array.from({ length: GRID * GRID }, (_, i) => 90 + (i % GRID) * 2);
+// RGBA canvas: grey background with optional discs painted as [cx, cy, radius, [r,g,b]].
+function image(w, h, discs = []) {
+  const d = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let c = [90, 110, 130];
+      for (const [cx, cy, r, col] of discs) if (Math.hypot(x - cx, y - cy) <= r) c = col;
+      d.set([...c, 255], (y * w + x) * 4);
+    }
+  }
+  return d;
+}
+const YELLOW = [255, 205, 0];
+const SKIN = [224, 172, 140];
 
 test('crc32 matches the standard check value', () => {
   assert.equal(crc32(new TextEncoder().encode('123456789')), 0xcbf43926);
 });
 
-test('luminance weights RGBA pixels', () => {
-  assert.ok(Math.abs(luminance(new Uint8Array([255, 255, 255, 255]))[0] - 255) < 0.01);
+test('colour classes: emoji yellow is not skin, skin is not emoji yellow', () => {
+  assert.ok(isEmojiYellow(...YELLOW) && !isSkin(...YELLOW));
+  assert.ok(isSkin(...SKIN) && !isEmojiYellow(...SKIN));
 });
 
-test('an emoji over a small area still counts as the same photo and is located', () => {
-  const covered = withBlock(photo, 12, 8, 19, 15, 250);
-  const cmp = compareGrids(photo, covered);
-  assert.equal(cmp.diffCells, 64);
-  assert.deepEqual(cmp.region, { x: 12 / GRID, y: 8 / GRID, w: 8 / GRID, h: 8 / GRID });
-  assert.equal(verdict({ width: 800, height: 600 }, { width: 800, height: 600 }, cmp), 'ok');
+test('findEmoji locates a yellow disc', () => {
+  const f = findEmoji(image(200, 150, [[70, 60, 25, YELLOW]]), 200, 150);
+  assert.ok(Math.abs(f.cx - 70 / 200) < 0.02 && Math.abs(f.cy - 60 / 150) < 0.02);
+  assert.ok(Math.abs(f.r - (25 * 1.05) / 200) < 0.01);
 });
 
-test('verdicts: identical, mismatch, aspect', () => {
-  const d = { width: 100, height: 100 };
-  assert.equal(verdict(d, d, compareGrids(photo, photo)), 'identical');
-  assert.equal(verdict(d, d, compareGrids(flat(0), flat(255))), 'mismatch');
-  assert.equal(verdict(d, { width: 200, height: 100 }, compareGrids(photo, photo)), 'aspect');
-  assert.ok(sameAspect({ width: 1000, height: 500 }, { width: 2000, height: 1000 }));
+test('findEmoji picks the largest disc and ignores skin, thin strips and tiny specks', () => {
+  const d = image(200, 150, [[60, 60, 12, YELLOW], [140, 80, 22, YELLOW], [100, 20, 30, SKIN]]);
+  for (let x = 0; x < 200; x++) d.set([...YELLOW, 255], (140 * 200 + x) * 4); // 1px strip
+  const f = findEmoji(d, 200, 150);
+  assert.ok(Math.abs(f.cx - 140 / 200) < 0.02);
+  assert.equal(findEmoji(image(200, 150, [[30, 30, 3, YELLOW]]), 200, 150), null);
+  assert.equal(findEmoji(image(200, 150, [[100, 70, 30, SKIN]]), 200, 150), null);
 });
 
-test('bundle puts the face-visible original first and preserves bytes', () => {
+test('skin tone gain moves the face toward the photo and is clamped', () => {
+  const face = skinMean(image(60, 60, [[30, 30, 40, [180, 140, 110]]]), 60, 60, () => true);
+  const photo = skinMean(image(60, 60, [[30, 30, 40, [224, 172, 140]]]), 60, 60, () => true);
+  const g = toneGain(face, photo);
+  assert.ok(g[0] > 1.2 && g[0] <= 1.3 && g[1] > 1.1 && g[2] > 1.1);
+  const dark = skinMean(image(60, 60, [[30, 30, 40, [90, 60, 40]]]), 60, 60, () => true);
+  assert.equal(toneGain(dark, photo)[0], 1.3);
+  assert.equal(toneGain(null, photo), null);
+  assert.equal(toneGain({ mean: [1, 1, 1], count: 5 }, photo), null);
+});
+
+test('ringSkin only samples the band just outside the smiley', () => {
+  const d = image(200, 200, [[100, 100, 30, SKIN], [100, 100, 14, [0, 0, 255]]]);
+  assert.equal(ringSkin(d, 200, 200, 100, 100, 14)?.count > 0, true);
+  assert.equal(ringSkin(d, 200, 200, 100, 100, 60), null); // ring lies entirely on the plain background
+});
+
+test('pastePlan sizes the face to the covered face and centres the patch on the smiley', () => {
+  const circle = { cx: 400, cy: 300, r: 100 };
+  const face = { x: 200, y: 100, w: 150, h: 160 };
+  const p = pastePlan(circle, face);
+  // the detected face lands FACE_TO_SMILEY of the smiley's diameter wide, whatever its size in its own photo
+  assert.ok(Math.abs(face.w * p.scale - 200 * FACE_TO_SMILEY) < 1e-9);
+  const bigger = pastePlan(circle, { ...face, w: 300, h: 320 });
+  assert.ok(Math.abs(300 * bigger.scale - 200 * FACE_TO_SMILEY) < 1e-9);
+  // patch covers the smiley, is square, and maps onto the photo at the same scale
+  assert.ok(p.dst.w > 200 && p.dst.w === p.dst.h);
+  assert.ok(Math.abs(p.dst.x + p.dst.w / 2 - 400) < 1e-9 && Math.abs(p.dst.y + p.dst.h / 2 - 300) < 1e-9);
+  assert.ok(Math.abs(p.src.w * p.scale - p.dst.w) < 1e-9);
+  // the face box centre sits at the patch centre horizontally, a little above middle vertically
+  assert.ok(Math.abs(p.src.x + p.src.w / 2 - 275) < 1e-9 && Math.abs(p.src.y + p.src.h / 2 - (100 + 160 * 0.4)) < 1e-9);
+  // the user's face-size control scales the face, not the patch
+  const half = pastePlan(circle, face, 0.5);
+  assert.ok(Math.abs(half.scale - p.scale / 2) < 1e-9 && half.dst.w === p.dst.w);
+});
+
+test('inpaintDisc removes the smiley and blends the surroundings in', () => {
+  const d = image(120, 120, [[60, 60, 30, YELLOW]]);
+  inpaintDisc(d, 120, 120, 60, 60, 30);
+  const at = (x, y) => [...d.slice((y * 120 + x) * 4, (y * 120 + x) * 4 + 3)];
+  assert.deepEqual(at(60, 60).map(Math.round), [90, 110, 130]); // centre is now background colour
+  assert.ok(!isEmojiYellow(...at(80, 60)));
+  assert.deepEqual(at(5, 5), [90, 110, 130]); // outside untouched
+  // a half-skin, half-background surround is blended across
+  const e = image(120, 120, [[60, 60, 30, YELLOW], [60, 20, 22, SKIN]]);
+  inpaintDisc(e, 120, 120, 60, 60, 30);
+  const top = [...e.slice((40 * 120 + 60) * 4, (40 * 120 + 60) * 4 + 3)], bottom = [...e.slice((80 * 120 + 60) * 4, (80 * 120 + 60) * 4 + 3)];
+  assert.ok(top[0] > bottom[0]); // nearer the skin side is warmer than the far side
+});
+
+test('pickFace takes the most confident clear face and ignores weak hits', () => {
+  const f = (score, w) => ({ score, x: 0, y: 0, w, h: w });
+  assert.equal(pickFace([f(0.9, 50), f(0.7, 120), f(0.4, 300)]).w, 50);
+  assert.equal(pickFace([f(0.55, 80), f(0.52, 200)]).w, 80);
+  assert.equal(pickFace([f(0.45, 80), f(0.3, 200)]), null); // e.g. a round badge: better to ask than to guess
+  assert.equal(pickFace([]), null);
+});
+
+test('tiles cover the whole photo with overlap and stay inside it', () => {
+  const W = 1600, H = 1200, side = 600;
+  const ts = tiles(W, H, side);
+  for (const t of ts) assert.ok(t.sx >= 0 && t.sy >= 0 && t.sx + t.side <= W && t.sy + t.side <= H);
+  assert.ok(ts.some((t) => t.sx + t.side === W) && ts.some((t) => t.sy + t.side === H));
+  for (let x = 0; x < W; x += 50) for (let y = 0; y < H; y += 50) {
+    assert.ok(ts.some((t) => x >= t.sx && x < t.sx + t.side && y >= t.sy && y < t.sy + t.side), `uncovered ${x},${y}`);
+  }
+  assert.equal(tiles(300, 200, 600).length, 1); // photo smaller than a tile
+});
+
+test('bundle puts the edited face image first and keeps the sources byte-for-byte', () => {
   const mk = (n, b) => ({ name: n, type: 'image/jpeg', sha256: 'x', width: 4, height: 4, bytes: new Uint8Array(b) });
-  const original = mk('IMG_orig.jpg', [1, 2, 3]);
-  const covered = mk('IMG_covered.jpg', [9, 9]);
-  const { zip, manifest, names } = buildBundle({ original, covered, cmp: compareGrids(photo, withBlock(photo, 1, 1, 3, 3, 250)) });
-  assert.deepEqual(names, ['1_face_visible.jpg', '2_face_covered.jpg', 'manifest.json']);
-  assert.equal(manifest.files[0].role, 'original, face visible');
+  const { zip, manifest, names } = buildBundle({
+    composite: mk('c.jpg', [7, 7, 7]), covered: mk('IMG_a.jpg', [1, 2]), face: mk('IMG_b.png', [9]),
+    regions: { smiley: { cx: 1, cy: 1, r: 1 } },
+  });
+  assert.deepEqual(names, ['1_face_restored.jpg', '2_covered_original.jpg', '3_face_source.jpg', 'manifest.json']);
+  assert.match(manifest.files[0].role, /edited/);
+  assert.match(manifest.note, /composite/);
   assert.equal(manifest.consent.confirmed, true);
-  const dv = new DataView(zip.buffer);
-  assert.equal(dv.getUint32(0, true), 0x04034b50);
-  assert.equal(dv.getUint16(zip.length - 22 + 10, true), 3); // entries in end-of-central-directory
+  assert.equal(new DataView(zip.buffer).getUint16(zip.length - 22 + 10, true), 4);
 });
 
 test('makeZip output is readable by unzip', async () => {
