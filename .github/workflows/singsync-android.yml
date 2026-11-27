@@ -149,6 +149,13 @@ jobs:
             echo "### APK contents"; echo '```'; cat /tmp/apk-contents.txt; echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           grep -q libsingcore.so /tmp/apk-contents.txt
+          # Is whisper.cpp actually linked into the JNI library? (file size alone cannot tell)
+          mkdir -p /tmp/apk && unzip -o -q "$APK" 'lib/arm64-v8a/libsingcore.so' -d /tmp/apk
+          W=$(nm -D --defined-only /tmp/apk/lib/arm64-v8a/libsingcore.so 2>/dev/null | grep -c . || true)
+          HAS=$(strings /tmp/apk/lib/arm64-v8a/libsingcore.so | grep -c -E 'whisper_full|whisper_init_from_file' || true)
+          echo "libsingcore.so exported symbols: $W; whisper symbol strings: $HAS"
+          echo "- whisper symbols in libsingcore.so (arm64): **$HAS** $( [ "$HAS" -gt 0 ] && echo OK || echo ':warning: NOT LINKED' )" >> "$GITHUB_STEP_SUMMARY"
+          [ "$HAS" -gt 0 ]
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
