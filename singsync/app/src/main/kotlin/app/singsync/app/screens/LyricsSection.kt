@@ -1,5 +1,10 @@
 package app.singsync.app.screens
 
+import app.singsync.ml.TranslationPacks
+import app.singsync.common.translate.PackSelector
+import app.singsync.app.processing.ProcessingService
+import app.singsync.app.data.SongStatus
+import app.singsync.core.WhisperRecognizer
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -74,8 +79,8 @@ fun LyricsSection(song: Song) {
         if (busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
     }
     val lang by app.settings.lyricsLanguage.collectAsState()
-    val whisperOk = remember { app.singsync.core.WhisperRecognizer.isUsable(ctx) }
-    val running = song.status == app.singsync.app.data.SongStatus.PROCESSING
+    val whisperOk = remember { WhisperRecognizer.isUsable(ctx) }
+    val running = song.status == SongStatus.PROCESSING
     Spacer(Modifier.height(10.dp))
     if (whisperOk) {
         Text("Transcribe from the vocal stem (on this phone)", color = Brand.TextDim, fontSize = 12.sp)
@@ -85,10 +90,10 @@ fun LyricsSection(song: Song) {
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = { app.singsync.app.processing.ProcessingService.transcribe(ctx, song.id, lang) }, enabled = !running, colors = ButtonDefaults.buttonColors(containerColor = Brand.Violet)) {
+            Button(onClick = { ProcessingService.transcribe(ctx, song.id, lang) }, enabled = !running, colors = ButtonDefaults.buttonColors(containerColor = Brand.Violet)) {
                 Text(if (lyrics == null) "Find lyrics" else "Re-transcribe")
             }
-            if (running) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp); OutlinedButton(onClick = { app.singsync.app.processing.ProcessingService.cancel(ctx, song.id) }) { Text("Cancel") } }
+            if (running) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp); OutlinedButton(onClick = { ProcessingService.cancel(ctx, song.id) }) { Text("Cancel") } }
         }
     } else Text("Speech recognition is not part of this build.", color = Brand.Warn, fontSize = 11.sp)
     song.lyricsError?.let { Text(it, color = Brand.Bad, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
@@ -97,8 +102,8 @@ fun LyricsSection(song: Song) {
     Spacer(Modifier.height(12.dp))
     val romanUseful = l.lines.any { Romanizer.needsRoman(it.text) }
     val hasEnglish = l.lines.any { it.english != null }
-    val pair = remember(l) { app.singsync.common.translate.PackSelector.packFor(l) }
-    val canTranslate = pair != null && remember(pair) { app.singsync.ml.TranslationPacks.isBundled(ctx, pair) }
+    val pair = remember(l) { PackSelector.packFor(l) }
+    val canTranslate = pair != null && remember(pair) { TranslationPacks.isBundled(ctx, pair) }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(selected = mode == "ORIGINAL", onClick = { app.store.update(song.id) { it.copy(lyricsMode = "ORIGINAL") } }, label = { Text("Original") })
         FilterChip(selected = mode == "ROMAN", enabled = romanUseful, onClick = { app.store.update(song.id) { it.copy(lyricsMode = "ROMAN") } }, label = { Text("Roman") })
@@ -106,7 +111,7 @@ fun LyricsSection(song: Song) {
     }
     if (!hasEnglish && pair != null) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { app.singsync.app.processing.ProcessingService.translate(ctx, song.id) }, enabled = canTranslate) { Text("Translate to English") }
+            OutlinedButton(onClick = { ProcessingService.translate(ctx, song.id) }, enabled = canTranslate) { Text("Translate to English") }
             if (!canTranslate) Text("Translation pack missing from this build", color = Brand.Warn, fontSize = 11.sp)
         }
     }

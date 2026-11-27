@@ -1,5 +1,7 @@
 package app.singsync.app.screens
 
+import app.singsync.ml.TranslationPacks
+import app.singsync.core.WhisperRecognizer
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -51,8 +53,8 @@ fun SettingsScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(24.dp))
             Section("About")
             Hint("SingSync works fully offline. Songs never leave this device.")
-            Hint("Speech recognition (Whisper small): " + if (app.singsync.core.WhisperRecognizer.isUsable(ctx)) "bundled" else "MISSING from this build")
-            Hint("English translation packs: " + listOf("hi-en", "ml-en").joinToString { it + if (app.singsync.ml.TranslationPacks.isBundled(ctx, it)) " ✓" else " ✗ missing" })
+            Hint("Speech recognition (Whisper small): " + if (WhisperRecognizer.isUsable(ctx)) "bundled" else "MISSING from this build")
+            Hint("English translation packs: " + listOf("hi-en", "ml-en").joinToString { it + if (TranslationPacks.isBundled(ctx, it)) " ✓" else " ✗ missing" })
             Hint("Native core: ${NativeCore.nativeVersion()}")
             Hint("Open-source components: Demucs (MIT), ONNX Runtime (MIT), AndroidX / Jetpack Compose (Apache-2.0). Full licence list will ship with the model bundle.")
         }

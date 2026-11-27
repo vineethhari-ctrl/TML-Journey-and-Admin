@@ -29,8 +29,8 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class ProcessingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private data class Job(val id: String, val lyricsOnly: Boolean, val lang: String, val translate: Boolean = false)
-    private val queue = Channel<Job>(Channel.UNLIMITED)
+    private data class QueuedJob(val id: String, val lyricsOnly: Boolean, val lang: String, val translate: Boolean = false)
+    private val queue = Channel<QueuedJob>(Channel.UNLIMITED)
     private val cancelled = ConcurrentHashMap.newKeySet<String>()
     private val queued = ConcurrentHashMap.newKeySet<String>()
     private var worker: Job? = null
@@ -50,7 +50,7 @@ class ProcessingService : Service() {
                 val translate = intent?.getBooleanExtra(EXTRA_TRANSLATE, false) == true
                 val lyricsOnly = translate || intent?.getBooleanExtra(EXTRA_LYRICS_ONLY, false) == true
                 if (!lyricsOnly) app.store.update(id) { s -> s.copy(status = SongStatus.QUEUED, error = null) }
-                queue.trySend(Job(id, lyricsOnly, intent?.getStringExtra(EXTRA_LANG) ?: app.settings.lyricsLanguage.value, translate))
+                queue.trySend(QueuedJob(id, lyricsOnly, intent?.getStringExtra(EXTRA_LANG) ?: app.settings.lyricsLanguage.value, translate))
             }
         }
         if (worker?.isActive != true) worker = scope.launch { runQueue() }
