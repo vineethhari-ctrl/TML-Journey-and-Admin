@@ -24,7 +24,7 @@ Principles
 | # | Scope | Status |
 |---|---|---|
 | 1 | Import → decode → chunked separation (resumable, foreground service, thermal guard) → lossless FLAC stems → library/processing UI, export to Music/SingSync, A/B listening, null test | **this commit** (Classic fallback separator; Demucs ONNX wired but model not yet converted) |
-| 2 | Lyrics: whisper.cpp JNI, USLT/SYLT/LRC import + forced alignment, editor, ICU transliteration, opt-in translation pack | |
+| 2 | Lyrics: JSON model, LRC/Enhanced-LRC, ID3 SYLT/USLT, rough alignment to the vocal, editor, ICU transliteration, UI – **done**. Whisper.cpp recogniser + translation pack: **M2b** (needs build-time fetch, see D-16) | partial |
 | 3 | Karaoke player: SoundTouch key/tempo, guide-vocal slider, count-in, 60 fps word wipe, language chips | |
 | 4 | Recording: Oboe, latency calibration, monitoring, take review | |
 | 5 | Voice polish + mixing (-14 LUFS, true-peak limiter), export WAV24/M4A, share | |

@@ -26,5 +26,11 @@ Format: **ID – decision** · why · (status). Anything the brief left open is 
 - **D-14 – Foreground service type `dataSync`** for separation; one song at a time (RAM budget); cancel keeps checkpoints.
 - **D-15 – compile/target SDK 35, min 26.** `MediaStore.Audio` + `RELATIVE_PATH` on API 29+, legacy path + `WRITE_EXTERNAL_STORAGE(maxSdk 28)` on 26–28.
 
+## Milestone 2 – lyrics
+- **D-16 – Whisper recogniser deferred behind `WordRecognizer`.** whisper.cpp source and the multilingual model could not be fetched in the build sandbox (GitHub archives / HuggingFace blocked), and JNI code that was never compiled against the real library is not worth shipping blind. Everything around it is done and tested: JSON model with word timings, LRC / Enhanced-LRC, ID3 SYLT/USLT, editor, transliteration, UI. Next step (M2b): CI downloads whisper.cpp (pinned tag) + `ggml-small-q5_1` at **build time**, bundles the model as an APK asset, and implements `WordRecognizer` via JNI (still no runtime download). Malayalam accuracy will need the editor.
+- **D-17 – Plain text without timings gets "rough sync"**, not forced alignment: lines are spread over the vocal stem's singing regions (energy VAD) by text length. Tagged `TEXT_ROUGH` and flagged in the UI. Real forced alignment needs the ASR model (M2b).
+- **D-18 – Transliteration via `android.icu.text.Transliterator("Any-Latin; Latin-ASCII")`** (API 24+, bundled with Android, offline). Diacritics are dropped for readability. English meaning needs the optional NMT pack: the chip is present but disabled until M2b/pack decision.
+- **D-19 – Lyrics stored as `lyrics.json` per song**; display mode remembered per song in the library index.
+
 ## Not yet decided (later milestones)
 Whisper model size/quantisation, translation pack size, signalling backend (leaning Cloudflare Workers + Durable Objects), Oboe vs ExoPlayer player core.
