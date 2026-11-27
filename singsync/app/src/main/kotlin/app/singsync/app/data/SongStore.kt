@@ -21,6 +21,7 @@ class SongStore(context: Context) {
     fun cover(id: String) = File(dir(id), "cover.jpg")
     fun instrumental(id: String) = File(dir(id), "instrumental.flac")
     fun vocals(id: String) = File(dir(id), "vocals.flac")
+    fun lyricsFile(id: String) = File(dir(id), "lyrics.json")
     fun checkpoints(id: String) = File(dir(id), "ckpt")
     fun get(id: String): Song? = _songs.value.firstOrNull { it.id == id }
 

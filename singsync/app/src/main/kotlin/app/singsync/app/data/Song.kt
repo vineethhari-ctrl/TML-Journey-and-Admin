@@ -25,4 +25,8 @@ data class Song(
     val nullTestDb: Double? = null,
     val hasCover: Boolean = false,
     val error: String? = null,
+    /** LyricsSource name, null = none yet. */
+    val lyricsSource: String? = null,
+    /** ORIGINAL | ROMAN | ENGLISH – remembered per song. */
+    val lyricsMode: String = "ORIGINAL",
 )

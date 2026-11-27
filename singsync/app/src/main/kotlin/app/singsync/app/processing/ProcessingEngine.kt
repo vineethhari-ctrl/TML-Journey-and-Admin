@@ -2,6 +2,7 @@ package app.singsync.app.processing
 
 import android.content.Context
 import android.net.Uri
+import app.singsync.app.data.LyricsRepo
 import app.singsync.app.data.Song
 import app.singsync.app.data.SongStatus
 import app.singsync.app.data.SongStore
@@ -50,7 +51,12 @@ class ProcessingEngine(private val context: Context, private val store: SongStor
             FlacEncoder.encodeToFile(store.instrumental(songId), arrayOf(result.instrumental.left, result.instrumental.right), pcm.sampleRate, 24)
             FlacEncoder.encodeToFile(store.vocals(songId), arrayOf(result.vocals.left, result.vocals.right), pcm.sampleRate, 24)
             val nullDb = NativeCore.nullTestDb(pcm, result.instrumental, result.vocals)
-            store.update(songId) { it.copy(status = SongStatus.DONE, stage = Stage.DONE, progress = 1f, nullTestDb = nullDb) }
+            store.update(songId) { it.copy(stage = Stage.LYRICS, progress = 0.98f, nullTestDb = nullDb) }
+
+            // ---- Stage 4: Lyrics (embedded tags only for now; whisper arrives with the recogniser – DECISIONS D-16) ---
+            val found = LyricsRepo.findEmbedded(store.source(songId), result.vocals)
+            if (found != null) LyricsRepo.save(store, songId, found)
+            store.update(songId) { it.copy(status = SongStatus.DONE, stage = Stage.DONE, progress = 1f, lyricsSource = found?.source?.name) }
             return Outcome.Done
         } catch (_: SeparationCancelled) { return paused(songId)
         } catch (_: java.util.concurrent.CancellationException) { return paused(songId)
