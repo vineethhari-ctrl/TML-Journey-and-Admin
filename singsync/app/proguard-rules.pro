@@ -1,0 +1,3 @@
+-keep class ai.onnxruntime.** { *; }
+-keep class app.singsync.core.NativeCore { *; }
+-keepclassmembers class * { native <methods>; }
