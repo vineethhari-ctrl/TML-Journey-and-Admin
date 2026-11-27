@@ -83,8 +83,9 @@ fun SongScreen(id: String, onBack: () -> Unit) {
                     StageRow("Analysing", "Decoding to 44.1 kHz stereo", st(Stage.ANALYSING, 0), if (song.stage == Stage.ANALYSING) (song.progress / 0.10f).coerceIn(0f, 1f) else null)
                     StageRow("Separating voice", song.engine?.let { engineLabel(it) } ?: "Splitting singer and band", st(Stage.SEPARATING, 1),
                         if (song.stage == Stage.SEPARATING) ((song.progress - 0.10f) / 0.85f).coerceIn(0f, 1f) else null)
-                    StageRow("Finding lyrics", when { song.lyricsSource != null -> "Found in the file's tags"; done -> "None in the file – import below"; else -> "Reading embedded tags" },
-                        if (done) (if (song.lyricsSource != null) StageState.Done else StageState.Skipped) else if (song.stage == Stage.LYRICS && active) StageState.Active else StageState.Pending)
+                    StageRow("Finding lyrics", when { song.lyricsSource == "WHISPER" -> "Transcribed on this phone"; song.lyricsSource != null -> "Found / imported"; done -> "None yet – transcribe or import below"; else -> "Tags, then on-device Whisper" },
+                        if (done) (if (song.lyricsSource != null) StageState.Done else StageState.Skipped) else if (song.stage == Stage.LYRICS && active) StageState.Active else StageState.Pending,
+                        if (song.stage == Stage.LYRICS && active) ((song.progress - 0.95f) / 0.05f).coerceIn(0f, 1f) else null)
                     StageRow("Done", if (done) "Stems saved on this phone" else null, if (done) StageState.Done else StageState.Pending)
                 }
             }
@@ -122,7 +123,7 @@ fun SongScreen(id: String, onBack: () -> Unit) {
 }
 
 private fun engineLabel(id: String) = when (id) {
-    "classic-midside" -> "Basic centre-channel method (no AI model bundled)"
+    "classic-midside" -> "Basic centre-channel method (not AI)"
     else -> "Demucs v4 · on-device"
 }
 
@@ -136,7 +137,7 @@ private fun DoneSection(song: Song, player: AbPlayer, playing: String?, setPlayi
     )
     if (song.usedFallback) {
         Card(colors = CardDefaults.cardColors(containerColor = Brand.Warn.copy(alpha = .15f)), shape = RoundedCornerShape(16.dp)) {
-            Text("This build has no AI model bundled, so the voice was reduced with a basic centre-channel method. Vocals will bleed through. See README → \"Bundling the model\".",
+            Text("Best quality was requested but the Demucs model is missing from this build, so a basic centre-channel method was used. Vocals will bleed through. Check the CI \"models\" job.",
                 color = Brand.Warn, fontSize = 13.sp, modifier = Modifier.padding(14.dp))
         }
         Spacer(Modifier.height(12.dp))

@@ -39,18 +39,20 @@ fun SettingsScreen(onBack: () -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Quality.entries.forEach { q -> FilterChip(selected = q == quality, onClick = { app.settings.setQuality(q) }, label = { Text(q.label) }) }
             }
-            Hint(if (quality == Quality.BEST) "Best: 25 % chunk overlap with cross-fade. Slower, smoothest result." else "Fast: 10 % overlap. Roughly 1.5× faster, seams may be slightly audible.")
+            Hint(if (quality == Quality.BEST) "Best: Demucs v4 neural separation (25 % overlap, cross-faded). Slower, clean result." else "Fast: basic centre-channel method – seconds per song, but vocals bleed through. Use Best for real karaoke.")
             Spacer(Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) { Text("Use NNAPI acceleration", color = Color.White); Hint("Experimental. Falls back to CPU if unsupported.") }
                 Switch(checked = nnapi, onCheckedChange = { app.settings.setNnapi(it) })
             }
             Spacer(Modifier.height(24.dp))
-            Section("Engine")
-            Hint(if (SeparatorFactory.hasNeuralModel(ctx)) "Demucs v4 (int8) bundled in this build." else "No AI model bundled in this build – using the basic fallback separator.")
+            Section("Bundled models")
+            Hint(if (SeparatorFactory.hasNeuralModel(ctx)) "Demucs v4 bundled in this build (used by Best)." else "Demucs model is MISSING from this build – Best falls back to the basic method. Check the CI \"models\" job.")
             Spacer(Modifier.height(24.dp))
             Section("About")
             Hint("SingSync works fully offline. Songs never leave this device.")
+            Hint("Speech recognition (Whisper small): " + if (app.singsync.core.WhisperRecognizer.isUsable(ctx)) "bundled" else "MISSING from this build")
+            Hint("English translation packs: " + listOf("hi-en", "ml-en").joinToString { it + if (app.singsync.ml.TranslationPacks.isBundled(ctx, it)) " ✓" else " ✗ missing" })
             Hint("Native core: ${NativeCore.nativeVersion()}")
             Hint("Open-source components: Demucs (MIT), ONNX Runtime (MIT), AndroidX / Jetpack Compose (Apache-2.0). Full licence list will ship with the model bundle.")
         }

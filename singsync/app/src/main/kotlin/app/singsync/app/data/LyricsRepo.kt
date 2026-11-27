@@ -11,10 +11,10 @@ import java.io.File
 object LyricsRepo {
     fun load(store: SongStore, id: String): Lyrics? = try { store.lyricsFile(id).takeIf { it.exists() }?.readText()?.let(Lyrics::fromJson) } catch (_: Exception) { null }
 
-    fun save(store: SongStore, id: String, lyrics: Lyrics) {
+    fun save(store: SongStore, id: String, lyrics: Lyrics, keepSource: Boolean = false) {
         val f = store.lyricsFile(id); val tmp = File(f.path + ".tmp")
         tmp.writeText(lyrics.toJson()); if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
-        store.update(id) { it.copy(lyricsSource = lyrics.source.name) }
+        if (!keepSource) store.update(id) { it.copy(lyricsSource = lyrics.source.name) }
     }
 
     /** ID3 USLT/SYLT from the original file; plain (untimed) USLT is rough-aligned to the vocal stem. */

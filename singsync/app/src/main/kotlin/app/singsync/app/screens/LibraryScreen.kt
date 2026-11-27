@@ -147,6 +147,10 @@ fun statusChip(song: Song) {
         SongStatus.PROCESSING -> StatusChip("Processing ${(song.progress * 100).toInt()}%", Brand.Cyan)
         SongStatus.PAUSED -> StatusChip("Paused ${(song.progress * 100).toInt()}% · tap to resume", Brand.Warn)
         SongStatus.FAILED -> StatusChip("Failed", Brand.Bad)
-        SongStatus.DONE -> StatusChip(if (song.usedFallback) "Ready · basic quality" else "Ready", if (song.usedFallback) Brand.Warn else Brand.Good)
+        SongStatus.DONE -> when {
+            song.usedFallback -> StatusChip("Ready · model missing", Brand.Warn)
+            song.engine == "classic-midside" -> StatusChip("Ready · Fast mode", Brand.Cyan)
+            else -> StatusChip("Ready", Brand.Good)
+        }
     }
 }

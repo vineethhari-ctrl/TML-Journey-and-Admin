@@ -12,5 +12,6 @@ android {
 dependencies {
     api(project(":common"))
     implementation(libs.onnxruntime.android)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.core.ktx)
 }

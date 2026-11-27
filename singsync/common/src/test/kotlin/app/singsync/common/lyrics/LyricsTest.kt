@@ -125,3 +125,32 @@ class Id3Test {
         assertNull(Id3Lyrics.read(tag(frame("TIT2", byteArrayOf(0, 65), true), 4)))
     }
 }
+
+class WhisperSupportTest {
+    private fun w(t: String, s: Long, e: Long) = LyricWord(t, s, e)
+    @Test fun groupsByPauseAndPunctuationAndDropsNoise() {
+        val words = listOf(w("[MUSIC]", 0, 900), w("Hello", 1000, 1300), w("there", 1300, 1600), w("friend.", 1600, 2000), w("How", 2100, 2300), w("are", 2300, 2500), w("you", 2500, 2800),
+            w("♪", 2800, 3000), w("fine", 6000, 6400))
+        val lines = WhisperSupport.groupIntoLines(words)
+        assertEquals(listOf("Hello there friend.", "How are you", "fine"), lines.map { it.text })
+        assertTrue(lines.zipWithNext().all { (a, b) -> a.endMs <= b.startMs })
+    }
+    @Test fun splitsLongRunsAndKeepsTimesMonotonic() {
+        val words = (0 until 20).map { w("w$it", it * 300L, it * 300L + 250) } + w("overlap", 100, 200)
+        val lines = WhisperSupport.groupIntoLines(words)
+        assertTrue(lines.all { it.words.size <= 9 })
+        val flat = lines.flatMap { it.words }
+        assertTrue(flat.zipWithNext().all { (a, b) -> a.endMs <= b.startMs && a.startMs < a.endMs })
+    }
+    @Test fun indicSentenceEndSplits() {
+        val l = WhisperSupport.groupIntoLines(listOf(w("यह", 0, 200), w("एक", 200, 400), w("गाना", 400, 600), w("है।", 600, 800), w("सुनो", 850, 1100)))
+        assertEquals(listOf("यह एक गाना है।", "सुनो"), l.map { it.text })
+    }
+    @Test fun noiseDetection() { assertTrue(WhisperSupport.isNoise(" [BLANK_AUDIO]")); assertTrue(WhisperSupport.isNoise("♪ ♪")); assertFalse(WhisperSupport.isNoise("മലയാളം")) }
+    @Test fun inputIsMono16k() {
+        val sr = 44_100; val x = FloatArray(sr * 2) { kotlin.math.sin(2 * Math.PI * 440 * it / sr).toFloat() * 0.5f }
+        val out = WhisperSupport.toWhisperInput(StereoPcm(x, x.copyOf()))
+        assertEquals(32_000.0, out.size.toDouble(), 2.0)
+        assertEquals(0.5, out.drop(1000).take(2000).maxOf { kotlin.math.abs(it) }.toDouble(), 0.02)
+    }
+}

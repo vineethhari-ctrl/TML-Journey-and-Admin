@@ -29,7 +29,8 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class ProcessingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val queue = Channel<String>(Channel.UNLIMITED)
+    private data class Job(val id: String, val lyricsOnly: Boolean, val lang: String, val translate: Boolean = false)
+    private val queue = Channel<Job>(Channel.UNLIMITED)
     private val cancelled = ConcurrentHashMap.newKeySet<String>()
     private val queued = ConcurrentHashMap.newKeySet<String>()
     private var worker: Job? = null
@@ -46,8 +47,10 @@ class ProcessingService : Service() {
             ACTION_CANCEL -> if (id != null) { cancelled.add(id); app.store.update(id) { s -> if (s.status == SongStatus.QUEUED) s.copy(status = SongStatus.PAUSED) else s } }
             else -> if (id != null && queued.add(id)) {
                 cancelled.remove(id)
-                app.store.update(id) { s -> s.copy(status = SongStatus.QUEUED, error = null) }
-                queue.trySend(id)
+                val translate = intent?.getBooleanExtra(EXTRA_TRANSLATE, false) == true
+                val lyricsOnly = translate || intent?.getBooleanExtra(EXTRA_LYRICS_ONLY, false) == true
+                if (!lyricsOnly) app.store.update(id) { s -> s.copy(status = SongStatus.QUEUED, error = null) }
+                queue.trySend(Job(id, lyricsOnly, intent?.getStringExtra(EXTRA_LANG) ?: app.settings.lyricsLanguage.value, translate))
             }
         }
         if (worker?.isActive != true) worker = scope.launch { runQueue() }
@@ -59,7 +62,8 @@ class ProcessingService : Service() {
     private suspend fun runQueue() {
         val engine = ProcessingEngine(applicationContext, app.store, ThermalGuard(applicationContext))
         while (true) {
-            val next = queue.tryReceive().getOrNull() ?: break
+            val job0 = queue.tryReceive().getOrNull() ?: break
+            val next = job0.id
             queued.remove(next)
             if (next in cancelled) { cancelled.remove(next); continue }
             current = next
@@ -70,14 +74,16 @@ class ProcessingService : Service() {
                     if (s.status == SongStatus.PROCESSING) notify(buildNotification("${stageLabel(s.stage.name)} · $title", (s.progress * 100).toInt(), false))
                 }
             }
-            engine.process(next, app.settings.quality.value, app.settings.useNnapi.value, { next in cancelled }, { note = it })
+            if (job0.translate) engine.translateLyrics(next) { next in cancelled }
+            else if (job0.lyricsOnly) engine.transcribeOnly(next, job0.lang) { next in cancelled }
+            else engine.process(next, app.settings.quality.value, app.settings.useNnapi.value, job0.lang, { next in cancelled }, { note = it })
             job.cancel(); cancelled.remove(next); current = null
         }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
-    private fun stageLabel(stage: String) = when (stage) { "ANALYSING" -> "Analysing"; "SEPARATING" -> "Separating voice"; else -> "Working" }
+    private fun stageLabel(stage: String) = when (stage) { "ANALYSING" -> "Analysing"; "SEPARATING" -> "Separating voice"; "LYRICS" -> "Finding lyrics"; else -> "Working" }
 
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
@@ -114,9 +120,20 @@ class ProcessingService : Service() {
         private const val NOTIF_ID = 42
         private const val ACTION_CANCEL = "app.singsync.CANCEL"
         private const val EXTRA_SONG_ID = "song_id"
+        private const val EXTRA_LYRICS_ONLY = "lyrics_only"
+        private const val EXTRA_LANG = "lang"
+        private const val EXTRA_TRANSLATE = "translate"
 
         fun start(context: Context, songId: String) {
             androidx.core.content.ContextCompat.startForegroundService(context, Intent(context, ProcessingService::class.java).putExtra(EXTRA_SONG_ID, songId))
+        }
+        fun transcribe(context: Context, songId: String, lang: String) {
+            androidx.core.content.ContextCompat.startForegroundService(context, Intent(context, ProcessingService::class.java)
+                .putExtra(EXTRA_SONG_ID, songId).putExtra(EXTRA_LYRICS_ONLY, true).putExtra(EXTRA_LANG, lang))
+        }
+        fun translate(context: Context, songId: String) {
+            androidx.core.content.ContextCompat.startForegroundService(context, Intent(context, ProcessingService::class.java)
+                .putExtra(EXTRA_SONG_ID, songId).putExtra(EXTRA_TRANSLATE, true))
         }
         fun cancel(context: Context, songId: String) {
             context.startService(Intent(context, ProcessingService::class.java).setAction(ACTION_CANCEL).putExtra(EXTRA_SONG_ID, songId))

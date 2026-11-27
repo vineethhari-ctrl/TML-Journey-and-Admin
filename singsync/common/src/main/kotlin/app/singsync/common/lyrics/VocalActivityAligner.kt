@@ -60,10 +60,10 @@ object VocalActivityAligner {
 }
 
 /**
- * Seam for the on-device speech recogniser (whisper.cpp via JNI). Implementations return word timings for a
- * 16 kHz mono buffer of the VOCAL stem. Not implemented yet – see DECISIONS.md D-16.
+ * Speech recogniser seam (whisper.cpp via JNI lives in :core-audio). Input: 16 kHz mono float PCM of the VOCAL stem.
+ * Output: lyrics with word timings, grouped into lines.
  */
 interface WordRecognizer : AutoCloseable {
-    fun transcribe(pcm16kMono: FloatArray, languageHint: String?, onProgress: (Float) -> Unit): Lyrics
+    fun transcribe(pcm16kMono: FloatArray, languageHint: String?, isCancelled: () -> Boolean = { false }, onProgress: (Float) -> Unit = {}): Lyrics
     override fun close() {}
 }

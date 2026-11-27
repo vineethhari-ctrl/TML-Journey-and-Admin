@@ -29,4 +29,6 @@ data class Song(
     val lyricsSource: String? = null,
     /** ORIGINAL | ROMAN | ENGLISH – remembered per song. */
     val lyricsMode: String = "ORIGINAL",
+    /** Why automatic lyrics failed / were cancelled (stems are still fine). */
+    val lyricsError: String? = null,
 )

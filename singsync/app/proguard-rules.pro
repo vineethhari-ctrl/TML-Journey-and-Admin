@@ -1,3 +1,5 @@
 -keep class ai.onnxruntime.** { *; }
 -keep class app.singsync.core.NativeCore { *; }
 -keepclassmembers class * { native <methods>; }
+-keep class app.singsync.core.WhisperNative { *; }
+-keep class app.singsync.core.WhisperNative$Callback { *; }

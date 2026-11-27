@@ -1,6 +1,7 @@
 name: SingSync Android
 
 # SingSync lives in /singsync of this repository (see singsync/DECISIONS.md D-00). Runs on every push that touches it.
+# Jobs: `models` converts/downloads the AI models (cached by script hash) -> `build` bundles them into the debug APK.
 on:
   push:
     paths: ["singsync/**", ".github/workflows/singsync-android.yml"]
@@ -9,9 +10,82 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  models:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: singsync/models-tools
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore models cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: singsync/models-out
+          key: models-v1-${{ hashFiles('singsync/models-tools/**/*.py', 'singsync/models-tools/requirements.txt') }}
+
+      - uses: actions/setup-python@v5
+        if: steps.cache.outputs.cache-hit != 'true'
+        with: { python-version: "3.11" }
+
+      - name: Install Python dependencies (CPU PyTorch)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      - name: Build models (Demucs ONNX, Whisper ggml, opus-mt packs)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: python build_all.py --out ../models-out
+
+      - name: Did every model build?
+        id: check
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          m = json.load(open("../models-out/manifest.json"))
+          bad = [k for k, v in m.items() if v.get("status") != "ok"]
+          print("all_ok=" + ("false" if bad else "true"))
+          print("failed=" + ",".join(bad))
+          PY
+          {
+            echo "### Models"
+            python - <<'PY'
+          import json, os
+          out = "../models-out"
+          m = json.load(open(out + "/manifest.json"))
+          for k, v in m.items():
+              print(f"- **{k}**: {v.get('status')} {v.get('error', '')}")
+          for root, _, files in os.walk(out):
+              for f in files:
+                  p = os.path.join(root, f)
+                  print(f"  - `{os.path.relpath(p, out)}` {os.path.getsize(p)/1e6:.1f} MB")
+          PY
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save models cache (only when everything built)
+        if: steps.cache.outputs.cache-hit != 'true' && steps.check.outputs.all_ok == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: singsync/models-out
+          key: models-v1-${{ hashFiles('singsync/models-tools/**/*.py', 'singsync/models-tools/requirements.txt') }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: models
+          path: singsync/models-out
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+
+  build:
+    needs: models
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: singsync
@@ -35,17 +109,53 @@ jobs:
           cmake --build build-host
           ctest --test-dir build-host --output-on-failure
 
-      - name: Kotlin core – unit tests (chunking, overlap-add, resume, FLAC, resampler)
+      - name: Kotlin core – unit tests (chunking, resume, FLAC, lyrics, tokenizer, translation decode)
         run: ./gradlew :common:test --console=plain
+
+      - name: Fetch whisper.cpp (pinned) for the JNI build
+        run: git clone --depth 1 --branch v1.7.5 https://github.com/ggml-org/whisper.cpp third_party/whisper.cpp
+
+      - name: Download built models into the app assets
+        id: models
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: models
+          path: singsync/app/src/main/assets/models
+
+      - name: Bundled models report
+        run: |
+          {
+            echo "### APK model bundle"
+            if [ -d app/src/main/assets/models ]; then
+              find app/src/main/assets/models -type f -printf '- `%P` %s bytes\n'
+              for f in htdemucs.onnx ggml-small-q5_1.bin opus-mt-hi-en/encoder.onnx opus-mt-ml-en/encoder.onnx; do
+                [ -f "app/src/main/assets/models/$f" ] || echo "- :warning: **MISSING $f** – that feature will be degraded in the app"
+              done
+            else
+              echo "- :warning: **no models bundled at all** (models job failed)"
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --console=plain
+
+      - name: Verify what is inside the APK
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          ls -l "$APK"
+          unzip -l "$APK" | grep -E "assets/models/|libsingcore.so|libonnxruntime.so" | awk '{print $1, $4}' | tee /tmp/apk-contents.txt
+          {
+            echo "### APK contents"; echo '```'; cat /tmp/apk-contents.txt; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          grep -q libsingcore.so /tmp/apk-contents.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: singsync-debug-apk
           path: singsync/app/build/outputs/apk/debug/app-debug.apk
+          compression-level: 0
           if-no-files-found: error
 
       - name: Upload test reports

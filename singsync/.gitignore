@@ -9,3 +9,6 @@ captures/
 *.keystore
 app/src/main/assets/models/*.onnx
 models-tools/work/
+third_party/
+models-out/
+models-tools/work/

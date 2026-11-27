@@ -9,7 +9,7 @@ android {
         minSdk = 26
         consumerProguardFiles("consumer-rules.pro")
         externalNativeBuild { cmake { cppFlags += "-std=c++17"; arguments += "-DANDROID_STL=c++_shared" } }
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }  // armeabi-v7a dropped: ggml/whisper + ORT on 32-bit ARM is too slow to be useful
     }
     externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt") } }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

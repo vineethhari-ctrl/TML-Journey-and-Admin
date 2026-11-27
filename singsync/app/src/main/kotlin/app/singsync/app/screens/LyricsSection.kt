@@ -42,7 +42,7 @@ private fun sourceLabel(s: String?) = when (s) {
 @Composable
 fun LyricsSection(song: Song) {
     val app = app(); val ctx = LocalContext.current; val scope = rememberCoroutineScope()
-    var lyrics by remember(song.id) { mutableStateOf(LyricsRepo.load(app.store, song.id)) }
+    var lyrics by remember(song.id, song.lyricsSource, song.status) { mutableStateOf(LyricsRepo.load(app.store, song.id)) }
     var editIndex by remember { mutableStateOf<Int?>(null) }
     var busy by remember { mutableStateOf(false) }
     val mode = song.lyricsMode
@@ -73,22 +73,49 @@ fun LyricsSection(song: Song) {
         Button(onClick = { picker.launch(arrayOf("*/*")) }, enabled = !busy, colors = ButtonDefaults.buttonColors(containerColor = Brand.SurfaceHigh)) { Text(if (lyrics == null) "Import .lrc / .txt" else "Replace") }
         if (busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
     }
-    Text("Auto-transcription from the vocal stem (Whisper) is the next step; until then import lyrics or use embedded tags.", color = Brand.TextDim, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+    val lang by app.settings.lyricsLanguage.collectAsState()
+    val whisperOk = remember { app.singsync.core.WhisperRecognizer.isUsable(ctx) }
+    val running = song.status == app.singsync.app.data.SongStatus.PROCESSING
+    Spacer(Modifier.height(10.dp))
+    if (whisperOk) {
+        Text("Transcribe from the vocal stem (on this phone)", color = Brand.TextDim, fontSize = 12.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            listOf("auto" to "Auto", "en" to "English", "hi" to "Hindi", "ml" to "Malayalam").forEach { (code, label) ->
+                FilterChip(selected = lang == code, onClick = { app.settings.setLyricsLanguage(code) }, label = { Text(label, fontSize = 12.sp) })
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(onClick = { app.singsync.app.processing.ProcessingService.transcribe(ctx, song.id, lang) }, enabled = !running, colors = ButtonDefaults.buttonColors(containerColor = Brand.Violet)) {
+                Text(if (lyrics == null) "Find lyrics" else "Re-transcribe")
+            }
+            if (running) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp); OutlinedButton(onClick = { app.singsync.app.processing.ProcessingService.cancel(ctx, song.id) }) { Text("Cancel") } }
+        }
+    } else Text("Speech recognition is not part of this build.", color = Brand.Warn, fontSize = 11.sp)
+    song.lyricsError?.let { Text(it, color = Brand.Bad, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
 
     val l = lyrics ?: return
     Spacer(Modifier.height(12.dp))
     val romanUseful = l.lines.any { Romanizer.needsRoman(it.text) }
+    val hasEnglish = l.lines.any { it.english != null }
+    val pair = remember(l) { app.singsync.common.translate.PackSelector.packFor(l) }
+    val canTranslate = pair != null && remember(pair) { app.singsync.ml.TranslationPacks.isBundled(ctx, pair) }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(selected = mode == "ORIGINAL", onClick = { app.store.update(song.id) { it.copy(lyricsMode = "ORIGINAL") } }, label = { Text("Original") })
         FilterChip(selected = mode == "ROMAN", enabled = romanUseful, onClick = { app.store.update(song.id) { it.copy(lyricsMode = "ROMAN") } }, label = { Text("Roman") })
-        FilterChip(selected = false, enabled = false, onClick = {}, label = { Text("English (pack)") })
+        FilterChip(selected = mode == "ENGLISH", enabled = hasEnglish, onClick = { app.store.update(song.id) { it.copy(lyricsMode = "ENGLISH") } }, label = { Text("English") })
+    }
+    if (!hasEnglish && pair != null) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { app.singsync.app.processing.ProcessingService.translate(ctx, song.id) }, enabled = canTranslate) { Text("Translate to English") }
+            if (!canTranslate) Text("Translation pack missing from this build", color = Brand.Warn, fontSize = 11.sp)
+        }
     }
     Spacer(Modifier.height(8.dp))
     Column(Modifier.clip(RoundedCornerShape(16.dp)).background(Brand.Surface.copy(alpha = .9f)).padding(vertical = 6.dp)) {
         l.lines.take(300).forEachIndexed { i, line ->
             Row(Modifier.fillMaxWidth().clickable { editIndex = i }.padding(horizontal = 14.dp, vertical = 7.dp)) {
                 Text(formatDuration(line.startMs), color = Brand.Cyan, fontSize = 12.sp, modifier = Modifier.width(44.dp))
-                Text(if (mode == "ROMAN") Romanizer.romanize(line.text) else line.text, color = Color.White, fontSize = 15.sp)
+                Text(when (mode) { "ROMAN" -> Romanizer.romanize(line.text); "ENGLISH" -> line.english ?: line.text; else -> line.text }, color = Color.White, fontSize = 15.sp)
             }
         }
     }
